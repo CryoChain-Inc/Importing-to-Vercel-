@@ -7,13 +7,20 @@ export const cors = {
 };
 
 export function adminClient(): SupabaseClient {
-  return createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  );
 }
 
 export function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  });
 }
 
 export async function caller(req: Request) {
@@ -23,28 +30,49 @@ export async function caller(req: Request) {
   const admin = adminClient();
   const { data, error } = await admin.auth.getUser(jwt);
   if (error || !data.user) return { error: json({ error: 'Sign in required.' }, 401) };
-  const { data: profile, error: profileError } = await admin.from('profiles').select('*').eq('id', data.user.id).single();
-  if (profileError || !profile) return { error: json({ error: 'Profile missing. Apply the database migration.' }, 403) };
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .select('*')
+    .eq('id', data.user.id)
+    .single();
+  if (profileError || !profile)
+    return { error: json({ error: 'Profile missing. Apply the database migration.' }, 403) };
   return { admin, user: data.user, profile };
 }
 
 export async function readWorkspace(admin: SupabaseClient) {
-  const { data, error } = await admin.from('workspace').select('version, state').eq('id', 1).maybeSingle();
+  const { data, error } = await admin
+    .from('workspace')
+    .select('version, state')
+    .eq('id', 1)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   return data as { version: number; state: Record<string, unknown> } | null;
 }
 
-export async function writeWorkspace(admin: SupabaseClient, version: number, state: Record<string, unknown>) {
-  const { data, error } = await admin.from('workspace').update({
-    state,
-    version: version + 1,
-    updated_at: new Date().toISOString(),
-  }).eq('id', 1).eq('version', version).select('version');
+export async function writeWorkspace(
+  admin: SupabaseClient,
+  version: number,
+  state: Record<string, unknown>,
+) {
+  const { data, error } = await admin
+    .from('workspace')
+    .update({
+      state,
+      version: version + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', 1)
+    .eq('version', version)
+    .select('version');
   if (error) throw new Error(error.message);
   return (data ?? [])[0] as { version: number } | undefined;
 }
 
-export async function mutateWorkspace(admin: SupabaseClient, change: (state: Record<string, unknown>) => void) {
+export async function mutateWorkspace(
+  admin: SupabaseClient,
+  change: (state: Record<string, unknown>) => void,
+) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const row = await readWorkspace(admin);
     if (!row) throw new Error('Workspace is not bootstrapped.');

@@ -45,35 +45,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sessionFromEmailLink();
     const { data } = await supabase.auth.getSession();
     setSession(data.session);
-    if (!data.session) { setProfile(null); setProfileError(null); return; }
-    const found = await supabase.from('profiles').select('*').eq('id', data.session.user.id).maybeSingle();
-    if (found.error) { setProfile(null); setProfileError(found.error.message); return; }
-    if (found.data) { setProfile(found.data as Profile); setProfileError(null); return; }
+    if (!data.session) {
+      setProfile(null);
+      setProfileError(null);
+      return;
+    }
+    const found = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.session.user.id)
+      .maybeSingle();
+    if (found.error) {
+      setProfile(null);
+      setProfileError(found.error.message);
+      return;
+    }
+    if (found.data) {
+      setProfile(found.data as Profile);
+      setProfileError(null);
+      return;
+    }
     const ensured = await supabase.rpc('ensure_my_profile');
-    if (ensured.error || !ensured.data) { setProfile(null); setProfileError(ensured.error?.message ?? 'No profile row for this account.'); return; }
+    if (ensured.error || !ensured.data) {
+      setProfile(null);
+      setProfileError(ensured.error?.message ?? 'No profile row for this account.');
+      return;
+    }
     setProfile(ensured.data as Profile);
     setProfileError(null);
   };
 
   useEffect(() => {
     let live = true;
-    refresh().finally(() => { if (live) setReady(true); });
-    const { data: sub } = supabase.auth.onAuthStateChange(() => { void refresh(); });
-    return () => { live = false; sub.subscription.unsubscribe(); };
+    refresh().finally(() => {
+      if (live) setReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void refresh();
+    });
+    return () => {
+      live = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  const signOut = async () => { await supabase.auth.signOut(); setProfile(null); };
-  return <AuthCtx.Provider value={{ ready, session, profile, profileError, refresh, signOut }}>{children}</AuthCtx.Provider>;
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setProfile(null);
+  };
+  return (
+    <AuthCtx.Provider value={{ ready, session, profile, profileError, refresh, signOut }}>
+      {children}
+    </AuthCtx.Provider>
+  );
 }
 
 export function SetupScreen() {
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.paper }} contentContainerStyle={{ padding: 28, gap: 14, maxWidth: 720 }}>
-    <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>Connect CryoChain</Text>
-    <Text style={{ fontSize: 16, lineHeight: 24, color: colors.ink }}>The operating record, payments, text messages, and photographs stay off this device until a Supabase project is connected. Add these two values to cryochain-mobile/.env and restart the app.</Text>
-    <Text style={{ fontFamily: fontFamily('600'), color: colors.ink }}>EXPO_PUBLIC_SUPABASE_URL</Text>
-    <Text style={{ fontFamily: fontFamily('600'), color: colors.ink }}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>
-    <Text style={{ fontSize: 15, lineHeight: 22, color: colors.steelInk }}>Use the anon key only. The service role key belongs in Supabase Edge Function secrets, never in the app. After the file is in place, run the migration, deploy the functions, and sign in. The first account becomes the node manager.</Text>
-  </ScrollView>;
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.paper }}
+      contentContainerStyle={{ padding: 28, gap: 14, maxWidth: 720 }}
+    >
+      <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>
+        Connect CryoChain
+      </Text>
+      <Text style={{ fontSize: 16, lineHeight: 24, color: colors.ink }}>
+        The operating record, payments, text messages, and photographs stay off this device until a
+        Supabase project is connected. Add these two values to cryochain-mobile/.env and restart the
+        app.
+      </Text>
+      <Text style={{ fontFamily: fontFamily('600'), color: colors.ink }}>
+        EXPO_PUBLIC_SUPABASE_URL
+      </Text>
+      <Text style={{ fontFamily: fontFamily('600'), color: colors.ink }}>
+        EXPO_PUBLIC_SUPABASE_ANON_KEY
+      </Text>
+      <Text style={{ fontSize: 15, lineHeight: 22, color: colors.steelInk }}>
+        Use the anon key only. The service role key belongs in Supabase Edge Function secrets, never
+        in the app. After the file is in place, run the migration, deploy the functions, and sign
+        in. The first account becomes the node manager.
+      </Text>
+    </ScrollView>
+  );
 }
 
 export function AuthScreen() {
@@ -91,9 +144,16 @@ export function AuthScreen() {
     setError('');
     setInfo('');
     if (name) {
-      const { error: signError } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name } } });
+      const { error: signError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: name } },
+      });
       if (signError) setError(signError.message);
-      else setInfo('Account created. If Supabase asks you to confirm the email, open that message, then sign in here.');
+      else
+        setInfo(
+          'Account created. If Supabase asks you to confirm the email, open that message, then sign in here.',
+        );
       return;
     }
     const { error: signError } = await supabase.auth.signInWithPassword({ email, password });
@@ -103,7 +163,11 @@ export function AuthScreen() {
   const sendCode = async () => {
     setError('');
     const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
-    if (otpError) setError(otpError.message + ' Phone sign-in needs a provider such as Twilio enabled under Authentication in Supabase.');
+    if (otpError)
+      setError(
+        otpError.message +
+          ' Phone sign-in needs a provider such as Twilio enabled under Authentication in Supabase.',
+      );
     else setSent(true);
   };
 
@@ -113,44 +177,142 @@ export function AuthScreen() {
     if (otpError) setError(otpError.message);
   };
 
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.paper }} contentContainerStyle={{ padding: 28, gap: 12, maxWidth: 480 }}>
-    <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>Sign in</Text>
-    <Text style={{ color: colors.steelInk, lineHeight: 22 }}>The first person to create an account becomes the node manager and opens an empty operating record. Everyone else waits until operations invites them.</Text>
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <Pressable onPress={() => setMode('email')}><Text style={{ fontFamily: fontFamily(mode === 'email' ? '700' : '500'), color: colors.blue }}>Email</Text></Pressable>
-      <Pressable onPress={() => setMode('phone')}><Text style={{ fontFamily: fontFamily(mode === 'phone' ? '700' : '500'), color: colors.blue }}>Phone</Text></Pressable>
-    </View>
-    {mode === 'email' ? <>
-      <Field label="Your name, only when creating an account" value={name} onChange={setName} />
-      <Field label="Email" value={email} onChange={setEmail} keyboard="email-address" />
-      <Field label="Password" value={password} onChange={setPassword} secure />
-      <Pressable onPress={() => void submitEmail()} style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}><Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>{name ? 'Create account' : 'Sign in'}</Text></Pressable>
-    </> : <>
-      <Field label="Phone" value={phone} onChange={setPhone} keyboard="phone-pad" />
-      {sent ? <Field label="Code" value={code} onChange={setCode} /> : null}
-      <Pressable onPress={() => void (sent ? verify() : sendCode())} style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}><Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>{sent ? 'Verify code' : 'Send code'}</Text></Pressable>
-    </>}
-    {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
-    {info ? <Text style={{ color: colors.ink, lineHeight: 22 }}>{info}</Text> : null}
-  </ScrollView>;
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.paper }}
+      contentContainerStyle={{ padding: 28, gap: 12, maxWidth: 480 }}
+    >
+      <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>
+        Sign in
+      </Text>
+      <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
+        The first person to create an account becomes the node manager and opens an empty operating
+        record. Everyone else waits until operations invites them.
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable onPress={() => setMode('email')}>
+          <Text
+            style={{ fontFamily: fontFamily(mode === 'email' ? '700' : '500'), color: colors.blue }}
+          >
+            Email
+          </Text>
+        </Pressable>
+        <Pressable onPress={() => setMode('phone')}>
+          <Text
+            style={{ fontFamily: fontFamily(mode === 'phone' ? '700' : '500'), color: colors.blue }}
+          >
+            Phone
+          </Text>
+        </Pressable>
+      </View>
+      {mode === 'email' ? (
+        <>
+          <Field label="Your name, only when creating an account" value={name} onChange={setName} />
+          <Field label="Email" value={email} onChange={setEmail} keyboard="email-address" />
+          <Field label="Password" value={password} onChange={setPassword} secure />
+          <Pressable
+            onPress={() => void submitEmail()}
+            style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
+          >
+            <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
+              {name ? 'Create account' : 'Sign in'}
+            </Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Field label="Phone" value={phone} onChange={setPhone} keyboard="phone-pad" />
+          {sent ? <Field label="Code" value={code} onChange={setCode} /> : null}
+          <Pressable
+            onPress={() => void (sent ? verify() : sendCode())}
+            style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
+          >
+            <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
+              {sent ? 'Verify code' : 'Send code'}
+            </Text>
+          </Pressable>
+        </>
+      )}
+      {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
+      {info ? <Text style={{ color: colors.ink, lineHeight: 22 }}>{info}</Text> : null}
+    </ScrollView>
+  );
 }
 
-function Field({ label, value, onChange, secure, keyboard }: { label: string; value: string; onChange: (v: string) => void; secure?: boolean; keyboard?: 'email-address' | 'phone-pad' }) {
-  return <View style={{ gap: 6 }}>
-    <Text style={{ fontSize: 12, color: colors.steelInk }}>{label}</Text>
-    <TextInput value={value} onChangeText={onChange} secureTextEntry={secure} keyboardType={keyboard} autoCapitalize="none" style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 12, fontSize: 16, color: colors.ink, backgroundColor: '#fff' }} />
-  </View>;
+function Field({
+  label,
+  value,
+  onChange,
+  secure,
+  keyboard,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  secure?: boolean;
+  keyboard?: 'email-address' | 'phone-pad';
+}) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 12, color: colors.steelInk }}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        secureTextEntry={secure}
+        keyboardType={keyboard}
+        autoCapitalize="none"
+        style={{
+          borderWidth: 1,
+          borderColor: colors.line,
+          borderRadius: 8,
+          padding: 12,
+          fontSize: 16,
+          color: colors.ink,
+          backgroundColor: '#fff',
+        }}
+      />
+    </View>
+  );
 }
 
 export function MissingProfile() {
   const { profileError, refresh, signOut } = useAuth();
-  return <View style={{ flex: 1, backgroundColor: colors.paper, padding: 28, justifyContent: 'center', gap: 12, maxWidth: 640 }}>
-    <Text style={{ fontFamily: fontFamily('600'), fontSize: 24, color: colors.ink }}>Account confirmed</Text>
-    <Text style={{ lineHeight: 22, color: colors.ink }}>The first script does not create a profile for an account that already existed. In the Supabase SQL editor, run cryochain-mobile/supabase/migrations/20260929130000_backfill_profiles.sql, then press Check again.</Text>
-    {profileError ? <Text style={{ lineHeight: 20, color: colors.red }}>{profileError}</Text> : null}
-    <Pressable onPress={() => void refresh()} style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}><Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>Check again</Text></Pressable>
-    <Pressable onPress={() => void signOut()}><Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text></Pressable>
-  </View>;
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.paper,
+        padding: 28,
+        justifyContent: 'center',
+        gap: 12,
+        maxWidth: 640,
+      }}
+    >
+      <Text style={{ fontFamily: fontFamily('600'), fontSize: 24, color: colors.ink }}>
+        Account confirmed
+      </Text>
+      <Text style={{ lineHeight: 22, color: colors.ink }}>
+        The first script does not create a profile for an account that already existed. In the
+        Supabase SQL editor, run
+        cryochain-mobile/supabase/migrations/20260929130000_backfill_profiles.sql, then press Check
+        again.
+      </Text>
+      {profileError ? (
+        <Text style={{ lineHeight: 20, color: colors.red }}>{profileError}</Text>
+      ) : null}
+      <Pressable
+        onPress={() => void refresh()}
+        style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
+      >
+        <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
+          Check again
+        </Text>
+      </Pressable>
+      <Pressable onPress={() => void signOut()}>
+        <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 export function PendingAccess() {
@@ -161,20 +323,60 @@ export function PendingAccess() {
     if (res.error) setError(res.error);
     else await refresh();
   };
-  return <View style={{ flex: 1, backgroundColor: colors.paper, padding: 28, justifyContent: 'center', gap: 12 }}>
-    <Text style={{ fontFamily: fontFamily('600'), fontSize: 24, color: colors.ink }}>Waiting for access</Text>
-    <Text style={{ lineHeight: 22, color: colors.ink }}>{profile?.display_name || 'This account'} is signed in, and operations has not assigned a role yet. A buyer can register an organisation from here. Farmers, agents, drivers, and staff wait for an invite from the node manager.</Text>
-    <Pressable onPress={() => void become()} style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}><Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>Register a buyer organisation</Text></Pressable>
-    <Pressable onPress={() => void signOut()}><Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text></Pressable>
-    {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
-  </View>;
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.paper,
+        padding: 28,
+        justifyContent: 'center',
+        gap: 12,
+      }}
+    >
+      <Text style={{ fontFamily: fontFamily('600'), fontSize: 24, color: colors.ink }}>
+        Waiting for access
+      </Text>
+      <Text style={{ lineHeight: 22, color: colors.ink }}>
+        {profile?.display_name || 'This account'} is signed in, and operations has not assigned a
+        role yet. A buyer can register an organisation from here. Farmers, agents, drivers, and
+        staff wait for an invite from the node manager.
+      </Text>
+      <Pressable
+        onPress={() => void become()}
+        style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
+      >
+        <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
+          Register a buyer organisation
+        </Text>
+      </Pressable>
+      <Pressable onPress={() => void signOut()}>
+        <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text>
+      </Pressable>
+      {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
+    </View>
+  );
 }
 
 export function AccountBar() {
   const { profile, signOut } = useAuth();
   if (!profile) return null;
-  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.ink }}>
-    <Text style={{ color: '#fff', fontFamily: fontFamily('600'), fontSize: 13 }}>{profile.display_name} · {profile.role}</Text>
-    <Pressable onPress={() => void signOut()}><Text style={{ color: '#fff', fontSize: 13 }}>Sign out</Text></Pressable>
-  </View>;
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: colors.ink,
+      }}
+    >
+      <Text style={{ color: '#fff', fontFamily: fontFamily('600'), fontSize: 13 }}>
+        {profile.display_name} · {profile.role}
+      </Text>
+      <Pressable onPress={() => void signOut()}>
+        <Text style={{ color: '#fff', fontSize: 13 }}>Sign out</Text>
+      </Pressable>
+    </View>
+  );
 }

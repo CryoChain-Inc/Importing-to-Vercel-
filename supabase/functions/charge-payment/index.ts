@@ -3,7 +3,14 @@ import { caller, cors, json, mutateWorkspace } from '../_shared/db.ts';
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   const secret = Deno.env.get('FLW_SECRET_KEY');
-  if (!secret) return json({ error: 'Add FLW_SECRET_KEY to the charge-payment function secrets. Card and mobile money stay unpaid until Flutterwave is connected.' }, 503);
+  if (!secret)
+    return json(
+      {
+        error:
+          'Add FLW_SECRET_KEY to the charge-payment function secrets. Card and mobile money stay unpaid until Flutterwave is connected.',
+      },
+      503,
+    );
   const who = await caller(req);
   if (who.error) return who.error;
   const body = await req.json().catch(() => ({}));
@@ -15,10 +22,17 @@ Deno.serve(async (req) => {
   let alreadyPaid = false;
   try {
     await mutateWorkspace(who.admin, (state) => {
-      const orders = state.orders as { id: string; status: string; payment?: { checkoutUrl?: string } }[];
-      const order = orders.find(o => o.id === orderId);
+      const orders = state.orders as {
+        id: string;
+        status: string;
+        payment?: { checkoutUrl?: string };
+      }[];
+      const order = orders.find((o) => o.id === orderId);
       if (!order) throw new Error('Order not found.');
-      if (order.status === 'paid') { alreadyPaid = true; return; }
+      if (order.status === 'paid') {
+        alreadyPaid = true;
+        return;
+      }
       if (order.payment?.checkoutUrl) link = order.payment.checkoutUrl;
     });
   } catch (err) {
@@ -28,8 +42,9 @@ Deno.serve(async (req) => {
   if (link) return json({ link });
 
   const { data: row } = await who.admin.from('workspace').select('state').eq('id', 1).single();
-  const orders = (row?.state as { orders?: { id: string; total: number; orgId: string }[] })?.orders ?? [];
-  const order = orders.find(o => o.id === orderId);
+  const orders =
+    (row?.state as { orders?: { id: string; total: number; orgId: string }[] })?.orders ?? [];
+  const order = orders.find((o) => o.id === orderId);
   if (!order) return json({ error: 'Order not found.' }, 404);
   const txRef = `${orderId}-${Date.now()}`;
   const payload = {
@@ -56,7 +71,7 @@ Deno.serve(async (req) => {
   if (!res.ok || !link) failure = raw?.message ?? 'Flutterwave did not return a payment page.';
   await mutateWorkspace(who.admin, (state) => {
     const list = state.orders as { id: string; payment?: Record<string, unknown> }[];
-    const found = list.find(o => o.id === orderId);
+    const found = list.find((o) => o.id === orderId);
     if (!found?.payment) return;
     if (link) found.payment.checkoutUrl = link;
     else found.payment.checkoutError = failure;

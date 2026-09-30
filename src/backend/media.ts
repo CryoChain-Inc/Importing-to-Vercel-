@@ -8,16 +8,28 @@ export async function capturePhoto(label: string): Promise<string | null> {
   if (!remoteEnabled) return label;
   const camera = await ImagePicker.requestCameraPermissionsAsync();
   const shot = camera.granted
-    ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.5, base64: Platform.OS !== 'web' })
-    : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5, base64: Platform.OS !== 'web' });
+    ? await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.5,
+        base64: Platform.OS !== 'web',
+      })
+    : await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.5,
+        base64: Platform.OS !== 'web',
+      });
   if (shot.canceled || !shot.assets[0]) return null;
   const asset = shot.assets[0];
   const { data: userData } = await supabase.auth.getUser();
   const uid = userData.user?.id;
   if (!uid) return null;
   const path = `${uid}/${label}-${Date.now()}.jpg`;
-  const body = asset.base64 ? base64Bytes(asset.base64) : await (await fetch(asset.uri)).arrayBuffer();
-  const { error } = await supabase.storage.from('captures').upload(path, body, { contentType: 'image/jpeg', upsert: false });
+  const body = asset.base64
+    ? base64Bytes(asset.base64)
+    : await (await fetch(asset.uri)).arrayBuffer();
+  const { error } = await supabase.storage
+    .from('captures')
+    .upload(path, body, { contentType: 'image/jpeg', upsert: false });
   if (error) return null;
   return `${label}:${path}`;
 }
@@ -30,7 +42,7 @@ function base64Bytes(value: string) {
 }
 
 export function shotDone(photos: string[], label: string) {
-  return photos.some(photo => photo === label || photo.startsWith(`${label}:`));
+  return photos.some((photo) => photo === label || photo.startsWith(`${label}:`));
 }
 
 export async function readPosition(): Promise<{ lat: number; lng: number; at: number } | null> {
