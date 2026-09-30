@@ -1,3 +1,5 @@
+// Lightweight runtime CSS compiler: parses utility classes and CSS properties into
+// React Native ViewStyle and TextStyle objects, enabling web-like styling on mobile.
 import { Dimensions, type TextStyle, type ViewStyle } from 'react-native';
 import { colors, cssVar, fontFamily } from './theme';
 

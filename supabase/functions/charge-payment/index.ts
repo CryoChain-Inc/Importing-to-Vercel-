@@ -33,6 +33,7 @@ Deno.serve(async (req) => {
         alreadyPaid = true;
         return;
       }
+      // Return cached checkout link if one was already issued for this order.
       if (order.payment?.checkoutUrl) link = order.payment.checkoutUrl;
     });
   } catch (err) {
@@ -46,12 +47,14 @@ Deno.serve(async (req) => {
     (row?.state as { orders?: { id: string; total: number; orgId: string }[] })?.orders ?? [];
   const order = orders.find((o) => o.id === orderId);
   if (!order) return json({ error: 'Order not found.' }, 404);
+  // Prefix txRef with orderId for deterministic correlation when webhooks fire.
   const txRef = `${orderId}-${Date.now()}`;
   const payload = {
     tx_ref: txRef,
     amount: order.total,
     currency: 'GHS',
     redirect_url: Deno.env.get('APP_URL') ?? 'https://cryochain.co',
+    // Flutterwave requires 'mobilemoneyghana' specifically for Ghana telecom networks.
     payment_options: method === 'momo' ? 'mobilemoneyghana' : 'card',
     customer: {
       email: who.user.email ?? 'payments@cryochain.co',
@@ -69,6 +72,7 @@ Deno.serve(async (req) => {
   const raw = await res.json().catch(() => ({}));
   link = raw?.data?.link ?? '';
   if (!res.ok || !link) failure = raw?.message ?? 'Flutterwave did not return a payment page.';
+  // Record checkout link or provider failure on the order for operational visibility and retry.
   await mutateWorkspace(who.admin, (state) => {
     const list = state.orders as { id: string; payment?: Record<string, unknown> }[];
     const found = list.find((o) => o.id === orderId);

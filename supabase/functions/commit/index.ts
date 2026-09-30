@@ -91,12 +91,16 @@ async function bootstrap(
   return json({ empty: false, version: 1, state: filterFor(state, linked), profile: linked });
 }
 
+/**
+ * Persists client state changes using optimistic version checking and role-specific merge logic.
+ */
 async function save(
   admin: ReturnType<typeof Object>,
   profile: Profile,
   version: number,
   clientState: Record<string, unknown>,
 ) {
+  // Farmers and unverified accounts have read-only access to operating records.
   if (profile.role === 'pending' || profile.role === 'farmer')
     return json({ error: 'This login cannot change operating records.' }, 403);
   if (!clientState) return json({ error: 'Nothing to save.' }, 400);
@@ -151,6 +155,10 @@ async function save(
   });
 }
 
+/**
+ * Allows a newly invited user to activate as a buyer organization.
+ * Staff roles cannot be self-selected; they must be provisioned by operations.
+ */
 async function become(admin: ReturnType<typeof Object>, profile: Profile, role: string) {
   if (role !== 'buyer') return json({ error: 'Choose a buyer organisation registration.' }, 400);
   if (profile.role !== 'pending' && profile.role !== 'buyer')
@@ -208,6 +216,7 @@ async function invite(
   if (role === 'farmer') {
     const farmerId = String(body.farmerId ?? '');
     const farmers = Array.isArray(row.state.farmers) ? (row.state.farmers as { id: string }[]) : [];
+    // Verification requirement: Field agent must register farmer at farm gate before online portal access.
     if (!farmers.some((f) => f.id === farmerId))
       return json(
         {

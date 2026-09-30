@@ -11,6 +11,7 @@ import type {
   Transfer,
 } from './types';
 
+// Uses exponential notation to avoid IEEE 754 floating point rounding errors (e.g. 1.005).
 export const round2 = (n: number) => Number(`${Math.round(Number(`${n}e2`))}e-2`) || 0;
 export const ghs = (n: number, sign = false) =>
   `${sign && n < 0 ? '− ' : ''}GHS ${Math.abs(n).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -189,14 +190,20 @@ export const PR_TONE: Record<PayoutRun['status'], Tone> = {
   cancelled: 'neutral',
 };
 
-// Settlement: fixed at the farm gate. payable_kg × price snapshot. Deductions 0 in v1.
+/**
+ * Computes farmer payment snapshot fixed at farm-gate capture.
+ * Shielding rule: Delivery rejections or transit shrinkage never reduce the farmer's locked settlement.
+ */
 export function computeSettlement(farmGateKg: number, pricePerKg: number, deductions = 0) {
   if (!(farmGateKg > 0)) throw new Error('Weight must be above zero');
   const gross = round2(farmGateKg * pricePerKg);
   const net = round2(gross - deductions);
   return { gross, deductions, net };
 }
-// Allocation re-cut: how much of a line is still uncovered after captures, declines and no-shows.
+
+/**
+ * Calculates current line fulfillment to detect shortfalls when re-cutting allocations.
+ */
 export function lineCoverage(line: { qtyKg: number }, cons: Consignment[]) {
   const covered = cons
     .filter((c) => c.status !== 'cancelled' && c.status !== 'declined')
@@ -206,10 +213,17 @@ export function lineCoverage(line: { qtyKg: number }, cons: Consignment[]) {
 export function isShort(c: Consignment, tolerancePct: number) {
   return c.farmGateKg !== undefined && c.farmGateKg < c.plannedKg * (1 - tolerancePct / 100);
 }
-// Payout rules
+
+/**
+ * Dual-control rule: Payout runs exceeding the threshold OR containing manual corrections require two sign-offs.
+ */
 export function payoutRequiresTwo(total: number, threshold: number, hasCorrection: boolean) {
   return total > threshold || hasCorrection;
 }
+
+/**
+ * Segregation of duties check: The user who created the payout run cannot approve it.
+ */
 export function canApprove(run: PayoutRun, userId: string, approverIds: string[]) {
   if (run.createdBy === userId)
     return { ok: false, why: 'The person who raised a run cannot approve it.' };
@@ -260,6 +274,9 @@ export function creditBalance(state: State, orgId: string) {
 export function orderById(state: State, id: string): Order | undefined {
   return state.orders.find((o) => o.id === id);
 }
+/**
+ * SLA rule: Farmers must receive payment within 24 hours of successful delivery to the buyer.
+ */
 export function settlementDeadline(payableAt: number) {
   return payableAt + 24 * H;
 }

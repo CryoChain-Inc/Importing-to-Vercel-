@@ -27,6 +27,7 @@ export type CommitResult = {
   link?: string;
 };
 
+// Deduplicates concurrent background dispatches (transfers, SMS, payments) to prevent duplicate runs.
 const inflight = new Set<string>();
 const STAFF = new Set(['ops', 'agent', 'driver']);
 
@@ -37,6 +38,9 @@ function needsStaffPolicy(message: string) {
 const staffPolicyError =
   'Run cryochain-mobile/supabase/migrations/20260929140000_staff_workspace.sql in the Supabase SQL editor, then reload.';
 
+/**
+ * Injects user's active session profile and draft into the workspace state for local UI binding.
+ */
 function withSession(state: State, profile: Profile): State {
   const next = structuredClone(state);
   next.session = {
@@ -50,6 +54,9 @@ function withSession(state: State, profile: Profile): State {
   return next;
 }
 
+/**
+ * Strips device-specific and user-transient session state before persisting to the shared workspace doc.
+ */
 function withoutSession(state: State): State {
   const stored = structuredClone(state);
   stored.session = {
@@ -76,6 +83,10 @@ async function myProfile(): Promise<{ profile?: Profile; error?: string }> {
   return { profile: data as Profile };
 }
 
+/**
+ * Low-latency direct PostgreSQL access for operational staff using RLS policies.
+ * External roles (buyer, farmer) must use the commit Edge Function for strict projection.
+ */
 async function directCommit(body: Record<string, unknown>): Promise<CommitResult> {
   const who = await myProfile();
   if (!who.profile) return { version: 0, error: who.error ?? 'Profile missing.' };

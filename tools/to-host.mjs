@@ -1,3 +1,5 @@
+// AST Codegen tool: Rewrites standard web HTML JSX elements (div, span, button, table, etc.)
+// into <Host tag="..."> components so web-authored layouts render correctly on React Native.
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
 import _generate from '@babel/generator';

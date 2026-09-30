@@ -8,6 +8,7 @@ Deno.serve(async (req) => {
       { error: 'Set FLW_WEBHOOK_SECRET to the verif-hash from the Flutterwave dashboard.' },
       503,
     );
+  // Authenticate Flutterwave webhook using the secret hash configured in the dashboard.
   const sent = req.headers.get('verif-hash') ?? '';
   if (sent !== secretHash) return json({ error: 'Webhook signature did not match.' }, 401);
   const event = await req.json().catch(() => ({}));
@@ -21,6 +22,7 @@ Deno.serve(async (req) => {
 async function onCharge(admin: ReturnType<typeof adminClient>, data: Record<string, unknown>) {
   if (String(data.status) !== 'successful') return;
   const id = String(data.id ?? '');
+  // Re-verify the transaction directly against Flutterwave to guard against forged webhook bodies.
   const verified = await fetch(`https://api.flutterwave.com/v3/transactions/${id}/verify`, {
     headers: { Authorization: `Bearer ${Deno.env.get('FLW_SECRET_KEY')}` },
   });
@@ -70,6 +72,7 @@ async function onCharge(admin: ReturnType<typeof adminClient>, data: Record<stri
         by: 'Flutterwave webhook, verified',
       });
     } else {
+      // Hold order and open an exception if paid amount differs from order total to prevent under/over delivery.
       order.status = 'held';
       order.payment = {
         ...(order.payment ?? {}),

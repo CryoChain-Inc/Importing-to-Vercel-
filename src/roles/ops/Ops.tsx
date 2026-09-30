@@ -1538,6 +1538,7 @@ function PayoutDetail() {
   const [err, setErr] = useState('');
   if (!r) return <Navigate to="/ops/payouts" />;
   const ts = state.transfers.filter((t) => r.transferIds.includes(t.id));
+  // Financial dual control: Evaluates required sign-offs (1 or 2) and enforces segregation of duties.
   const need = approvalsNeeded(r);
   const can = canApprove(r, me.id, state.config.approverIds);
   const steps = [

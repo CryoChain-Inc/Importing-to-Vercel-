@@ -26,6 +26,8 @@ const frameShadow =
         elevation: 2,
       };
 
+// Simulates a 360px mobile handset on desktop/web viewports (>=480px) for field app testing,
+// while expanding full-screen without bezels when running on physical mobile devices.
 export function Phone({ children }: { children: ReactNode }) {
   const { width } = useWindowDimensions();
   const framed = width >= 480;

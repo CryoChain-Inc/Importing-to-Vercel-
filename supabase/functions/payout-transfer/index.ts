@@ -1,11 +1,13 @@
 import { caller, cors, json, mutateWorkspace } from '../_shared/db.ts';
 
+// Telecel maps to 'VOD' because Vodafone Ghana was acquired by Telecel, but Flutterwave still routes with 'VOD'.
 const BANK: Record<string, string> = { MTN: 'MTN', Telecel: 'VOD', AirtelTigo: 'ATL' };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   const who = await caller(req);
   if (who.error) return who.error;
+  // Financial disbursement is strictly restricted to operations roles.
   if (who.profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
   const secret = Deno.env.get('FLW_SECRET_KEY');
   if (!secret)
@@ -50,6 +52,7 @@ Deno.serve(async (req) => {
       amount: transfer.amount,
       currency: 'GHS',
       narration: 'CryoChain farmer payout',
+      // Pass idempotency key as provider reference to prevent double disbursements on network retries.
       reference: transfer.idempotencyKey,
       beneficiary_name: farmer.name,
       meta: { transfer_id: transfer.id },
@@ -78,6 +81,9 @@ Deno.serve(async (req) => {
   return json({ ok: true, status: status === 'SUCCESSFUL' ? 'succeeded' : 'sent' });
 });
 
+/**
+ * Cascades successful payout across transfer, settlement, ledger, and payout run states.
+ */
 function markPaid(doc: Record<string, unknown>, transferId: string, ref: string) {
   const transfers = doc.transfers as {
     id: string;
@@ -151,6 +157,7 @@ async function fail(admin: { from: (t: string) => unknown }, id: string, error: 
     const settlements = doc.settlements as { id: string; status: string; deadlineAt?: number }[];
     const settlement = settlements.find((s) => s.id === transfer.settlementId);
     if (settlement) settlement.status = 'failed';
+    // Raise a high-severity ticket once 3 retries fail so ops can pay manually before the 24h SLA expires.
     if (transfer.attempts >= 3) {
       const exceptions = doc.exceptions as Record<string, unknown>[];
       if (

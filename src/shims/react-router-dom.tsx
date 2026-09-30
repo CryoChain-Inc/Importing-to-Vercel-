@@ -18,6 +18,8 @@ import {
 } from 'react-native';
 import { present } from '../ui/style';
 
+// NOTE: Custom cross-platform routing shim that mirrors react-router-dom API.
+// Synchronizes with HTML5 History on web and React Native BackHandler on native mobile.
 type Entry = { path: string; search: string };
 type RouteState = { base: string; params: Record<string, string> };
 

@@ -26,6 +26,7 @@ function textOf(node: ReactNode): string {
   return '';
 }
 
+// Inspects React child hierarchy to determine whether nodes should render as inline Text, flex row, or block View.
 function flow(node: ReactNode): 'text' | 'row' | 'block' {
   if (
     node == null ||
@@ -245,6 +246,10 @@ function paint(children: ReactNode, text: TextStyle) {
   );
 }
 
+/**
+ * Universal component adapter that maps web HTML tags (div, span, button, table, select)
+ * into equivalent React Native primitives (View, Text, Pressable, TextInput, Modal).
+ */
 export function Host(props: {
   tag: string;
   className?: string;

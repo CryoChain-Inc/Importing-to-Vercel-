@@ -4,6 +4,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   const who = await caller(req);
   if (who.error) return who.error;
+  // SMS dispatch is restricted to operational field staff and management.
   if (!['ops', 'agent', 'driver'].includes(who.profile.role))
     return json({ error: 'Staff only.' }, 403);
   const body = await req.json().catch(() => ({}));
@@ -21,6 +22,7 @@ Deno.serve(async (req) => {
   if (sms.status === 'sent' || sms.status === 'delivered')
     return json({ ok: true, ref: 'already-sent' });
   try {
+    // Hubtel is the primary direct-to-MNO SMS aggregator in Ghana; Africa's Talking is the fallback.
     if (provider === 'africastalking') result = await africa(sms.to, sms.body);
     else result = await hubtel(sms.to, sms.body);
   } catch (err) {
@@ -66,7 +68,12 @@ async function hubtel(to: string, body: string) {
       Authorization: `Basic ${btoa(`${id}:${secret}`)}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ From: from, To: to.replace(/\s/g, ''), Content: body }),
+    body: JSON.stringify({
+      From: from,
+      // Aggregator rejects numbers containing spacing or hyphens.
+      To: to.replace(/\s/g, ''),
+      Content: body,
+    }),
   });
   const raw = await res.json().catch(() => ({}));
   if (!res.ok)

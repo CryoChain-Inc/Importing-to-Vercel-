@@ -148,6 +148,8 @@ function createSettlement(s: State, c: Consignment) {
     createdAt: c.coldBoxAt ?? Date.now(),
     status: 'pending_delivery',
   };
+  // Conflict handling: If ops cancelled the consignment while the field agent captured it offline,
+  // do not silently discard either; hold payment and open a high-severity review exception.
   if (c.status === 'cancelled') {
     st.status = 'held';
     st.heldReason = 'Sync conflict: ops cancelled this consignment while it was captured offline';
@@ -178,6 +180,9 @@ function createSettlement(s: State, c: Consignment) {
   }
   s.settlements.unshift(st);
 }
+/**
+ * Activates pending settlements upon buyer delivery, starting the 24-hour payout countdown.
+ */
 function makePayable(s: State, orderId: string, at: number) {
   s.settlements
     .filter((x) => x.orderId === orderId && x.status === 'pending_delivery')
@@ -315,6 +320,7 @@ function applyEffects(s: State, ev: DeviceEvent) {
         makePayable(s, oid, d.at);
         const o = order(s, oid);
         o?.lines.forEach((l) => {
+          // Buyer rejections trigger credit note reviews; farmer payout is protected and remains intact.
           if (l.rejectedKg && l.rejectedKg > 0)
             openException(
               s,
@@ -351,6 +357,7 @@ function deviceEvent(
     status: 'pending',
     sizeKb,
   };
+  // Offline-first: Apply immediately when online; buffer in sequential FIFO outbox when offline.
   if (d.online) {
     ev.receivedAt = Date.now();
     applyEffects(s, ev);
@@ -378,6 +385,7 @@ function syncDevice(s: State, deviceId: string) {
   d.lastSyncAt = Date.now();
 }
 function processTransfer(s: State, t: Transfer) {
+  // When Supabase is configured, delegate execution to the payout-transfer Edge Function.
   if (remoteEnabled) {
     if (
       t.status === 'succeeded' ||

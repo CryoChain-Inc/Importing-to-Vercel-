@@ -5,8 +5,10 @@ import { remoteEnabled } from './config';
 import { supabase } from './client';
 
 export async function capturePhoto(label: string): Promise<string | null> {
+  // Offline prototype fallback allows full UI testing without Supabase storage.
   if (!remoteEnabled) return label;
   const camera = await ImagePicker.requestCameraPermissionsAsync();
+  // Native requires base64 extraction to construct binary payloads; web can fetch asset.uri directly.
   const shot = camera.granted
     ? await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
@@ -23,6 +25,7 @@ export async function capturePhoto(label: string): Promise<string | null> {
   const { data: userData } = await supabase.auth.getUser();
   const uid = userData.user?.id;
   if (!uid) return null;
+  // Prefix path with user ID to satisfy Supabase storage row-level security policies.
   const path = `${uid}/${label}-${Date.now()}.jpg`;
   const body = asset.base64
     ? base64Bytes(asset.base64)
@@ -49,6 +52,7 @@ export async function readPosition(): Promise<{ lat: number; lng: number; at: nu
   if (!remoteEnabled) return null;
   const perm = await Location.requestForegroundPermissionsAsync();
   if (perm.status !== 'granted') return null;
+  // Use Balanced accuracy (~100m) to preserve mobile battery during all-day transit runs.
   const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
   return { lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() };
 }

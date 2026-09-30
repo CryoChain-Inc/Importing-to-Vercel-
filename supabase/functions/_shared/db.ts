@@ -6,6 +6,9 @@ export const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/**
+ * Admin client with service role key, bypassing RLS for trusted Edge Function operations.
+ */
 export function adminClient(): SupabaseClient {
   return createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,6 +26,9 @@ export function json(body: unknown, status = 200) {
   });
 }
 
+/**
+ * Validates the caller's JWT and loads their profile row to resolve RBAC permissions.
+ */
 export async function caller(req: Request) {
   const header = req.headers.get('Authorization') ?? '';
   const jwt = header.replace('Bearer ', '');
@@ -50,6 +56,9 @@ export async function readWorkspace(admin: SupabaseClient) {
   return data as { version: number; state: Record<string, unknown> } | null;
 }
 
+/**
+ * Atomic compare-and-swap (CAS) update. Only succeeds if the version has not incremented.
+ */
 export async function writeWorkspace(
   admin: SupabaseClient,
   version: number,
@@ -69,6 +78,10 @@ export async function writeWorkspace(
   return (data ?? [])[0] as { version: number } | undefined;
 }
 
+/**
+ * Executes a mutation against the workspace using optimistic concurrency control with retry.
+ * Handles concurrent writes without requiring explicit database row locking.
+ */
 export async function mutateWorkspace(
   admin: SupabaseClient,
   change: (state: Record<string, unknown>) => void,

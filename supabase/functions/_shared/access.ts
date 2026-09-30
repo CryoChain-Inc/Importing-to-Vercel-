@@ -44,8 +44,13 @@ function arr(state: Rec, key: string): Rec[] {
   return Array.isArray(state[key]) ? (state[key] as Rec[]) : [];
 }
 
+/**
+ * Projects and redacts the global workspace document based on the authenticated user's role.
+ * Acts as an in-memory Row-Level Security (RLS) enforcement layer.
+ */
 export function filterFor(state: Rec, profile: Profile): Rec {
   const next = structuredClone(state) as Rec;
+  // Ops, field agents, and drivers require full operational visibility across all collections.
   if (profile.role === 'ops' || profile.role === 'agent' || profile.role === 'driver') {
     applySession(next, profile);
     return next;
@@ -67,9 +72,11 @@ export function filterFor(state: Rec, profile: Profile): Rec {
     next.runs = arr(next, 'runs').filter((r) => runIds.has(String(r.id)));
     next.temps = arr(next, 'temps').filter((t) => runIds.has(String(t.runId)));
     next.deliveries = arr(next, 'deliveries').filter((d) => orderIds.has(String(d.orderId)));
+    // Strip farm-gate photos to protect farmer privacy and reduce payload size.
     next.consignments = arr(next, 'consignments')
       .filter((c) => orderIds.has(String(c.orderId)))
       .map((c) => ({ ...c, photos: [] }));
+    // Zero out private operational, payout, and internal collections.
     for (const key of [
       'farmers',
       'availability',
@@ -102,6 +109,7 @@ export function filterFor(state: Rec, profile: Profile): Rec {
     next.settlements = arr(next, 'settlements').filter((s) => s.farmerId === farmerId);
     next.sms = arr(next, 'sms').filter((m) => m.farmerId === farmerId);
     next.availability = arr(next, 'availability').filter((a) => a.farmerId === farmerId);
+    // Redact commercial details (pricing, buyer address, order lines) to preserve customer privacy.
     next.orders = arr(next, 'orders')
       .filter((o) => orderIds.has(String(o.id)))
       .map((o) => ({
@@ -149,8 +157,13 @@ export function filterFor(state: Rec, profile: Profile): Rec {
   return next;
 }
 
+// Order statuses that have advanced past buyer submission or payment.
 const PROGRESSED = new Set(['paid', 'allocated', 'in_collection', 'delivered', 'closed', 'held']);
 
+/**
+ * Safely merges buyer mutations into the authoritative server state.
+ * Prevents client rollbacks of webhook-confirmed payments and warehouse allocations.
+ */
 export function mergeBuyer(
   server: Rec,
   client: Rec,
@@ -181,6 +194,7 @@ export function mergeBuyer(
       const prev = serverOrders.find((x) => x.id === o.id);
       if (!prev) return o;
       const payment = prev.payment as Rec | undefined;
+      // Do not allow an offline or stale buyer client to revert an order confirmed or allocated on server.
       const serverAhead = PROGRESSED.has(String(prev.status)) || payment?.status === 'confirmed';
       const clientEarly =
         String(o.status) === 'approved' ||
@@ -224,6 +238,10 @@ export function mergeBuyer(
   return { state: next };
 }
 
+/**
+ * Operational staff (ops, agents, drivers) hold authoritative state.
+ * Advances the logical clock (seq) and blanks transient device sessions before commit.
+ */
 export function replaceOperational(server: Rec, client: Rec): Rec {
   const next = structuredClone(client) as Rec;
   next.seq = Math.max(Number(client.seq ?? 0), Number(server.seq ?? 0));

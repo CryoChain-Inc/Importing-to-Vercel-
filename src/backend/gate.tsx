@@ -15,6 +15,10 @@ type AuthValue = {
 };
 
 let emailLinkAdopted = false;
+/**
+ * Extracts magic link / invite tokens from the URL hash, establishes the session,
+ * and immediately purges the hash from the browser URL to prevent token leakage in history or referrers.
+ */
 async function sessionFromEmailLink() {
   if (emailLinkAdopted || typeof window === 'undefined') return;
   const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
@@ -65,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileError(null);
       return;
     }
+    // Fallback RPC creates profile row if the auth trigger had not fired yet.
     const ensured = await supabase.rpc('ensure_my_profile');
     if (ensured.error || !ensured.data) {
       setProfile(null);

@@ -747,6 +747,7 @@ function Stop() {
               Weight from the scale
             </Host>
             <Keypad value={kgv} onChange={setKg} />
+            {/* If weight falls below tolerance threshold, flag as short to trigger an ops allocation re-cut */}
             {w > 0 && w < c.plannedKg * (1 - state.config.tolerancePct / 100) && (
               <Host tag="div" className="tint-amber">
                 Short: {round2(c.plannedKg - w)} kg under the {c.plannedKg} kg planned. Ops will

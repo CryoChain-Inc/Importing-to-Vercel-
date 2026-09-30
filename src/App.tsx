@@ -29,6 +29,7 @@ import OpsApp from './roles/ops/Ops';
 import { colors } from './ui/theme';
 import type { ReactNode } from 'react';
 
+// Workaround: React Native Web defaults can prevent automatic word breaking inside flex containers.
 function useWebTextWrap() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -64,6 +65,10 @@ function Wait({ text }: { text: string }) {
   );
 }
 
+/**
+ * RBAC route guard. Verifies that the authenticated user matches the required role
+ * and has their requisite operational device, farmer profile, or ops credentials provisioned.
+ */
 function RoleOnly({
   role,
   children,

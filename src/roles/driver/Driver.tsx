@@ -117,6 +117,7 @@ function TempSheet({
           </Host>
         </Host>
       </Host>
+      {/* Temperature breach: Require driver explanation to attach to the high-severity exception ticket */}
       {oor && (
         <Field label="What happened">
           <Host
