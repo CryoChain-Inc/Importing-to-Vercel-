@@ -73,4 +73,4 @@ export function orderById(state: State, id: string): Order | undefined { return 
 export function settlementDeadline(payableAt: number) { return payableAt + 24 * H; }
 export function checkpointLabel(cp: string, stopLabel?: string) { return ({ load: 'Load · node', farm_stop: `Stop · ${stopLabel ?? ''}`, depart_last: 'Departure · last stop', arrival: `Arrival · ${stopLabel ?? 'buyer'}`, handover: 'Handover' } as Record<string, string>)[cp] ?? cp; }
 export function nextId(prefix: string, n: number) { return `${prefix}-${String(n).padStart(4, '0')}`; }
-export function uuid() { return (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2) + Date.now().toString(16)); }
+export function uuid() { const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto; if (c?.randomUUID) return c.randomUUID(); return Math.random().toString(16).slice(2) + Date.now().toString(16); }

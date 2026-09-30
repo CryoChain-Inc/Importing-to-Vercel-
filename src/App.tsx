@@ -1,40 +1,84 @@
-import { Link, Route, Routes } from 'react-router-dom';
-import { StoreProvider } from './domain/store';
-import { DemoBar } from './layouts/shells';
-import { Logo } from './ui/kit';
+import { useEffect } from 'react';
+import { useFonts, Fraunces_400Regular } from '@expo-google-fonts/fraunces';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { StatusBar } from 'expo-status-bar';
+import { Platform, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { NavProvider, Navigate, Route, Routes } from 'react-router-dom';
+import { StoreProvider, useStore } from './domain/store';
+import { remoteEnabled } from './backend/config';
+import { AccountBar, AuthProvider, AuthScreen, MissingProfile, PendingAccess, SetupScreen, useAuth } from './backend/gate';
 import BuyerApp from './roles/buyer/Buyer';
 import FarmerApp from './roles/farmer/Farmer';
 import AgentApp from './roles/agent/Agent';
 import DriverApp from './roles/driver/Driver';
 import OpsApp from './roles/ops/Ops';
+import { colors } from './ui/theme';
+import type { ReactNode } from 'react';
 
-const ROLES = [
-  { to: '/buyer', name: 'Buyer', sub: 'Order by category, approve, pay in full, accept on delivery', who: 'Hotels, grocery chains, mining camps, caterers, exporters' },
-  { to: '/farmer', name: 'Farmer', sub: 'Your pickups, your prices, your payments', who: 'Feature phone by SMS, browser for those with a smartphone' },
-  { to: '/agent', name: 'Field agent', sub: 'Weigh, grade, photograph, into cold box. No signal needed', who: 'Company handset, native app' },
-  { to: '/driver', name: 'Driver', sub: 'Stops, temperature checkpoints, delivery signature', who: 'Company handset, native app' },
-  { to: '/ops', name: 'Operations', sub: 'Order book, allocation, runs, settlements, payout runs, exceptions', who: 'Node manager and approvers, desktop' },
-];
-const LOOP = ['Order and pay', 'Allocate', 'Weigh and grade', 'Collect cold', 'Deliver', 'Pay farmers'];
-function Landing() {
-  return <div style={{ minHeight: '100dvh', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', background: 'var(--paper)' }} className="landing">
-    <style>{`@media (max-width:900px){.landing{grid-template-columns:1fr !important}.landing .dark{min-height:auto}}`}</style>
-    <div className="dark" style={{ background: 'var(--ink)', color: '#fff', padding: '48px 44px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Logo h={26} style={{ filter: 'brightness(0) invert(1)', alignSelf: 'flex-start' }} />
-      <div className="hero" style={{ fontSize: 40, maxWidth: 520, marginTop: 24 }}>Cold from the farm gate to your door.</div>
-      <div style={{ fontSize: 16, lineHeight: 1.6, color: 'var(--steel)', maxWidth: 520 }}>One operational system for buyers, farmers, field agents, drivers and operations. Buyers pay before collection. Farmers are paid within 24 hours of delivery. Everything the field captures works with no signal.</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, maxWidth: 520 }}>{LOOP.map((s, i) => <div key={s} style={{ padding: '10px 12px', border: '1px solid rgba(255,255,255,.18)', borderRadius: 8, fontSize: 13 }}><div style={{ fontSize: 11, color: 'var(--steel)' }}>0{i + 1}</div><div style={{ fontWeight: 600 }}>{s}</div></div>)}</div>
-      <div style={{ marginTop: 'auto', fontSize: 12, color: 'var(--steel)' }}>Version one prototype · Nsawam node · demo data resets from the bar below</div>
-    </div>
-    <div style={{ padding: '48px 44px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
-      <div className="lbl">Choose a role to explore</div>
-      <div className="h24">Every role, one account, one backend.</div>
-      <div className="muted" style={{ marginBottom: 8 }}>Demo accounts are already signed in. The bar at the bottom left switches role and the person you are acting as.</div>
-      {ROLES.map(r => <Link key={r.to} to={r.to} className="item" style={{ padding: 16, gap: 4 }}><div className="row"><span className="h16">{r.name}</span><span style={{ color: 'var(--blue)', fontWeight: 600 }}>Open →</span></div><div style={{ fontSize: 14 }}>{r.sub}</div><div className="cap">{r.who}</div></Link>)}
-      <div className="card card-pad" style={{ fontSize: 13, lineHeight: 1.5 }}><strong>Five flows to walk.</strong> A buyer places and pays an order. Ops allocates it across seven farmers and builds the run. The agent captures with no signal, one comes in short, ops re-cuts. The driver runs the stops with checkpoints and delivers with one rejected line. Ops raises a payout run above the threshold, two approvers approve, one transfer fails into Exceptions, the rest pay and the farmer gets the SMS.</div>
-    </div>
-  </div>;
+function useWebTextWrap() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const id = 'cc-text-wrap';
+    const css = '#root [dir="auto"]{overflow-wrap:break-word;white-space:normal;}';
+    const node = document.getElementById(id) ?? document.createElement('style');
+    node.id = id;
+    node.textContent = css;
+    if (!node.parentElement) document.head.appendChild(node);
+  }, []);
 }
+
+function RoleHome() {
+  const { profile } = useAuth();
+  const to = profile?.role === 'buyer' ? '/buyer' : profile?.role === 'farmer' ? '/farmer' : profile?.role === 'agent' ? '/agent' : profile?.role === 'driver' ? '/driver' : '/ops';
+  return <Navigate to={to} replace />;
+}
+
+function Wait({ text }: { text: string }) {
+  return <View style={{ flex: 1, padding: 28, justifyContent: 'center', backgroundColor: colors.paper }}><Text style={{ fontSize: 16, lineHeight: 24, color: colors.ink }}>{text}</Text></View>;
+}
+
+function RoleOnly({ role, children }: { role: 'buyer' | 'farmer' | 'agent' | 'driver' | 'ops'; children: ReactNode }) {
+  const { profile } = useAuth();
+  const { state } = useStore();
+  if (profile?.role !== role) return <Navigate to="/" replace />;
+  if (role === 'farmer' && !state.farmers.some(farmer => farmer.id === state.session.farmerId)) return <Wait text="Operations has not linked this login to a farmer record. They do that from Team access, after a field agent registers the farmer." />;
+  if (role === 'agent' && !state.devices.some(device => device.id === state.session.agentDeviceId && device.role === 'agent')) return <Wait text="Operations has not attached a handset to this agent. They do that from Team access." />;
+  if (role === 'driver' && !state.devices.some(device => device.id === state.session.driverDeviceId && device.role === 'driver')) return <Wait text="Operations has not attached a handset to this driver. They do that from Team access." />;
+  if (role === 'ops' && !state.opsUsers.some(user => user.id === state.session.opsUserId)) return <Wait text="This operations login is not on the node record yet." />;
+  return children;
+}
+
+function SyncBanner() {
+  const { syncNote } = useStore();
+  if (!syncNote) return null;
+  return <Text style={{ backgroundColor: '#F4E4C8', color: colors.ink, paddingHorizontal: 12, paddingVertical: 8 }}>{syncNote}</Text>;
+}
+
+function Workspace() {
+  return <StoreProvider><NavProvider><SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><StatusBar style="dark" /><AccountBar /><SyncBanner /><View style={{ flex: 1 }}><Routes>
+    <Route path="/" element={<RoleHome />} />
+    <Route path="/buyer/*" element={<RoleOnly role="buyer"><BuyerApp /></RoleOnly>} />
+    <Route path="/farmer/*" element={<RoleOnly role="farmer"><FarmerApp /></RoleOnly>} />
+    <Route path="/agent/*" element={<RoleOnly role="agent"><AgentApp /></RoleOnly>} />
+    <Route path="/driver/*" element={<RoleOnly role="driver"><DriverApp /></RoleOnly>} />
+    <Route path="/ops/*" element={<RoleOnly role="ops"><OpsApp /></RoleOnly>} />
+  </Routes></View></SafeAreaView></NavProvider></StoreProvider>;
+}
+
+function SignedIn() {
+  const { ready, session, profile } = useAuth();
+  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
+  if (!session) return <AuthScreen />;
+  if (!profile) return <MissingProfile />;
+  if (profile.role === 'pending') return <PendingAccess />;
+  return <Workspace />;
+}
+
 export default function App() {
-  return <StoreProvider><Routes><Route path="/" element={<Landing />} /><Route path="/buyer/*" element={<BuyerApp />} /><Route path="/farmer/*" element={<FarmerApp />} /><Route path="/agent/*" element={<AgentApp />} /><Route path="/driver/*" element={<DriverApp />} /><Route path="/ops/*" element={<OpsApp />} /></Routes><DemoBar /></StoreProvider>;
+  useWebTextWrap();
+  const [ready] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Fraunces_400Regular });
+  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
+  if (!remoteEnabled) return <SafeAreaProvider><SetupScreen /></SafeAreaProvider>;
+  return <SafeAreaProvider><AuthProvider><SignedIn /></AuthProvider></SafeAreaProvider>;
 }

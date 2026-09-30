@@ -1,0 +1,4 @@
+project_id = "cryochain"
+
+[functions.webhooks]
+verify_jwt = false

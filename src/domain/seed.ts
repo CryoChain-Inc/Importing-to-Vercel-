@@ -200,3 +200,34 @@ export function buildSeed(now = Date.now()): State {
     seq: 8000, seededAt: now,
   };
 }
+
+/** Catalog, prices, and rules only. No sample customers, orders, or payouts. */
+export function emptyOperatingState(now = Date.now()): State {
+  const seeded = buildSeed(now);
+  return {
+    ...seeded,
+    orgs: [],
+    buyerUsers: [],
+    orders: [],
+    farmers: [],
+    availability: [],
+    consignments: [],
+    runs: [],
+    temps: [],
+    deliveries: [],
+    settlements: [],
+    payoutRuns: [],
+    transfers: [],
+    ledger: [],
+    exceptions: [],
+    sms: [],
+    events: [],
+    devices: [],
+    opsUsers: [],
+    audit: [],
+    config: { ...seeded.config, approverIds: [] },
+    session: { buyerUserId: '', opsUserId: '', farmerId: '', agentDeviceId: '', driverDeviceId: '', draft: { lines: [], deliveryDate: '', address: '' } },
+    seq: 1000,
+    seededAt: now,
+  };
+}
