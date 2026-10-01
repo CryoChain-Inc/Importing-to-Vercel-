@@ -1,6 +1,7 @@
 import type {
   Config,
   Consignment,
+  Device,
   Farmer,
   Order,
   OrderStatus,
@@ -300,4 +301,17 @@ export function uuid() {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   if (c?.randomUUID) return c.randomUUID();
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+/** A run belongs to the handset Ops picked. Older runs stored the display name instead of the device id. */
+export function runAssignedTo(assigned: string, device: Pick<Device, 'id' | 'userName'>) {
+  return assigned === device.id || assigned === device.userName;
+}
+
+export function assignedStaffName(devices: Device[], assigned: string) {
+  return (
+    devices.find((d) => d.id === assigned)?.userName ??
+    devices.find((d) => d.userName === assigned)?.userName ??
+    assigned
+  );
 }

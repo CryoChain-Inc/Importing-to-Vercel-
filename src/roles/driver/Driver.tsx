@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../domain/store';
 import type { Checkpoint } from '../../domain/types';
-import { fmtStamp, fmtTime } from '../../domain/logic';
+import { fmtStamp, fmtTime, runAssignedTo } from '../../domain/logic';
 import {
   Btn,
   Chip,
@@ -24,7 +24,7 @@ import { capturePhoto, readPosition } from '../../backend/media';
 function useDriver() {
   const { state, act, now } = useStore();
   const dev = state.devices.find((d) => d.id === state.session.driverDeviceId)!;
-  const mine = state.runs.filter((r) => r.driverId === dev.userName);
+  const mine = state.runs.filter((r) => runAssignedTo(r.driverId, dev));
   const run =
     mine
       .filter((r) => r.status === 'in_progress' || r.status === 'planned')

@@ -892,6 +892,9 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
     }) {
       let id = '';
       mutate((s) => {
+        const driver = s.devices.find((d) => d.id === input.driverId && d.role === 'driver');
+        const agent = s.devices.find((d) => d.id === input.agentId && d.role === 'agent');
+        if (!driver || !agent) return;
         id = nid(s, 'RUN');
         const stops: State['runs'][number]['stops'] = [];
         const seen = new Map<string, number>();
@@ -944,10 +947,28 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           opsName(s),
           'Created collection run',
           id,
-          `${stops.length - 1} farm stops, ${orderIds.join(', ')}`,
+          `${stops.length - 1} farm stops, ${orderIds.join(', ')}, driver ${driver.userName}, agent ${agent.userName}`,
         );
       });
       return id;
+    },
+    assignRunCrew(runId: string, driverId: string, agentId: string) {
+      mutate((s) => {
+        const r = s.runs.find((x) => x.id === runId);
+        if (!r || r.status !== 'planned') return;
+        const driver = s.devices.find((d) => d.id === driverId && d.role === 'driver');
+        const agent = s.devices.find((d) => d.id === agentId && d.role === 'agent');
+        if (!driver || !agent) return;
+        r.driverId = driver.id;
+        r.agentId = agent.id;
+        audit(
+          s,
+          opsName(s),
+          'Assigned run crew',
+          runId,
+          `driver ${driver.userName}, agent ${agent.userName}`,
+        );
+      });
     },
     addToRun(runId: string, consignmentId: string) {
       mutate((s) => {

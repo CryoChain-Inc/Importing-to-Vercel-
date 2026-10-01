@@ -2,7 +2,7 @@ import { Host } from '../../ui/host';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../domain/store';
-import type { Exception, Order, Settlement } from '../../domain/types';
+import type { Device, Exception, Order, Run, Settlement } from '../../domain/types';
 import {
   CONS_LABEL,
   CONS_TONE,
@@ -15,6 +15,7 @@ import {
   TR_LABEL,
   TR_TONE,
   approvalsNeeded,
+  assignedStaffName,
   canApprove,
   fmtDay,
   fmtStamp,
@@ -22,6 +23,7 @@ import {
   lineCoverage,
   maskMomo,
   round2,
+  runAssignedTo,
 } from '../../domain/logic';
 import {
   Btn,
@@ -731,11 +733,19 @@ function Allocation() {
     </Shell>
   );
 }
+function handsets(devices: Device[], role: Device['role']) {
+  return devices.filter((d) => d.role === role);
+}
+
 function Runs() {
   const { state, act } = useOps();
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
   const [truck, setTruck] = useState('GS 2140-26');
+  const drivers = handsets(state.devices, 'driver');
+  const agents = handsets(state.devices, 'agent');
+  const [driverId, setDriverId] = useState('');
+  const [agentId, setAgentId] = useState('');
   const unassigned = state.consignments.filter((c) => !c.runId && c.status === 'planned');
   const byOrder = [...new Set(unassigned.map((c) => c.orderId))];
   const orgOf = (cid: string) =>
@@ -753,6 +763,12 @@ function Runs() {
           md
           onClick={() => {
             setSel(unassigned.map((c) => c.id));
+            setDriverId((current) =>
+              drivers.some((d) => d.id === current) ? current : (drivers[0]?.id ?? ''),
+            );
+            setAgentId((current) =>
+              agents.some((d) => d.id === current) ? current : (agents[0]?.id ?? ''),
+            );
             setOpen(true);
           }}
           disabled={!unassigned.length}
@@ -772,8 +788,8 @@ function Runs() {
               </Host>
               <Host tag="td">{fmtDay(r.date)}</Host>
               <Host tag="td">{r.truck}</Host>
-              <Host tag="td">{r.driverId}</Host>
-              <Host tag="td">{r.agentId}</Host>
+              <Host tag="td">{assignedStaffName(state.devices, r.driverId)}</Host>
+              <Host tag="td">{assignedStaffName(state.devices, r.agentId)}</Host>
               <Host tag="td">{r.stops.filter((s) => s.kind === 'farm').length} farms</Host>
               <Host tag="td">
                 {[
@@ -808,6 +824,50 @@ function Runs() {
             <Host tag="option">GS 2141-26</Host>
           </Host>
         </Field>
+        <Field label="Driver">
+          <Host
+            tag="select"
+            className="input"
+            value={driverId}
+            onChange={(e) => setDriverId(e.target.value)}
+          >
+            {drivers.length === 0 ? (
+              <Host tag="option" value="">
+                No driver linked yet
+              </Host>
+            ) : null}
+            {drivers.map((d) => (
+              <Host key={d.id} tag="option" value={d.id}>
+                {d.userName}
+              </Host>
+            ))}
+          </Host>
+        </Field>
+        <Field label="Field agent">
+          <Host
+            tag="select"
+            className="input"
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
+          >
+            {agents.length === 0 ? (
+              <Host tag="option" value="">
+                No field agent linked yet
+              </Host>
+            ) : null}
+            {agents.map((d) => (
+              <Host key={d.id} tag="option" value={d.id}>
+                {d.userName}
+              </Host>
+            ))}
+          </Host>
+        </Field>
+        {!drivers.length || !agents.length ? (
+          <Host tag="div" className="tint-amber">
+            Link a field agent and a driver from Team access before publishing a run. The manifest
+            goes only to the handsets you pick here.
+          </Host>
+        ) : null}
         <Host tag="div" className="lbl">
           Consignments (in stop order)
         </Host>
@@ -854,7 +914,7 @@ function Runs() {
           </Host>
         ))}
         <Btn
-          disabled={!sel.length}
+          disabled={!sel.length || !driverId || !agentId}
           onClick={() => {
             const org = orgOf(sel[0]);
             act.createRun({
@@ -862,8 +922,8 @@ function Runs() {
                 (o) => o.id === state.consignments.find((c) => c.id === sel[0])!.orderId,
               )!.deliveryDate,
               truck,
-              driverId: 'Yaw Mensah',
-              agentId: 'Kojo Antwi',
+              driverId,
+              agentId,
               consignmentIds: sel,
               deliveryLabel: org.name,
               deliveryAddress: org.address,
@@ -875,6 +935,84 @@ function Runs() {
         </Btn>
       </Sheet>
     </Shell>
+  );
+}
+function linkedHandset(devices: Device[], role: Device['role'], assigned: string) {
+  return devices.find((d) => d.role === role && runAssignedTo(assigned, d))?.id ?? '';
+}
+
+function RunCrew({ run }: { run: Run }) {
+  const { state, act } = useOps();
+  const drivers = handsets(state.devices, 'driver');
+  const agents = handsets(state.devices, 'agent');
+  const [driverPick, setDriverPick] = useState<string | null>(null);
+  const [agentPick, setAgentPick] = useState<string | null>(null);
+  const driverId = driverPick ?? linkedHandset(state.devices, 'driver', run.driverId);
+  const agentId = agentPick ?? linkedHandset(state.devices, 'agent', run.agentId);
+  const driverLinked = Boolean(linkedHandset(state.devices, 'driver', run.driverId));
+  const agentLinked = Boolean(linkedHandset(state.devices, 'agent', run.agentId));
+  return (
+    <Host tag="div" className="card card-pad col gap8" style={{ maxWidth: 480 }}>
+      <Host tag="div" className="lbl">
+        Driver and field agent
+      </Host>
+      {!driverLinked || !agentLinked ? (
+        <Host tag="div" className="tint-amber">
+          This run is not on a linked handset, so the phones will not show it. Pick the driver and
+          the field agent who should receive the manifest.
+        </Host>
+      ) : null}
+      <Field label="Driver">
+        <Host
+          tag="select"
+          className="input"
+          value={driverId}
+          onChange={(e) => setDriverPick(e.target.value)}
+        >
+          {drivers.length === 0 ? (
+            <Host tag="option" value="">
+              No driver linked yet
+            </Host>
+          ) : null}
+          {drivers.map((d) => (
+            <Host key={d.id} tag="option" value={d.id}>
+              {d.userName}
+            </Host>
+          ))}
+        </Host>
+      </Field>
+      <Field label="Field agent">
+        <Host
+          tag="select"
+          className="input"
+          value={agentId}
+          onChange={(e) => setAgentPick(e.target.value)}
+        >
+          {agents.length === 0 ? (
+            <Host tag="option" value="">
+              No field agent linked yet
+            </Host>
+          ) : null}
+          {agents.map((d) => (
+            <Host key={d.id} tag="option" value={d.id}>
+              {d.userName}
+            </Host>
+          ))}
+        </Host>
+      </Field>
+      <Btn
+        kind="secondary"
+        disabled={
+          !driverId ||
+          !agentId ||
+          (driverId === linkedHandset(state.devices, 'driver', run.driverId) &&
+            agentId === linkedHandset(state.devices, 'agent', run.agentId))
+        }
+        onClick={() => act.assignRunCrew(run.id, driverId, agentId)}
+      >
+        Assign to these handsets
+      </Btn>
+    </Host>
   );
 }
 function RunDetail() {
@@ -897,10 +1035,12 @@ function RunDetail() {
       }
     >
       <Host tag="div" className="cap">
-        Driver {r.driverId} · Agent {r.agentId} · range {r.tempMin} to {r.tempMax} °C · position{' '}
-        {r.positionOn ? 'on' : 'off'}
+        Driver {assignedStaffName(state.devices, r.driverId)} · Agent{' '}
+        {assignedStaffName(state.devices, r.agentId)} · range {r.tempMin} to {r.tempMax} °C ·
+        position {r.positionOn ? 'on' : 'off'}
         {r.position ? ` · ${r.position.lat.toFixed(5)}, ${r.position.lng.toFixed(5)}` : ''}
       </Host>
+      {r.status === 'planned' ? <RunCrew key={r.id} run={r} /> : null}
       <Tbl
         head={[
           '#',
