@@ -1175,7 +1175,7 @@ export function buildSeed(now = Date.now()): State {
       idempotencyKey: 'a1b2c3d4-7001',
       status: 'succeeded' as const,
       attempts: 1,
-      providerRef: 'FLW-A1B2C3D4',
+      providerRef: 'PSK-A1B2C3D4',
       at: t(-6, 12, 10),
     },
     {
@@ -1189,7 +1189,7 @@ export function buildSeed(now = Date.now()): State {
       idempotencyKey: 'a1b2c3d4-7002',
       status: 'succeeded' as const,
       attempts: 1,
-      providerRef: 'FLW-A1B2C3D5',
+      providerRef: 'PSK-A1B2C3D5',
       at: t(-6, 12, 10),
     },
     {
@@ -1203,7 +1203,7 @@ export function buildSeed(now = Date.now()): State {
       idempotencyKey: 'a1b2c3d4-7003',
       status: 'succeeded' as const,
       attempts: 1,
-      providerRef: 'FLW-A1B2C3D6',
+      providerRef: 'PSK-A1B2C3D6',
       at: t(-6, 12, 11),
     },
   ];
@@ -1235,7 +1235,7 @@ export function buildSeed(now = Date.now()): State {
       ref: 'STB-76010',
       orderId: 'CC-2388',
       at: t(-9, 15, 2),
-      by: 'Flutterwave webhook',
+      by: 'Paystack webhook',
     },
     {
       id: 'LG-2',
@@ -1264,7 +1264,7 @@ export function buildSeed(now = Date.now()): State {
       kind: 'payout_out' as const,
       direction: 'out' as const,
       amount: settlements[0].net,
-      ref: 'FLW-A1B2C3D4',
+      ref: 'PSK-A1B2C3D4',
       settlementId: 'ST-5001',
       transferId: 'TR-7001',
       at: t(-6, 12, 10),
@@ -1275,7 +1275,7 @@ export function buildSeed(now = Date.now()): State {
       kind: 'payout_out' as const,
       direction: 'out' as const,
       amount: settlements[1].net,
-      ref: 'FLW-A1B2C3D5',
+      ref: 'PSK-A1B2C3D5',
       settlementId: 'ST-5002',
       transferId: 'TR-7002',
       at: t(-6, 12, 10),
@@ -1286,7 +1286,7 @@ export function buildSeed(now = Date.now()): State {
       kind: 'payout_out' as const,
       direction: 'out' as const,
       amount: settlements[2].net,
-      ref: 'FLW-A1B2C3D6',
+      ref: 'PSK-A1B2C3D6',
       settlementId: 'ST-5003',
       transferId: 'TR-7003',
       at: t(-6, 12, 11),
@@ -1300,7 +1300,7 @@ export function buildSeed(now = Date.now()): State {
       ref: 'STB-77120',
       orderId: 'CC-2402',
       at: t(-4, 15, 2),
-      by: 'Flutterwave webhook',
+      by: 'Paystack webhook',
     },
     {
       id: 'LG-8',
@@ -1310,7 +1310,7 @@ export function buildSeed(now = Date.now()): State {
       ref: 'MTN-88120',
       orderId: 'CC-2396',
       at: t(-2, 9, 47),
-      by: 'Flutterwave webhook',
+      by: 'Paystack webhook',
     },
     {
       id: 'LG-9',
@@ -1320,7 +1320,7 @@ export function buildSeed(now = Date.now()): State {
       ref: 'STB-77201',
       orderId: 'CC-2410',
       at: t(-3, 14, 10),
-      by: 'Flutterwave webhook',
+      by: 'Paystack webhook',
     },
     {
       id: 'LG-10',
@@ -1341,7 +1341,7 @@ export function buildSeed(now = Date.now()): State {
       ref: 'STB-77230',
       orderId: 'CC-2420',
       at: t(0, 8, 5),
-      by: 'Flutterwave webhook',
+      by: 'Paystack webhook',
     },
   ];
   const exceptions = [
@@ -1398,7 +1398,7 @@ export function buildSeed(now = Date.now()): State {
       to: '+233 24 400 9999',
       farmerId: 'F1',
       template: 'farmer_paid',
-      body: 'CryoChain: GHS 1,350.00 sent to ••• ••• •999. Ref FLW-A1B2C3D4. Thank you.',
+      body: 'CryoChain: GHS 1,350.00 sent to ••• ••• •999. Ref PSK-A1B2C3D4. Thank you.',
       at: t(-6, 12, 11),
       status: 'delivered' as const,
       ref: 'HUB-88120',

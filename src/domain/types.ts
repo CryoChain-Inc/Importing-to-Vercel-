@@ -106,7 +106,12 @@ export type Farmer = {
   registeredBy: string;
   walletBad?: boolean;
   pendingSync?: boolean;
+  /** Wallet name lookup at the payout provider. Set before the first payout to this number. */
   momoVerified?: boolean;
+  momoName?: string;
+  momoVerifiedAt?: number;
+  momoVerifyError?: string;
+  recipientCode?: string;
 };
 export type Availability = {
   id: ID;
@@ -248,8 +253,13 @@ export type Transfer = {
   status: 'queued' | 'sent' | 'succeeded' | 'failed' | 'manual' | 'held';
   attempts: number;
   lastError?: string;
+  /** Provider's own code for the transfer (Paystack `transfer_code`). */
   providerRef?: string;
+  /** The reference we sent to the provider for the current attempt. Webhooks match on it. */
+  reference?: string;
   at?: number;
+  /** When the provider confirmed the final status (webhook or verify call). */
+  verifiedAt?: number;
 };
 export type LedgerEntry = {
   id: ID;

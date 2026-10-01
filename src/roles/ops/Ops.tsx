@@ -40,6 +40,7 @@ import {
 import { Desk } from '../../layouts/shells';
 import { TeamFields } from '../../backend/Team';
 import { remoteEnabled } from '../../backend/config';
+import { payoutPreflight, resolveWallet, verifyTransfer } from '../../backend/remote';
 import { downloadCsv } from '../buyer/Buyer';
 const NAV = [
   {
@@ -1502,6 +1503,32 @@ function Settlements() {
     </Shell>
   );
 }
+/** One line on what the payout provider knows about a farmer's wallet. */
+function walletCheckLabel(f: {
+  name: string;
+  momoVerifiedAt?: number;
+  momoName?: string;
+  momoVerifyError?: string;
+}) {
+  if (!f.momoVerifiedAt) return { text: 'Wallet not yet checked', tone: 'neutral' as const };
+  if (f.momoName)
+    return {
+      text: `Wallet name ${f.momoName}`,
+      tone: namesAlike(f.name, f.momoName) ? ('ok' as const) : ('alert' as const),
+    };
+  return { text: f.momoVerifyError ?? 'Wallet name not returned', tone: 'warn' as const };
+}
+function namesAlike(a: string, b: string) {
+  const tokens = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 1);
+  const y = new Set(tokens(b));
+  return tokens(a).some((t) => y.has(t));
+}
+
 function Payouts() {
   const { state, act, now, me } = useOps();
   const nav = useNavigate();
@@ -1509,6 +1536,8 @@ function Payouts() {
     .filter((s) => s.status === 'payable')
     .sort((a, b) => (a.deadlineAt ?? 0) - (b.deadlineAt ?? 0));
   const [sel, setSel] = useState<string[] | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [walletNote, setWalletNote] = useState('');
   const chosen = sel ?? payable.map((s) => s.id);
   const total = round2(payable.filter((s) => chosen.includes(s.id)).reduce((a, s) => a + s.net, 0));
   const two = total > state.config.payoutThreshold;
@@ -1598,6 +1627,32 @@ function Payouts() {
                         ''
                       )}
                     </Host>
+                    {remoteEnabled ? (
+                      <Host tag="div" className="cap row" style={{ gap: 8 }}>
+                        <Chip tone={walletCheckLabel(f).tone}>{walletCheckLabel(f).text}</Chip>
+                        {!f.momoName ? (
+                          <Host
+                            tag="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled={checking === f.id}
+                            onClick={() => {
+                              setChecking(f.id);
+                              setWalletNote('');
+                              void resolveWallet(f.id).then((res) => {
+                                setChecking(null);
+                                if (res.error) setWalletNote(`${f.name}: ${res.error}`);
+                                else if (res.name)
+                                  setWalletNote(
+                                    `${f.name}: wallet is registered to ${res.name}${res.match ? '' : ' (does not match the farmer name)'}.`,
+                                  );
+                              });
+                            }}
+                          >
+                            {checking === f.id ? 'Checking…' : 'Check wallet name'}
+                          </Host>
+                        ) : null}
+                      </Host>
+                    ) : null}
                   </Host>
                 </Host>
                 <Host
@@ -1634,6 +1689,18 @@ function Payouts() {
             <Host tag="div" className="cap">
               Raised by {me.name}. The person who raises a run can never approve it.
             </Host>
+            {remoteEnabled ? (
+              <Host tag="div" className="cap">
+                Before money moves, each wallet is checked with Paystack and the name is stored on
+                the farmer. A name that does not match the farmer fails the transfer so Ops can
+                decide.
+              </Host>
+            ) : null}
+            {walletNote ? (
+              <Host tag="div" className="tint-amber">
+                {walletNote}
+              </Host>
+            ) : null}
           </Host>
         </Host>
         <Host tag="div" className="side">
@@ -1672,11 +1739,47 @@ function PayoutDetail() {
   const r = state.payoutRuns.find((x) => x.id === id);
   const [note, setNote] = useState('');
   const [manual, setManual] = useState<string | null>(null);
-  const [ref, setRef] = useState('FLW-MAN-');
+  const [ref, setRef] = useState('PSK-MAN-');
   const [fix, setFix] = useState<string | null>(null);
   const [newMomo, setNewMomo] = useState('');
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [info, setInfo] = useState('');
   if (!r) return <Navigate to="/ops/payouts" />;
+  const runId = r.id;
+  // Spec 8: a run does not execute against an insufficient balance. Paystack is asked first.
+  const execute = async () => {
+    setErr('');
+    setInfo('');
+    if (!remoteEnabled) {
+      act.executePayoutRun(runId);
+      return;
+    }
+    setBusy('execute');
+    const check = await payoutPreflight(runId);
+    setBusy(null);
+    if (check.error || !check.ok) {
+      setErr(check.error ?? 'Paystack balance check failed.');
+      return;
+    }
+    setInfo(
+      `Paystack balance GHS ${(check.balance ?? 0).toFixed(2)} covers GHS ${(check.needed ?? 0).toFixed(2)}. Transfers are being sent.`,
+    );
+    act.executePayoutRun(runId);
+  };
+  const checkWithPaystack = async (transferId: string) => {
+    setErr('');
+    setBusy(transferId);
+    const res = await verifyTransfer(transferId);
+    setBusy(null);
+    if (res.error) setErr(res.error);
+    else
+      setInfo(
+        res.status === 'sent'
+          ? `Paystack still has ${transferId} as ${res.provider ?? 'pending'}. The webhook will finish it.`
+          : `Paystack reports ${transferId} as ${res.status}.`,
+      );
+  };
   const ts = state.transfers.filter((t) => r.transferIds.includes(t.id));
   // Financial dual control: Evaluates required sign-offs (1 or 2) and enforces segregation of duties.
   const need = approvalsNeeded(r);
@@ -1772,6 +1875,11 @@ function PayoutDetail() {
                   </Host>
                   <Host tag="td" className="tabular">
                     {t.network} {maskMomo(t.momo)}
+                    {remoteEnabled ? (
+                      <Host tag="div" className="cap">
+                        <Chip tone={walletCheckLabel(f).tone}>{walletCheckLabel(f).text}</Chip>
+                      </Host>
+                    ) : null}
                   </Host>
                   <Host
                     tag="td"
@@ -1790,6 +1898,12 @@ function PayoutDetail() {
                   </Host>
                   <Host tag="td" className="cap">
                     {t.providerRef ?? t.lastError ?? '—'}
+                    {t.status === 'failed' && t.providerRef && t.lastError ? (
+                      <Host tag="div">{t.lastError}</Host>
+                    ) : null}
+                    {t.verifiedAt ? (
+                      <Host tag="div">Confirmed by Paystack {fmtStamp(t.verifiedAt)}</Host>
+                    ) : null}
                   </Host>
                   <Host
                     tag="td"
@@ -1835,6 +1949,16 @@ function PayoutDetail() {
                         Paid manually
                       </Host>
                     )}
+                    {t.status === 'sent' && remoteEnabled && (
+                      <Host
+                        tag="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={busy === t.id}
+                        onClick={() => void checkWithPaystack(t.id)}
+                      >
+                        {busy === t.id ? 'Checking…' : 'Check with Paystack'}
+                      </Host>
+                    )}
                   </Host>
                 </Host>
               );
@@ -1843,6 +1967,9 @@ function PayoutDetail() {
           <Host tag="div" className="cap">
             Every transfer carries its own idempotency key. Re-executing the run only touches
             transfers that are queued or failed; nothing that succeeded is sent again.
+            {remoteEnabled
+              ? ' A transfer is marked paid only after Paystack confirms it, through the signed webhook or a verify call, never from the send response alone.'
+              : ''}
           </Host>
           <Host
             tag="button"
@@ -1903,10 +2030,14 @@ function PayoutDetail() {
           )}
           {(r.status === 'approved' || r.status === 'executing' || r.status === 'partial') && (
             <>
-              <Btn kind="field" onClick={() => act.executePayoutRun(r.id)}>
-                {r.status === 'approved' ? 'Execute payout run' : 'Re-execute remaining'}
+              <Btn kind="field" disabled={busy === 'execute'} onClick={() => void execute()}>
+                {busy === 'execute'
+                  ? 'Checking Paystack balance…'
+                  : r.status === 'approved'
+                    ? 'Execute payout run'
+                    : 'Re-execute remaining'}
               </Btn>
-              {r.status === 'approved' && (
+              {r.status === 'approved' && !remoteEnabled && (
                 <Btn kind="secondary" onClick={() => act.executePayoutRun(r.id, 1)}>
                   Demo: crash the worker after 1 transfer
                 </Btn>
@@ -1929,6 +2060,11 @@ function PayoutDetail() {
               Note: {r.note}
             </Host>
           )}
+          {info && (
+            <Host tag="div" className="tint-green">
+              {info}
+            </Host>
+          )}
           {err && (
             <Host tag="div" className="tint-red">
               {err}
@@ -1938,8 +2074,8 @@ function PayoutDetail() {
       </Host>
       <Sheet open={!!manual} onClose={() => setManual(null)} title="Paid by hand">
         <Host tag="div" className="muted">
-          Pay through the provider dashboard, then record the reference here. The ledger gets a
-          manual transfer entry and the farmer gets the SMS.
+          Pay through the Paystack dashboard, then record its transfer code (TRF_…) here. The ledger
+          gets a manual transfer entry and the farmer gets the SMS.
         </Host>
         <Field label="Provider reference">
           <Host

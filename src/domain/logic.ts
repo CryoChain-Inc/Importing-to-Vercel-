@@ -249,7 +249,7 @@ export function simulateTransfer(
 ): { status: Transfer['status']; providerRef?: string; error?: string } {
   if (!f) return { status: 'failed', error: 'Farmer record missing' };
   if (f.walletBad) return { status: 'failed', error: 'Wallet number not registered on network' };
-  return { status: 'succeeded', providerRef: `FLW-${t.idempotencyKey.slice(0, 8).toUpperCase()}` };
+  return { status: 'succeeded', providerRef: `PSK-${t.idempotencyKey.slice(0, 8).toUpperCase()}` };
 }
 export function orderLinesTotal(lines: { total: number }[]) {
   return round2(lines.reduce((s, l) => s + l.total, 0));

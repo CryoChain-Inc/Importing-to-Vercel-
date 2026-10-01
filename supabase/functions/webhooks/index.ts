@@ -1,5 +1,13 @@
 import { cors, json, adminClient, mutateWorkspace } from '../_shared/db.ts';
-import { fromPesewas, paystackFetch, validSignature } from '../_shared/paystack.ts';
+import {
+  baseTransferReference,
+  fromPesewas,
+  paystackFetch,
+  toPesewas,
+  transferReference,
+  validSignature,
+} from '../_shared/paystack.ts';
+import { markFailed, markPaid, markReversedAfterSuccess, transfersOf } from '../_shared/payouts.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -18,10 +26,86 @@ Deno.serve(async (req) => {
   } catch {
     return json({ ok: true });
   }
-  if (event.event === 'charge.success') await onCharge(adminClient(), event.data ?? {}, secret);
+  const admin = adminClient();
+  const data = event.data ?? {};
+  switch (event.event) {
+    case 'charge.success':
+      await onCharge(admin, data, secret);
+      break;
+    case 'transfer.success':
+      await onTransfer(admin, data, 'success', secret);
+      break;
+    case 'transfer.failed':
+      await onTransfer(admin, data, 'failed', secret);
+      break;
+    case 'transfer.reversed':
+      await onTransfer(admin, data, 'reversed', secret);
+      break;
+  }
   // 200 for every valid signature. Anything else makes Paystack retry for up to 72 hours.
   return json({ ok: true });
 });
+
+/**
+ * Farmer payout outcome. A success is re-verified with Paystack (`/transfer/verify/:reference`)
+ * and checked against the amount we sent before any money state changes, so a signed-but-replayed
+ * or hand-built body can never mark a settlement paid.
+ */
+async function onTransfer(
+  admin: ReturnType<typeof adminClient>,
+  data: Record<string, unknown>,
+  outcome: 'success' | 'failed' | 'reversed',
+  secret: string,
+) {
+  const reference = String(data.reference ?? '');
+  if (!reference) return;
+  let providerRef = String(data.transfer_code ?? reference);
+  let verifiedAmount: number | undefined;
+  if (outcome === 'success') {
+    const check = await paystackFetch(`/transfer/verify/${encodeURIComponent(reference)}`, secret);
+    const tx = check.raw?.data ?? {};
+    if (!check.ok || String(tx.status).toLowerCase() !== 'success') return;
+    if (String(tx.currency ?? 'GHS').toUpperCase() !== 'GHS') return;
+    providerRef = String(tx.transfer_code ?? providerRef);
+    verifiedAmount = Number(tx.amount ?? NaN);
+  }
+  await mutateWorkspace(admin, (state) => {
+    const transfers = transfersOf(state);
+    // Exact reference first; older rows without one fall back to the idempotency key.
+    const base = baseTransferReference(reference);
+    const transfer =
+      transfers.find((t) => t.reference === reference) ??
+      transfers.find((t) => transferReference(t.idempotencyKey) === base);
+    if (!transfer) return;
+    if (outcome === 'success') {
+      if (verifiedAmount !== undefined && verifiedAmount !== toPesewas(transfer.amount)) {
+        markFailed(
+          state,
+          transfer.id,
+          `Paystack confirmed GHS ${fromPesewas(verifiedAmount).toFixed(2)} against GHS ${transfer.amount.toFixed(2)} expected. Check the Paystack dashboard before retrying.`,
+          false,
+        );
+        return;
+      }
+      markPaid(state, transfer.id, providerRef);
+      return;
+    }
+    if (transfer.status === 'succeeded') {
+      if (outcome === 'reversed') markReversedAfterSuccess(state, transfer.id, providerRef);
+      return;
+    }
+    if (transfer.status === 'manual') return;
+    // Paystack already made this attempt; do not count it twice.
+    markFailed(
+      state,
+      transfer.id,
+      outcome === 'reversed'
+        ? 'Paystack reversed the transfer. The wallet could not receive it. Retry later or fix the wallet.'
+        : 'Paystack reported the transfer failed. Retry, fix the wallet, or pay manually.',
+      false,
+    );
+  });
+}
 
 async function onCharge(
   admin: ReturnType<typeof adminClient>,
