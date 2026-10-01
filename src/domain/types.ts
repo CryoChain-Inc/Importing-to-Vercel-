@@ -1,43 +1,386 @@
 export type ID = string;
 export type Role = 'buyer' | 'farmer' | 'agent' | 'driver' | 'ops';
 export type Category = { id: ID; name: string };
-export type Product = { id: ID; categoryId: ID; name: string; grades: { grade: string; pricePerKg: number }[]; minKg: number; available: boolean; photo: string };
-export type BuyerOrg = { id: ID; name: string; type: string; country: string; address: string; contact: string; status: 'pending' | 'approved' | 'suspended'; submittedAt: number; virtualAccount?: { bank: string; number: string } };
+export type Product = {
+  id: ID;
+  categoryId: ID;
+  name: string;
+  grades: { grade: string; pricePerKg: number }[];
+  minKg: number;
+  available: boolean;
+  photo: string;
+};
+export type BuyerOrg = {
+  id: ID;
+  name: string;
+  type: string;
+  country: string;
+  address: string;
+  contact: string;
+  status: 'pending' | 'approved' | 'suspended';
+  submittedAt: number;
+  virtualAccount?: { bank: string; number: string };
+};
 export type BuyerRole = 'viewer' | 'requester' | 'approver' | 'admin';
-export type BuyerUser = { id: ID; orgId: ID; name: string; phone: string; roles: BuyerRole[]; limit?: number; status: 'active' | 'invited' | 'deactivated' };
-export type OrderStatus = 'draft' | 'submitted' | 'approved' | 'awaiting_payment' | 'paid' | 'allocated' | 'in_collection' | 'delivered' | 'closed' | 'expired' | 'cancelled' | 'held';
-export type OrderLine = { id: ID; productId: ID; name: string; grade: string; qtyKg: number; unitPrice: number; total: number; deliveredKg?: number; rejectedKg?: number; rejectReason?: string; credit?: number };
-export type Payment = { method: 'bank_transfer' | 'card' | 'momo'; status: 'awaiting' | 'confirmed' | 'mismatch'; ref: string; amount: number; at?: number; checkoutUrl?: string; checkoutError?: string };
-export type Order = { id: ID; orgId: ID; requestedBy: ID; approvedBy?: ID; deliveryDate: string; address: string; status: OrderStatus; lines: OrderLine[]; linesTotal: number; creditApplied: number; total: number; payment?: Payment; submittedAt?: number; approvedAt?: number; paidAt?: number; deliveredAt?: number; acceptedAt?: number; expiresAt?: number; allocationVersion: number; runId?: ID; receiver?: string; handoverTemp?: number };
+export type BuyerUser = {
+  id: ID;
+  orgId: ID;
+  name: string;
+  phone: string;
+  roles: BuyerRole[];
+  limit?: number;
+  status: 'active' | 'invited' | 'deactivated';
+};
+export type OrderStatus =
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'awaiting_payment'
+  | 'paid'
+  | 'allocated'
+  | 'in_collection'
+  | 'delivered'
+  | 'closed'
+  | 'expired'
+  | 'cancelled'
+  | 'held';
+export type OrderLine = {
+  id: ID;
+  productId: ID;
+  name: string;
+  grade: string;
+  qtyKg: number;
+  unitPrice: number;
+  total: number;
+  deliveredKg?: number;
+  rejectedKg?: number;
+  rejectReason?: string;
+  credit?: number;
+};
+export type Payment = {
+  method: 'bank_transfer' | 'card' | 'momo';
+  status: 'awaiting' | 'confirmed' | 'mismatch';
+  ref: string;
+  amount: number;
+  at?: number;
+  checkoutUrl?: string;
+  checkoutError?: string;
+  provider?: 'paystack';
+};
+export type Order = {
+  id: ID;
+  orgId: ID;
+  requestedBy: ID;
+  approvedBy?: ID;
+  deliveryDate: string;
+  address: string;
+  status: OrderStatus;
+  lines: OrderLine[];
+  linesTotal: number;
+  creditApplied: number;
+  total: number;
+  payment?: Payment;
+  submittedAt?: number;
+  approvedAt?: number;
+  paidAt?: number;
+  deliveredAt?: number;
+  acceptedAt?: number;
+  expiresAt?: number;
+  allocationVersion: number;
+  runId?: ID;
+  receiver?: string;
+  handoverTemp?: number;
+};
 export type WalletTier = 'unknown' | 'minimum' | 'medium' | 'enhanced';
-export type Farmer = { id: ID; code: string; name: string; phone?: string; momo: string; network: 'MTN' | 'Telecel' | 'AirtelTigo'; tier: WalletTier; kyc: 'unverified' | 'verified_manual' | 'verified_provider'; village: string; consentAt: number; registeredBy: string; walletBad?: boolean; pendingSync?: boolean; momoVerified?: boolean };
-export type Availability = { id: ID; farmerId: ID; productId: ID; expectedKg: number; readyFrom: string; readyUntil: string; source: 'agent' | 'web' };
-export type ConsignmentStatus = 'planned' | 'captured' | 'cold_boxed' | 'declined' | 'in_transit' | 'delivered' | 'cancelled';
-export type Consignment = { id: ID; orderId: ID; lineId: ID; farmerId: ID; productId: ID; productName: string; plannedKg: number; farmGateKg?: number; grade?: string; pricePerKg: number; pickedAt?: string; capturedAt?: number; coldBoxAt?: number; photos: string[]; status: ConsignmentStatus; adHoc?: boolean; adHocConfirmed?: boolean; runId?: ID; stopSeq?: number; version: number; declineReason?: string; pendingSync?: boolean; short?: boolean; notes?: string };
+export type Farmer = {
+  id: ID;
+  code: string;
+  name: string;
+  phone?: string;
+  momo: string;
+  network: 'MTN' | 'Telecel' | 'AirtelTigo';
+  tier: WalletTier;
+  kyc: 'unverified' | 'verified_manual' | 'verified_provider';
+  village: string;
+  consentAt: number;
+  registeredBy: string;
+  walletBad?: boolean;
+  pendingSync?: boolean;
+  momoVerified?: boolean;
+};
+export type Availability = {
+  id: ID;
+  farmerId: ID;
+  productId: ID;
+  expectedKg: number;
+  readyFrom: string;
+  readyUntil: string;
+  source: 'agent' | 'web';
+};
+export type ConsignmentStatus =
+  'planned' | 'captured' | 'cold_boxed' | 'declined' | 'in_transit' | 'delivered' | 'cancelled';
+export type Consignment = {
+  id: ID;
+  orderId: ID;
+  lineId: ID;
+  farmerId: ID;
+  productId: ID;
+  productName: string;
+  plannedKg: number;
+  farmGateKg?: number;
+  grade?: string;
+  pricePerKg: number;
+  pickedAt?: string;
+  capturedAt?: number;
+  coldBoxAt?: number;
+  photos: string[];
+  status: ConsignmentStatus;
+  adHoc?: boolean;
+  adHocConfirmed?: boolean;
+  runId?: ID;
+  stopSeq?: number;
+  version: number;
+  declineReason?: string;
+  pendingSync?: boolean;
+  short?: boolean;
+  notes?: string;
+};
 export type StopKind = 'farm' | 'delivery';
-export type Stop = { seq: number; kind: StopKind; farmerId?: ID; orderId?: ID; orderIds?: ID[]; label: string; address: string; window: string; arrivedAt?: number; collectedAt?: number; departedAt?: number; deliveredAt?: number };
-export type Run = { id: ID; date: string; truck: string; driverId: ID; agentId: ID; status: 'planned' | 'in_progress' | 'delivered' | 'closed'; stops: Stop[]; tempMin: number; tempMax: number; closedReason?: string; positionOn?: boolean; position?: { lat: number; lng: number; at: number } };
+export type Stop = {
+  seq: number;
+  kind: StopKind;
+  farmerId?: ID;
+  orderId?: ID;
+  orderIds?: ID[];
+  label: string;
+  address: string;
+  window: string;
+  arrivedAt?: number;
+  collectedAt?: number;
+  departedAt?: number;
+  deliveredAt?: number;
+};
+export type Run = {
+  id: ID;
+  date: string;
+  truck: string;
+  driverId: ID;
+  agentId: ID;
+  status: 'planned' | 'in_progress' | 'delivered' | 'closed';
+  stops: Stop[];
+  tempMin: number;
+  tempMax: number;
+  closedReason?: string;
+  positionOn?: boolean;
+  position?: { lat: number; lng: number; at: number };
+};
 export type Checkpoint = 'load' | 'farm_stop' | 'depart_last' | 'arrival' | 'handover';
-export type TempReading = { id: ID; runId: ID; checkpoint: Checkpoint; stopSeq?: number; label: string; valueC: number; source: 'manual' | 'device'; photo: boolean; at: number; outOfRange: boolean; pendingSync?: boolean; note?: string };
-export type Delivery = { id: ID; runId: ID; orderId: ID; at: number; receiver: string; signed: boolean; lines: { lineId: ID; acceptedKg: number; rejectedKg: number; reason?: string }[]; pendingSync?: boolean };
-export type SettlementStatus = 'pending_delivery' | 'payable' | 'held' | 'in_run' | 'paid' | 'failed' | 'corrected';
-export type Settlement = { id: ID; consignmentId: ID; farmerId: ID; orderId: ID; payableKg: number; pricePerKg: number; gross: number; deductions: number; net: number; createdAt: number; payableAt?: number; deadlineAt?: number; status: SettlementStatus; correctionOf?: ID; reason?: string; heldReason?: string };
+export type TempReading = {
+  id: ID;
+  runId: ID;
+  checkpoint: Checkpoint;
+  stopSeq?: number;
+  label: string;
+  valueC: number;
+  source: 'manual' | 'device';
+  photo: boolean;
+  at: number;
+  outOfRange: boolean;
+  pendingSync?: boolean;
+  note?: string;
+};
+export type Delivery = {
+  id: ID;
+  runId: ID;
+  orderId: ID;
+  at: number;
+  receiver: string;
+  signed: boolean;
+  lines: { lineId: ID; acceptedKg: number; rejectedKg: number; reason?: string }[];
+  pendingSync?: boolean;
+};
+export type SettlementStatus =
+  'pending_delivery' | 'payable' | 'held' | 'in_run' | 'paid' | 'failed' | 'corrected';
+export type Settlement = {
+  id: ID;
+  consignmentId: ID;
+  farmerId: ID;
+  orderId: ID;
+  payableKg: number;
+  pricePerKg: number;
+  gross: number;
+  deductions: number;
+  net: number;
+  createdAt: number;
+  payableAt?: number;
+  deadlineAt?: number;
+  status: SettlementStatus;
+  correctionOf?: ID;
+  reason?: string;
+  heldReason?: string;
+};
 export type Approval = { userId: ID; name: string; at: number };
-export type PayoutRun = { id: ID; createdBy: ID; createdByName: string; createdAt: number; total: number; count: number; threshold: number; requiresTwo: boolean; approvals: Approval[]; status: 'draft' | 'pending_approval' | 'approved' | 'executing' | 'completed' | 'partial' | 'cancelled'; transferIds: ID[]; executedAt?: number; note?: string };
-export type Transfer = { id: ID; runId: ID; settlementId: ID; farmerId: ID; momo: string; network: string; amount: number; idempotencyKey: string; status: 'queued' | 'sent' | 'succeeded' | 'failed' | 'manual' | 'held'; attempts: number; lastError?: string; providerRef?: string; at?: number };
-export type LedgerEntry = { id: ID; kind: 'payment_in' | 'payout_out' | 'manual_transfer' | 'credit_note' | 'correction' | 'fee'; direction: 'in' | 'out'; amount: number; ref: string; orderId?: ID; settlementId?: ID; transferId?: ID; at: number; by: string; memo?: string };
-export type ExceptionType = 'sync_conflict_pay_affecting' | 'consignment_short' | 'farmer_no_show' | 'ad_hoc_consignment' | 'temperature_out_of_range' | 'transfer_failed' | 'wallet_limit' | 'payment_amount_mismatch' | 'payment_for_expired_order' | 'reconciliation_break' | 'delivery_rejection' | 'wallet_change_request' | 'sms_failed' | 'settlement_photos_pending';
-export type Exception = { id: ID; type: ExceptionType; severity: 'low' | 'medium' | 'high'; title: string; detail: string; entity?: { type: string; id: ID }; openedAt: number; deadlineAt?: number; status: 'open' | 'in_progress' | 'resolved' | 'dismissed'; assignee?: string; resolution?: string; resolvedAt?: number; payload?: Record<string, unknown> };
-export type Sms = { id: ID; to: string; farmerId?: ID; template: string; body: string; at: number; status: 'queued' | 'sent' | 'delivered' | 'failed'; ref: string };
-export type DeviceEvent = { id: ID; deviceId: ID; seq: number; type: string; occurredAt: number; receivedAt?: number; payload: Record<string, unknown>; status: 'pending' | 'applied' | 'error'; sizeKb?: number };
-export type Device = { id: ID; role: 'agent' | 'driver'; userName: string; online: boolean; outbox: DeviceEvent[]; lastSyncAt?: number; seq: number; appVersion: string; storageMb: number; clockSkewMin: number };
+export type PayoutRun = {
+  id: ID;
+  createdBy: ID;
+  createdByName: string;
+  createdAt: number;
+  total: number;
+  count: number;
+  threshold: number;
+  requiresTwo: boolean;
+  approvals: Approval[];
+  status:
+    'draft' | 'pending_approval' | 'approved' | 'executing' | 'completed' | 'partial' | 'cancelled';
+  transferIds: ID[];
+  executedAt?: number;
+  note?: string;
+};
+export type Transfer = {
+  id: ID;
+  runId: ID;
+  settlementId: ID;
+  farmerId: ID;
+  momo: string;
+  network: string;
+  amount: number;
+  idempotencyKey: string;
+  status: 'queued' | 'sent' | 'succeeded' | 'failed' | 'manual' | 'held';
+  attempts: number;
+  lastError?: string;
+  providerRef?: string;
+  at?: number;
+};
+export type LedgerEntry = {
+  id: ID;
+  kind: 'payment_in' | 'payout_out' | 'manual_transfer' | 'credit_note' | 'correction' | 'fee';
+  direction: 'in' | 'out';
+  amount: number;
+  ref: string;
+  orderId?: ID;
+  settlementId?: ID;
+  transferId?: ID;
+  at: number;
+  by: string;
+  memo?: string;
+};
+export type ExceptionType =
+  | 'sync_conflict_pay_affecting'
+  | 'consignment_short'
+  | 'farmer_no_show'
+  | 'ad_hoc_consignment'
+  | 'temperature_out_of_range'
+  | 'transfer_failed'
+  | 'wallet_limit'
+  | 'payment_amount_mismatch'
+  | 'payment_for_expired_order'
+  | 'reconciliation_break'
+  | 'delivery_rejection'
+  | 'wallet_change_request'
+  | 'sms_failed'
+  | 'settlement_photos_pending';
+export type Exception = {
+  id: ID;
+  type: ExceptionType;
+  severity: 'low' | 'medium' | 'high';
+  title: string;
+  detail: string;
+  entity?: { type: string; id: ID };
+  openedAt: number;
+  deadlineAt?: number;
+  status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
+  assignee?: string;
+  resolution?: string;
+  resolvedAt?: number;
+  payload?: Record<string, unknown>;
+};
+export type Sms = {
+  id: ID;
+  to: string;
+  farmerId?: ID;
+  template: string;
+  body: string;
+  at: number;
+  status: 'queued' | 'sent' | 'delivered' | 'failed';
+  ref: string;
+};
+export type DeviceEvent = {
+  id: ID;
+  deviceId: ID;
+  seq: number;
+  type: string;
+  occurredAt: number;
+  receivedAt?: number;
+  payload: Record<string, unknown>;
+  status: 'pending' | 'applied' | 'error';
+  sizeKb?: number;
+};
+export type Device = {
+  id: ID;
+  role: 'agent' | 'driver';
+  userName: string;
+  online: boolean;
+  outbox: DeviceEvent[];
+  lastSyncAt?: number;
+  seq: number;
+  appVersion: string;
+  storageMb: number;
+  clockSkewMin: number;
+};
 export type OpsUser = { id: ID; name: string; title: string; approver: boolean };
-export type AuditEntry = { id: ID; at: number; actor: string; action: string; entity: string; detail?: string };
-export type Config = { payoutThreshold: number; approverIds: ID[]; checkpoints: Checkpoint[]; tempMin: number; tempMax: number; tolerancePct: number; leadDays: number; paymentExpiryHours: number; pingMinutes: number; walletLimits: { minimum: number; medium: number; enhanced: number }; smsTemplates: Record<string, string>; farmGatePrice: Record<ID, number> };
+export type AuditEntry = {
+  id: ID;
+  at: number;
+  actor: string;
+  action: string;
+  entity: string;
+  detail?: string;
+};
+export type Config = {
+  payoutThreshold: number;
+  approverIds: ID[];
+  checkpoints: Checkpoint[];
+  tempMin: number;
+  tempMax: number;
+  tolerancePct: number;
+  leadDays: number;
+  paymentExpiryHours: number;
+  pingMinutes: number;
+  walletLimits: { minimum: number; medium: number; enhanced: number };
+  smsTemplates: Record<string, string>;
+  farmGatePrice: Record<ID, number>;
+};
 export type State = {
-  categories: Category[]; products: Product[]; orgs: BuyerOrg[]; buyerUsers: BuyerUser[]; orders: Order[]; farmers: Farmer[]; availability: Availability[];
-  consignments: Consignment[]; runs: Run[]; temps: TempReading[]; deliveries: Delivery[]; settlements: Settlement[]; payoutRuns: PayoutRun[]; transfers: Transfer[];
-  ledger: LedgerEntry[]; exceptions: Exception[]; sms: Sms[]; events: DeviceEvent[]; devices: Device[]; opsUsers: OpsUser[]; audit: AuditEntry[]; config: Config;
-  session: { buyerUserId: ID; opsUserId: ID; farmerId: ID; agentDeviceId: ID; driverDeviceId: ID; draft: { lines: OrderLine[]; deliveryDate: string; address: string } };
-  seq: number; seededAt: number;
+  categories: Category[];
+  products: Product[];
+  orgs: BuyerOrg[];
+  buyerUsers: BuyerUser[];
+  orders: Order[];
+  farmers: Farmer[];
+  availability: Availability[];
+  consignments: Consignment[];
+  runs: Run[];
+  temps: TempReading[];
+  deliveries: Delivery[];
+  settlements: Settlement[];
+  payoutRuns: PayoutRun[];
+  transfers: Transfer[];
+  ledger: LedgerEntry[];
+  exceptions: Exception[];
+  sms: Sms[];
+  events: DeviceEvent[];
+  devices: Device[];
+  opsUsers: OpsUser[];
+  audit: AuditEntry[];
+  config: Config;
+  session: {
+    buyerUserId: ID;
+    opsUserId: ID;
+    farmerId: ID;
+    agentDeviceId: ID;
+    driverDeviceId: ID;
+    draft: { lines: OrderLine[]; deliveryDate: string; address: string };
+  };
+  seq: number;
+  seededAt: number;
 };

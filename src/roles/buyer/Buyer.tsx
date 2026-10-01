@@ -1,35 +1,78 @@
-import { Host } from "../../ui/host";
-import { useState, type ReactNode } from "react";
-import { Share } from "react-native";
-import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useStore } from "../../domain/store";
-import { remoteEnabled } from "../../backend/config";
-import type { Order, OrderLine } from "../../domain/types";
-import { ORDER_LABEL, ORDER_TONE, addDays, creditBalance, expiresIn, fmtDay, fmtDayLong, fmtStamp, ghs, kg, orderStepIndex, round2 } from "../../domain/logic";
-import { Btn, BottomNav, Chip, Countdown, Empty, Field, I, KV, Logo, Money, Ph, Progress, Sheet, Stamped, Tabs, TopBar, copy, useMedia } from "../../ui/kit";
-import { Desk, Phone } from "../../layouts/shells";
-const NAV = [{
-  to: "/buyer/home",
-  label: "Home"
-}, {
-  to: "/buyer/orders",
-  label: "Orders"
-}, {
-  to: "/buyer/payments",
-  label: "Payments"
-}, {
-  to: "/buyer/users",
-  label: "Users"
-}];
+import { Host } from '../../ui/host';
+import { useState, type ReactNode } from 'react';
+import { Share } from 'react-native';
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
+import { useStore } from '../../domain/store';
+import { remoteEnabled } from '../../backend/config';
+import type { Order, OrderLine } from '../../domain/types';
+import {
+  ORDER_LABEL,
+  ORDER_TONE,
+  addDays,
+  creditBalance,
+  expiresIn,
+  fmtDay,
+  fmtDayLong,
+  fmtStamp,
+  ghs,
+  kg,
+  orderStepIndex,
+  round2,
+} from '../../domain/logic';
+import {
+  Btn,
+  BottomNav,
+  Chip,
+  Countdown,
+  Empty,
+  Field,
+  I,
+  KV,
+  Logo,
+  Money,
+  Ph,
+  Progress,
+  Sheet,
+  Stamped,
+  Tabs,
+  TopBar,
+  copy,
+  useMedia,
+} from '../../ui/kit';
+import { Desk, Phone } from '../../layouts/shells';
+const NAV = [
+  {
+    to: '/buyer/home',
+    label: 'Home',
+  },
+  {
+    to: '/buyer/orders',
+    label: 'Orders',
+  },
+  {
+    to: '/buyer/payments',
+    label: 'Payments',
+  },
+  {
+    to: '/buyer/users',
+    label: 'Users',
+  },
+];
 function useBuyer() {
-  const {
-    state,
-    act,
-    now
-  } = useStore();
-  const user = state.buyerUsers.find(u => u.id === state.session.buyerUserId)!;
-  const org = state.orgs.find(o => o.id === user.orgId)!;
-  const orders = state.orders.filter(o => o.orgId === org.id).sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
+  const { state, act, now } = useStore();
+  const user = state.buyerUsers.find((u) => u.id === state.session.buyerUserId)!;
+  const org = state.orgs.find((o) => o.id === user.orgId)!;
+  const orders = state.orders
+    .filter((o) => o.orgId === org.id)
+    .sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
   return {
     state,
     act,
@@ -38,510 +81,784 @@ function useBuyer() {
     org,
     orders,
     credit: creditBalance(state, org.id),
-    isApprover: user.roles.includes("approver") || user.roles.includes("admin"),
-    isAdmin: user.roles.includes("admin"),
-    canRequest: user.roles.includes("requester") || user.roles.includes("admin") || user.roles.includes("approver")
+    isApprover: user.roles.includes('approver') || user.roles.includes('admin'),
+    isAdmin: user.roles.includes('admin'),
+    canRequest:
+      user.roles.includes('requester') ||
+      user.roles.includes('admin') ||
+      user.roles.includes('approver'),
   };
 }
-function Shell({
-  children,
-  nav = true
-}: {
-  children: ReactNode;
-  nav?: boolean;
-}) {
-  const desk = useMedia("(min-width: 1024px)");
-  const {
-    org,
-    user,
-    credit
-  } = useBuyer();
-  if (desk && nav) return <Desk nav={[{
-    to: "/buyer/orders",
-    label: "Orders"
-  }, {
-    to: "/buyer/deliveries",
-    label: "Deliveries"
-  }, {
-    to: "/buyer/temperature",
-    label: "Temperature records"
-  }, {
-    to: "/buyer/payments",
-    label: "Payments"
-  }, {
-    to: "/buyer/users",
-    label: "Users"
-  }, {
-    to: "/buyer/home",
-    label: "New order"
-  }]} footer={<>
+function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean }) {
+  const desk = useMedia('(min-width: 1024px)');
+  const { org, user, credit } = useBuyer();
+  if (desk && nav)
+    return (
+      <Desk
+        nav={[
+          {
+            to: '/buyer/orders',
+            label: 'Orders',
+          },
+          {
+            to: '/buyer/deliveries',
+            label: 'Deliveries',
+          },
+          {
+            to: '/buyer/temperature',
+            label: 'Temperature records',
+          },
+          {
+            to: '/buyer/payments',
+            label: 'Payments',
+          },
+          {
+            to: '/buyer/users',
+            label: 'Users',
+          },
+          {
+            to: '/buyer/home',
+            label: 'New order',
+          },
+        ]}
+        footer={
+          <>
             {org.name}
             <Host tag="br" />
-            {user.name} ·{" "}
-            {user.roles.map(r => r[0].toUpperCase() + r.slice(1)).join(", ")}
+            {user.name} · {user.roles.map((r) => r[0].toUpperCase() + r.slice(1)).join(', ')}
             <Host tag="br" />
-            Credit{" "}
-            <Host tag="strong" style={{
-      color: "var(--green)"
-    }}>{ghs(credit)}</Host>
-          </>}>
-        <Host tag="div" style={{
-      maxWidth: 980
-    }}>{children}</Host>
-      </Desk>;
-  return <Phone>
+            Credit{' '}
+            <Host
+              tag="strong"
+              style={{
+                color: 'var(--green)',
+              }}
+            >
+              {ghs(credit)}
+            </Host>
+          </>
+        }
+      >
+        <Host
+          tag="div"
+          style={{
+            maxWidth: 980,
+          }}
+        >
+          {children}
+        </Host>
+      </Desk>
+    );
+  return (
+    <Phone>
       {children}
       {nav && <BottomNav items={NAV} />}
-    </Phone>;
+    </Phone>
+  );
 }
 function SignIn() {
   const nav = useNavigate();
-  const [ph, setPh] = useState("24 555 0192");
-  return <Phone>
-      <Host tag="div" style={{
-      padding: "24px 20px",
-      display: "flex",
-      flexDirection: "column",
-      flex: 1
-    }}>
-        <Logo h={28} style={{
-        alignSelf: "flex-start"
-      }} />
-        <Host tag="div" className="hero" style={{
-        margin: "56px 0 8px"
-      }}>
+  const [ph, setPh] = useState('24 555 0192');
+  return (
+    <Phone>
+      <Host
+        tag="div"
+        style={{
+          padding: '24px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+        }}
+      >
+        <Logo
+          h={28}
+          style={{
+            alignSelf: 'flex-start',
+          }}
+        />
+        <Host
+          tag="div"
+          className="hero"
+          style={{
+            margin: '56px 0 8px',
+          }}
+        >
           Cold from the farm gate to your door.
         </Host>
-        <Host tag="div" style={{
-        fontSize: 16,
-        lineHeight: 1.5,
-        color: "var(--steel-ink)",
-        marginBottom: 40
-      }}>
+        <Host
+          tag="div"
+          style={{
+            fontSize: 16,
+            lineHeight: 1.5,
+            color: 'var(--steel-ink)',
+            marginBottom: 40,
+          }}
+        >
           Sign in with the phone number on your organisation account.
         </Host>
         <Field label="Phone number">
-          <Host tag="div" className="input" style={{
-          gap: 6
-        }}>
-            +233{" "}
-            <Host tag="input" value={ph} onChange={e => setPh(e.target.value)} style={{
-            border: 0,
-            outline: 0,
-            flex: 1,
-            fontSize: 16,
-            background: "transparent"
-          }} placeholder="24 000 0000" />
+          <Host
+            tag="div"
+            className="input"
+            style={{
+              gap: 6,
+            }}
+          >
+            +233{' '}
+            <Host
+              tag="input"
+              value={ph}
+              onChange={(e) => setPh(e.target.value)}
+              style={{
+                border: 0,
+                outline: 0,
+                flex: 1,
+                fontSize: 16,
+                background: 'transparent',
+              }}
+              placeholder="24 000 0000"
+            />
           </Host>
         </Field>
-        <Host tag="div" style={{
-        marginTop: 16
-      }}>
-          <Btn onClick={() => nav("/buyer/code")}>Send code</Btn>
+        <Host
+          tag="div"
+          style={{
+            marginTop: 16,
+          }}
+        >
+          <Btn onClick={() => nav('/buyer/code')}>Send code</Btn>
         </Host>
-        <Host tag="div" style={{
-        marginTop: "auto",
-        fontSize: 14,
-        color: "var(--steel-ink)",
-        paddingTop: 24
-      }}>
-          New buyer?{" "}
-          <Link to="/buyer/register" style={{
-          fontWeight: 600
-        }}>
+        <Host
+          tag="div"
+          style={{
+            marginTop: 'auto',
+            fontSize: 14,
+            color: 'var(--steel-ink)',
+            paddingTop: 24,
+          }}
+        >
+          New buyer?{' '}
+          <Link
+            to="/buyer/register"
+            style={{
+              fontWeight: 600,
+            }}
+          >
             Register your organisation
           </Link>
         </Host>
       </Host>
-    </Phone>;
+    </Phone>
+  );
 }
 function Code() {
   const nav = useNavigate();
-  const [d, setD] = useState("481");
+  const [d, setD] = useState('481');
   const full = d.length === 6;
-  return <Phone>
-      <Host tag="div" style={{
-      padding: "24px 20px",
-      display: "flex",
-      flexDirection: "column",
-      flex: 1
-    }}>
-        <Link to="/buyer" style={{
-        fontSize: 14,
-        fontWeight: 600,
-        textDecoration: "none"
-      }}>
+  return (
+    <Phone>
+      <Host
+        tag="div"
+        style={{
+          padding: '24px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+        }}
+      >
+        <Link
+          to="/buyer"
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
           ← Change number
         </Link>
-        <Host tag="div" className="h20" style={{
-        margin: "32px 0 6px"
-      }}>
+        <Host
+          tag="div"
+          className="h20"
+          style={{
+            margin: '32px 0 6px',
+          }}
+        >
           Enter the code
         </Host>
-        <Host tag="div" className="muted" style={{
-        marginBottom: 24
-      }}>
+        <Host
+          tag="div"
+          className="muted"
+          style={{
+            marginBottom: 24,
+          }}
+        >
           Sent by SMS to +233 24 555 0192.
         </Host>
-        <Host tag="div" style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(6,1fr)",
-        gap: 8,
-        fontSize: 24,
-        fontWeight: 600
-      }} className="tabular">
-          {[0, 1, 2, 3, 4, 5].map(i => <Host tag="button" key={i} onClick={() => setD(v => v.length < 6 ? v + String((i + 4) % 10) : v)} style={{
-          height: 56,
-          display: "grid",
-          placeItems: "center",
-          background: "#fff",
-          border: i === d.length ? "2px solid var(--blue)" : "1px solid var(--steel)",
-          borderRadius: 6
-        }}>
-              {d[i] ?? ""}
-            </Host>)}
+        <Host
+          tag="div"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(6,1fr)',
+            gap: 8,
+            fontSize: 24,
+            fontWeight: 600,
+          }}
+          className="tabular"
+        >
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Host
+              tag="button"
+              key={i}
+              onClick={() => setD((v) => (v.length < 6 ? v + String((i + 4) % 10) : v))}
+              style={{
+                height: 56,
+                display: 'grid',
+                placeItems: 'center',
+                background: '#fff',
+                border: i === d.length ? '2px solid var(--blue)' : '1px solid var(--steel)',
+                borderRadius: 6,
+              }}
+            >
+              {d[i] ?? ''}
+            </Host>
+          ))}
         </Host>
-        <Host tag="div" className="cap" style={{
-        marginTop: 8
-      }}>
+        <Host
+          tag="div"
+          className="cap"
+          style={{
+            marginTop: 8,
+          }}
+        >
           Tap the boxes to fill the demo code.
         </Host>
-        <Host tag="div" style={{
-        marginTop: 24
-      }}>
-          <Btn disabled={!full} onClick={() => nav("/buyer/home")}>
+        <Host
+          tag="div"
+          style={{
+            marginTop: 24,
+          }}
+        >
+          <Btn disabled={!full} onClick={() => nav('/buyer/home')}>
             Sign in
           </Btn>
         </Host>
-        <Host tag="div" className="muted" style={{
-        marginTop: 16
-      }}>
-          Resend code in{" "}
-          <Host tag="span" className="tabular" style={{
-          fontWeight: 600,
-          color: "var(--ink)"
-        }}>
+        <Host
+          tag="div"
+          className="muted"
+          style={{
+            marginTop: 16,
+          }}
+        >
+          Resend code in{' '}
+          <Host
+            tag="span"
+            className="tabular"
+            style={{
+              fontWeight: 600,
+              color: 'var(--ink)',
+            }}
+          >
             0:42
           </Host>
         </Host>
       </Host>
-    </Phone>;
+    </Phone>
+  );
 }
 function Register() {
-  const {
-    act
-  } = useStore();
+  const { act } = useStore();
   const nav = useNavigate();
   const [f, setF] = useState({
-    name: "",
-    type: "Hotel",
-    country: "Ghana",
-    address: "",
-    contact: "",
-    phone: "+233"
+    name: '',
+    type: 'Hotel',
+    country: 'Ghana',
+    address: '',
+    contact: '',
+    phone: '+233',
   });
-  const up = (k: string, v: string) => setF(x => ({
-    ...x,
-    [k]: v
-  }));
-  return <Phone>
-      <Host tag="div" style={{
-      padding: "24px 20px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 14,
-      flex: 1
-    }}>
+  const up = (k: string, v: string) =>
+    setF((x) => ({
+      ...x,
+      [k]: v,
+    }));
+  return (
+    <Phone>
+      <Host
+        tag="div"
+        style={{
+          padding: '24px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+          flex: 1,
+        }}
+      >
         <Host tag="div" className="cap">
-          Signed in. Submit this form to open your organisation. Operations approves it before you can order.
+          Signed in. Submit this form to open your organisation. Operations approves it before you
+          can order.
         </Host>
-        <Host tag="div" className="h20" style={{
-        marginTop: 8
-      }}>
+        <Host
+          tag="div"
+          className="h20"
+          style={{
+            marginTop: 8,
+          }}
+        >
           Register your organisation
         </Host>
         <Field label="Organisation name">
-          <Host tag="input" className="input" value={f.name} onChange={e => up("name", e.target.value)} />
+          <Host
+            tag="input"
+            className="input"
+            value={f.name}
+            onChange={(e) => up('name', e.target.value)}
+          />
         </Field>
         <Field label="Type">
-          <Host tag="select" className="input" value={f.type} onChange={e => up("type", e.target.value)}>
-            {["Hotel", "Grocery chain", "Mining camp", "Caterer", "Exporter", "Other"].map(t => <Host tag="option" key={t}>{t}</Host>)}
+          <Host
+            tag="select"
+            className="input"
+            value={f.type}
+            onChange={(e) => up('type', e.target.value)}
+          >
+            {['Hotel', 'Grocery chain', 'Mining camp', 'Caterer', 'Exporter', 'Other'].map((t) => (
+              <Host tag="option" key={t}>
+                {t}
+              </Host>
+            ))}
           </Host>
         </Field>
-        <Field label="Country" hint={f.country !== "Ghana" ? "Outside Ghana: bank transfer only in version one." : undefined}>
-          <Host tag="select" className="input" value={f.country} onChange={e => up("country", e.target.value)}>
-            {["Ghana", "Nigeria", "United Kingdom", "United States", "Other"].map(t => <Host tag="option" key={t}>{t}</Host>)}
+        <Field
+          label="Country"
+          hint={
+            f.country !== 'Ghana' ? 'Outside Ghana: bank transfer only in version one.' : undefined
+          }
+        >
+          <Host
+            tag="select"
+            className="input"
+            value={f.country}
+            onChange={(e) => up('country', e.target.value)}
+          >
+            {['Ghana', 'Nigeria', 'United Kingdom', 'United States', 'Other'].map((t) => (
+              <Host tag="option" key={t}>
+                {t}
+              </Host>
+            ))}
           </Host>
         </Field>
         <Field label="Delivery address">
-          <Host tag="textarea" className="input" value={f.address} onChange={e => up("address", e.target.value)} />
+          <Host
+            tag="textarea"
+            className="input"
+            value={f.address}
+            onChange={(e) => up('address', e.target.value)}
+          />
         </Field>
         <Field label="Contact name">
-          <Host tag="input" className="input" value={f.contact} onChange={e => up("contact", e.target.value)} />
+          <Host
+            tag="input"
+            className="input"
+            value={f.contact}
+            onChange={(e) => up('contact', e.target.value)}
+          />
         </Field>
         <Field label="Admin phone">
-          <Host tag="input" className="input" value={f.phone} onChange={e => up("phone", e.target.value)} />
+          <Host
+            tag="input"
+            className="input"
+            value={f.phone}
+            onChange={(e) => up('phone', e.target.value)}
+          />
         </Field>
-        <Host tag="div" style={{
-        marginTop: "auto",
-        paddingTop: 8
-      }}>
-          <Btn onClick={() => {
-          act.registerOrg(f);
-          nav("/buyer/pending");
-        }}>
+        <Host
+          tag="div"
+          style={{
+            marginTop: 'auto',
+            paddingTop: 8,
+          }}
+        >
+          <Btn
+            onClick={() => {
+              act.registerOrg(f);
+              nav('/buyer/pending');
+            }}
+          >
             Submit registration
           </Btn>
         </Host>
       </Host>
-    </Phone>;
+    </Phone>
+  );
 }
 function Pending() {
-  const {
-    org
-  } = useBuyer();
-  return <Phone>
-      <Host tag="div" style={{
-      padding: "24px 20px",
-      display: "flex",
-      flexDirection: "column",
-      flex: 1
-    }}>
-        <Logo h={28} style={{
-        alignSelf: "flex-start"
-      }} />
-        <Host tag="div" style={{
-        margin: "auto 0",
-        textAlign: "center"
-      }}>
+  const { org } = useBuyer();
+  return (
+    <Phone>
+      <Host
+        tag="div"
+        style={{
+          padding: '24px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+        }}
+      >
+        <Logo
+          h={28}
+          style={{
+            alignSelf: 'flex-start',
+          }}
+        />
+        <Host
+          tag="div"
+          style={{
+            margin: 'auto 0',
+            textAlign: 'center',
+          }}
+        >
           <Chip lg>Pending approval</Chip>
-          <Host tag="div" className="hero" style={{
-          fontSize: 26,
-          margin: "16px 0 10px"
-        }}>
+          <Host
+            tag="div"
+            className="hero"
+            style={{
+              fontSize: 26,
+              margin: '16px 0 10px',
+            }}
+          >
             {org.name} is registered.
           </Host>
-          <Host tag="div" style={{
-          fontSize: 16,
-          lineHeight: 1.5,
-          color: "var(--steel-ink)"
-        }}>
-            CryoChain reviews new buyers within one working day. You will get an
-            SMS when you can order.
+          <Host
+            tag="div"
+            style={{
+              fontSize: 16,
+              lineHeight: 1.5,
+              color: 'var(--steel-ink)',
+            }}
+          >
+            CryoChain reviews new buyers within one working day. You will get an SMS when you can
+            order.
           </Host>
         </Host>
-        <Host tag="div" className="card card-pad row" style={{
-        fontSize: 14
-      }}>
-          <Host tag="span" className="muted">Submitted</Host>
-          <Host tag="span" className="tabular" style={{
-          fontWeight: 600
-        }}>
+        <Host
+          tag="div"
+          className="card card-pad row"
+          style={{
+            fontSize: 14,
+          }}
+        >
+          <Host tag="span" className="muted">
+            Submitted
+          </Host>
+          <Host
+            tag="span"
+            className="tabular"
+            style={{
+              fontWeight: 600,
+            }}
+          >
             {fmtStamp(org.submittedAt)}
           </Host>
         </Host>
-        <Host tag="div" style={{
-        marginTop: 12
-      }}>
+        <Host
+          tag="div"
+          style={{
+            marginTop: 12,
+          }}
+        >
           <Btn kind="secondary" to="/ops/buyers">
             Open ops approval queue (demo)
           </Btn>
         </Host>
       </Host>
-    </Phone>;
+    </Phone>
+  );
 }
 function Home() {
-  const {
-    state,
-    org,
-    credit,
-    orders,
-    act
-  } = useBuyer();
+  const { state, org, credit, orders, act } = useBuyer();
   const nav = useNavigate();
-  const last = orders.find(o => o.status === "closed");
-  return <Shell>
-      <Host tag="div" className="row" style={{
-      padding: "14px 16px",
-      background: "#fff",
-      borderBottom: "1px solid var(--line)"
-    }}>
+  const last = orders.find((o) => o.status === 'closed');
+  return (
+    <Shell>
+      <Host
+        tag="div"
+        className="row"
+        style={{
+          padding: '14px 16px',
+          background: '#fff',
+          borderBottom: '1px solid var(--line)',
+        }}
+      >
         <Logo h={22} />
-        <Host tag="span" className="cap">{org.name}</Host>
-      </Host>
-      <Host tag="div" className="body" style={{
-      gap: 16
-    }}>
-        {credit > 0 && <Host tag="div" className="tint-green row">
-            <Host tag="span" style={{
-          fontWeight: 600
-        }}>Credit balance</Host>
-            <Money v={credit} color="var(--green)" size={16} />
-          </Host>}
-        {org.status !== "approved" && <Host tag="div" className="tint-amber">
-            <Host tag="strong">Pending approval.</Host> You can browse, but ordering
-            opens when CryoChain approves the organisation.
-          </Host>}
-        <Host tag="div" style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: 12
-      }}>
-          {state.categories.map((c, i) => <Link key={c.id} to={`/buyer/c/${c.id}`} className={`tile${i === 0 ? " wide" : ""}`}>
-              {c.name}
-            </Link>)}
+        <Host tag="span" className="cap">
+          {org.name}
         </Host>
-        {last && <>
-            <Host tag="div" className="lbl" style={{
-          marginTop: 4
-        }}>
+      </Host>
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          gap: 16,
+        }}
+      >
+        {credit > 0 && (
+          <Host tag="div" className="tint-green row">
+            <Host
+              tag="span"
+              style={{
+                fontWeight: 600,
+              }}
+            >
+              Credit balance
+            </Host>
+            <Money v={credit} color="var(--green)" size={16} />
+          </Host>
+        )}
+        {org.status !== 'approved' && (
+          <Host tag="div" className="tint-amber">
+            <Host tag="strong">Pending approval.</Host> You can browse, but ordering opens when
+            CryoChain approves the organisation.
+          </Host>
+        )}
+        <Host
+          tag="div"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 12,
+          }}
+        >
+          {state.categories.map((c, i) => (
+            <Link key={c.id} to={`/buyer/c/${c.id}`} className={`tile${i === 0 ? ' wide' : ''}`}>
+              {c.name}
+            </Link>
+          ))}
+        </Host>
+        {last && (
+          <>
+            <Host
+              tag="div"
+              className="lbl"
+              style={{
+                marginTop: 4,
+              }}
+            >
               Reorder
             </Host>
-            <Host tag="button" className="item" style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          textAlign: "left"
-        }} onClick={() => {
-          act.draftReorder(last.id);
-          nav("/buyer/summary");
-        }}>
+            <Host
+              tag="button"
+              className="item"
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                textAlign: 'left',
+              }}
+              onClick={() => {
+                act.draftReorder(last.id);
+                nav('/buyer/summary');
+              }}
+            >
               <Host tag="div">
                 <Host tag="div" className="h16">
                   {last.id} · {last.lines.length} lines
                 </Host>
                 <Host tag="div" className="cap">
-                  {last.lines.map(l => `${l.name.split(",")[0]} ${l.qtyKg} kg`).join(", ")}{" "}
-                  · delivered {fmtDay(last.deliveryDate).slice(4)}
+                  {last.lines.map((l) => `${l.name.split(',')[0]} ${l.qtyKg} kg`).join(', ')} ·
+                  delivered {fmtDay(last.deliveryDate).slice(4)}
                 </Host>
               </Host>
-              <Host tag="span" style={{
-            color: "var(--blue)",
-            fontWeight: 600
-          }}>
+              <Host
+                tag="span"
+                style={{
+                  color: 'var(--blue)',
+                  fontWeight: 600,
+                }}
+              >
                 Reorder
               </Host>
             </Host>
-          </>}
+          </>
+        )}
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Category() {
-  const {
-    state
-  } = useBuyer();
-  const {
-    id
-  } = useParams();
-  const cat = state.categories.find(c => c.id === id)!;
-  const ps = state.products.filter(p => p.categoryId === id);
-  return <Shell>
-      <TopBar back="/buyer/home" title={cat.name} right={<Host tag="span" className="cap">{ps.length} products</Host>} />
+  const { state } = useBuyer();
+  const { id } = useParams();
+  const cat = state.categories.find((c) => c.id === id)!;
+  const ps = state.products.filter((p) => p.categoryId === id);
+  return (
+    <Shell>
+      <TopBar
+        back="/buyer/home"
+        title={cat.name}
+        right={
+          <Host tag="span" className="cap">
+            {ps.length} products
+          </Host>
+        }
+      />
       <Host tag="div" className="body">
-        {ps.map(p => p.available ? <Link key={p.id} to={`/buyer/p/${p.id}`} className="item" style={{
-        flexDirection: "row",
-        gap: 12,
-        padding: 12
-      }}>
+        {ps.map((p) =>
+          p.available ? (
+            <Link
+              key={p.id}
+              to={`/buyer/p/${p.id}`}
+              className="item"
+              style={{
+                flexDirection: 'row',
+                gap: 12,
+                padding: 12,
+              }}
+            >
               <Ph label={p.photo} />
-              <Host tag="div" className="col" style={{
-          flex: 1,
-          gap: 2
-        }}>
-                <Host tag="div" className="h16">{p.name}</Host>
-                <Host tag="div" className="cap">
-                  Grades {p.grades.map(g => g.grade).join(" · ")} · min{" "}
-                  {p.minKg} kg
+              <Host
+                tag="div"
+                className="col"
+                style={{
+                  flex: 1,
+                  gap: 2,
+                }}
+              >
+                <Host tag="div" className="h16">
+                  {p.name}
                 </Host>
-                <Host tag="div" style={{
-            marginTop: "auto",
-            fontWeight: 600
-          }} className="tabular">
-                  GHS {p.grades[0].pricePerKg.toFixed(2)}{" "}
-                  <Host tag="span" className="muted" style={{
-              fontWeight: 400
-            }}>
+                <Host tag="div" className="cap">
+                  Grades {p.grades.map((g) => g.grade).join(' · ')} · min {p.minKg} kg
+                </Host>
+                <Host
+                  tag="div"
+                  style={{
+                    marginTop: 'auto',
+                    fontWeight: 600,
+                  }}
+                  className="tabular"
+                >
+                  GHS {p.grades[0].pricePerKg.toFixed(2)}{' '}
+                  <Host
+                    tag="span"
+                    className="muted"
+                    style={{
+                      fontWeight: 400,
+                    }}
+                  >
                     / kg
                   </Host>
                 </Host>
               </Host>
-            </Link> : <Host tag="div" key={p.id} className="item muted" style={{
-        flexDirection: "row",
-        gap: 12,
-        padding: 12
-      }}>
-              <Host tag="div" style={{
-          width: 72,
-          height: 72,
-          borderRadius: 6,
-          background: "var(--line-soft)",
-          position: "relative",
-          flex: "none"
-        }}>
-                <Host tag="span" style={{
-            position: "absolute",
-            left: 4,
-            top: 4,
-            font: "10px ui-monospace,monospace"
-          }}>
+            </Link>
+          ) : (
+            <Host
+              tag="div"
+              key={p.id}
+              className="item muted"
+              style={{
+                flexDirection: 'row',
+                gap: 12,
+                padding: 12,
+              }}
+            >
+              <Host
+                tag="div"
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 6,
+                  background: 'var(--line-soft)',
+                  position: 'relative',
+                  flex: 'none',
+                }}
+              >
+                <Host
+                  tag="span"
+                  style={{
+                    position: 'absolute',
+                    left: 4,
+                    top: 4,
+                    font: '10px ui-monospace,monospace',
+                  }}
+                >
                   {p.photo}
                 </Host>
               </Host>
-              <Host tag="div" className="col" style={{
-          flex: 1,
-          gap: 2
-        }}>
-                <Host tag="div" className="h16">{p.name}</Host>
-                <Host tag="div" className="cap">
-                  Grade {p.grades.map(g => g.grade).join(" · ")} · min{" "}
-                  {p.minKg} kg
+              <Host
+                tag="div"
+                className="col"
+                style={{
+                  flex: 1,
+                  gap: 2,
+                }}
+              >
+                <Host tag="div" className="h16">
+                  {p.name}
                 </Host>
-                <Host tag="span" style={{
-            marginTop: "auto",
-            alignSelf: "flex-start"
-          }}>
+                <Host tag="div" className="cap">
+                  Grade {p.grades.map((g) => g.grade).join(' · ')} · min {p.minKg} kg
+                </Host>
+                <Host
+                  tag="span"
+                  style={{
+                    marginTop: 'auto',
+                    alignSelf: 'flex-start',
+                  }}
+                >
                   <Chip>Not available this week</Chip>
                 </Host>
               </Host>
-            </Host>)}
+            </Host>
+          ),
+        )}
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Product() {
-  const {
-    state,
-    act,
-    org
-  } = useBuyer();
-  const {
-    id
-  } = useParams();
+  const { state, act, org } = useBuyer();
+  const { id } = useParams();
   const nav = useNavigate();
-  const p = state.products.find(x => x.id === id)!;
+  const p = state.products.find((x) => x.id === id)!;
   const [grade, setGrade] = useState(p.grades[0].grade);
   const [q, setQ] = useState(Math.max(p.minKg, 300));
   const draft = state.session.draft;
   const earliest = addDays(new Date().toISOString().slice(0, 10), state.config.leadDays);
-  const price = p.grades.find(g => g.grade === grade)!.pricePerKg;
-  return <Shell>
+  const price = p.grades.find((g) => g.grade === grade)!.pricePerKg;
+  return (
+    <Shell>
       <TopBar back={`/buyer/c/${p.categoryId}`} title={p.name} />
-      <Host tag="div" style={{
-      height: 160
-    }} className="ph">
-        <Host tag="span" style={{
-        left: 12,
-        top: 12,
-        fontSize: 11
-      }}>
+      <Host
+        tag="div"
+        style={{
+          height: 160,
+        }}
+        className="ph"
+      >
+        <Host
+          tag="span"
+          style={{
+            left: 12,
+            top: 12,
+            fontSize: 11,
+          }}
+        >
           product photo: {p.photo}, crate, 3:2
         </Host>
       </Host>
-      <Host tag="div" className="body" style={{
-      gap: 16
-    }}>
-        <Host tag="div" className="row" style={{
-        alignItems: "baseline"
-      }}>
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          gap: 16,
+        }}
+      >
+        <Host
+          tag="div"
+          className="row"
+          style={{
+            alignItems: 'baseline',
+          }}
+        >
           <Host tag="div">
             <Host tag="div" className="h20">
               {p.name}, grade {grade}
@@ -552,76 +869,138 @@ function Product() {
           </Host>
           <Host tag="div" className="h20 tabular">
             {price.toFixed(2)}
-            <Host tag="span" className="cap" style={{
-            fontWeight: 400
-          }}>
-              {" "}
+            <Host
+              tag="span"
+              className="cap"
+              style={{
+                fontWeight: 400,
+              }}
+            >
+              {' '}
               /kg
             </Host>
           </Host>
         </Host>
-        <Host tag="div" style={{
-        display: "flex",
-        gap: 8
-      }}>
-          {p.grades.map(g => <Host tag="button" key={g.grade} className={`pill${grade === g.grade ? " on" : ""}`} onClick={() => setGrade(g.grade)}>
+        <Host
+          tag="div"
+          style={{
+            display: 'flex',
+            gap: 8,
+          }}
+        >
+          {p.grades.map((g) => (
+            <Host
+              tag="button"
+              key={g.grade}
+              className={`pill${grade === g.grade ? ' on' : ''}`}
+              onClick={() => setGrade(g.grade)}
+            >
               {g.grade} · {g.pricePerKg.toFixed(2)}
-            </Host>)}
+            </Host>
+          ))}
         </Host>
         <Host tag="div" className="field">
-          <Host tag="span" className="lbl">Quantity, kg</Host>
-          <Host tag="div" style={{
-          display: "flex",
-          gap: 8
-        }}>
-            <Host tag="button" onClick={() => setQ(v => Math.max(p.minKg, v - 10))} style={{
-            width: 56,
-            height: 56,
-            border: "1px solid var(--steel)",
-            borderRadius: 6,
-            background: "#fff",
-            fontSize: 24
-          }}>
+          <Host tag="span" className="lbl">
+            Quantity, kg
+          </Host>
+          <Host
+            tag="div"
+            style={{
+              display: 'flex',
+              gap: 8,
+            }}
+          >
+            <Host
+              tag="button"
+              onClick={() => setQ((v) => Math.max(p.minKg, v - 10))}
+              style={{
+                width: 56,
+                height: 56,
+                border: '1px solid var(--steel)',
+                borderRadius: 6,
+                background: '#fff',
+                fontSize: 24,
+              }}
+            >
               −
             </Host>
-            <Host tag="input" className="tabular" value={q} onChange={e => setQ(Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0))} style={{
-            flex: 1,
-            height: 56,
-            textAlign: "center",
-            border: "1px solid var(--steel)",
-            borderRadius: 6,
-            background: "#fff",
-            fontSize: 24,
-            fontWeight: 600,
-            width: 60
-          }} />
-            <Host tag="button" onClick={() => setQ(v => v + 10)} style={{
-            width: 56,
-            height: 56,
-            border: "1px solid var(--steel)",
-            borderRadius: 6,
-            background: "#fff",
-            fontSize: 24
-          }}>
+            <Host
+              tag="input"
+              className="tabular"
+              value={q}
+              onChange={(e) =>
+                setQ(Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, '')) || 0))
+              }
+              style={{
+                flex: 1,
+                height: 56,
+                textAlign: 'center',
+                border: '1px solid var(--steel)',
+                borderRadius: 6,
+                background: '#fff',
+                fontSize: 24,
+                fontWeight: 600,
+                width: 60,
+              }}
+            />
+            <Host
+              tag="button"
+              onClick={() => setQ((v) => v + 10)}
+              style={{
+                width: 56,
+                height: 56,
+                border: '1px solid var(--steel)',
+                borderRadius: 6,
+                background: '#fff',
+                fontSize: 24,
+              }}
+            >
               +
             </Host>
           </Host>
           <Host tag="span" className="cap">
-            {q < p.minKg ? <Host tag="span" style={{
-            color: "var(--red)"
-          }}>Minimum {p.minKg} kg.</Host> : "Steps of 10 kg. Tap the number to type."}
+            {q < p.minKg ? (
+              <Host
+                tag="span"
+                style={{
+                  color: 'var(--red)',
+                }}
+              >
+                Minimum {p.minKg} kg.
+              </Host>
+            ) : (
+              'Steps of 10 kg. Tap the number to type.'
+            )}
           </Host>
         </Host>
         <Field label="Delivery date">
-          <Host tag="input" type="date" className="input" min={earliest} value={draft.deliveryDate < earliest ? earliest : draft.deliveryDate} onChange={e => act.draftSet({
-          deliveryDate: e.target.value
-        })} />
-          <Host tag="span" className="cap">Earliest {fmtDay(earliest)}</Host>
+          <Host
+            tag="input"
+            type="date"
+            className="input"
+            min={earliest}
+            value={draft.deliveryDate < earliest ? earliest : draft.deliveryDate}
+            onChange={(e) =>
+              act.draftSet({
+                deliveryDate: e.target.value,
+              })
+            }
+          />
+          <Host tag="span" className="cap">
+            Earliest {fmtDay(earliest)}
+          </Host>
         </Field>
         <Field label="Deliver to">
-          <Host tag="select" className="input" value={draft.address} onChange={e => act.draftSet({
-          address: e.target.value
-        })}>
+          <Host
+            tag="select"
+            className="input"
+            value={draft.address}
+            onChange={(e) =>
+              act.draftSet({
+                address: e.target.value,
+              })
+            }
+          >
             <Host tag="option">Main kitchen, Gamel Abdul Nasser Ave</Host>
             <Host tag="option">{org.address}</Host>
             <Host tag="option">Staff canteen, service entrance</Host>
@@ -629,178 +1008,288 @@ function Product() {
         </Field>
       </Host>
       <Host tag="div" className="footer">
-        <Host tag="div" className="row" style={{
-        fontSize: 14
-      }}>
+        <Host
+          tag="div"
+          className="row"
+          style={{
+            fontSize: 14,
+          }}
+        >
           <Host tag="span" className="muted">
             {q} kg × {price.toFixed(2)}
           </Host>
           <Money v={round2(q * price)} />
         </Host>
-        <Btn disabled={q < p.minKg || org.status !== "approved"} onClick={() => {
-        act.draftAdd(p.id, grade, q);
-        nav("/buyer/summary");
-      }}>
+        <Btn
+          disabled={q < p.minKg || org.status !== 'approved'}
+          onClick={() => {
+            act.draftAdd(p.id, grade, q);
+            nav('/buyer/summary');
+          }}
+        >
           Add to order
         </Btn>
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Summary() {
-  const {
-    state,
-    act,
-    user,
-    credit,
-    canRequest
-  } = useBuyer();
+  const { state, act, user, credit, canRequest } = useBuyer();
   const nav = useNavigate();
   const d = state.session.draft;
   const linesTotal = round2(d.lines.reduce((a, l) => a + l.total, 0));
   const cr = Math.min(credit, linesTotal);
-  const approver = state.buyerUsers.find(u => u.orgId === user.orgId && u.roles.includes("approver") && u.id !== user.id && u.status === "active");
-  if (!d.lines.length) return <Shell>
+  const approver = state.buyerUsers.find(
+    (u) =>
+      u.orgId === user.orgId &&
+      u.roles.includes('approver') &&
+      u.id !== user.id &&
+      u.status === 'active',
+  );
+  if (!d.lines.length)
+    return (
+      <Shell>
         <TopBar back="/buyer/home" title="Order summary" />
         <Host tag="div" className="body">
-          <Empty title="No lines yet." sub="Add produce from a category to start an order." action={<Btn to="/buyer/home" style={{
-        width: "auto",
-        display: "inline-flex"
-      }}>
+          <Empty
+            title="No lines yet."
+            sub="Add produce from a category to start an order."
+            action={
+              <Btn
+                to="/buyer/home"
+                style={{
+                  width: 'auto',
+                  display: 'inline-flex',
+                }}
+              >
                 Browse produce
-              </Btn>} />
+              </Btn>
+            }
+          />
         </Host>
-      </Shell>;
-  return <Shell>
+      </Shell>
+    );
+  return (
+    <Shell>
       <TopBar back="/buyer/home" title="Order summary" />
-      <Host tag="div" className="body" style={{
-      fontSize: 14
-    }}>
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          fontSize: 14,
+        }}
+      >
         <Host tag="div" className="card">
-          {d.lines.map((l, i) => <Host tag="div" key={l.id} className="row" style={{
-          padding: "12px 14px",
-          borderBottom: i < d.lines.length - 1 ? "1px solid var(--line-soft)" : undefined
-        }}>
+          {d.lines.map((l, i) => (
+            <Host
+              tag="div"
+              key={l.id}
+              className="row"
+              style={{
+                padding: '12px 14px',
+                borderBottom: i < d.lines.length - 1 ? '1px solid var(--line-soft)' : undefined,
+              }}
+            >
               <Host tag="div">
                 <Host tag="div" className="h16">
                   {l.name}, {l.grade}
                 </Host>
                 <Host tag="div" className="cap">
-                  {l.qtyKg} kg × {l.unitPrice.toFixed(2)} ·{" "}
-                  <Host tag="button" onClick={() => act.draftRemove(l.id)} style={{
-                color: "var(--red)",
-                fontWeight: 600
-              }}>
+                  {l.qtyKg} kg × {l.unitPrice.toFixed(2)} ·{' '}
+                  <Host
+                    tag="button"
+                    onClick={() => act.draftRemove(l.id)}
+                    style={{
+                      color: 'var(--red)',
+                      fontWeight: 600,
+                    }}
+                  >
                     remove
                   </Host>
                 </Host>
               </Host>
-              <Host tag="span" className="tabular" style={{
-            fontWeight: 600
-          }}>
-                {l.total.toLocaleString("en-GH", {
-              minimumFractionDigits: 2
-            })}
+              <Host
+                tag="span"
+                className="tabular"
+                style={{
+                  fontWeight: 600,
+                }}
+              >
+                {l.total.toLocaleString('en-GH', {
+                  minimumFractionDigits: 2,
+                })}
               </Host>
-            </Host>)}
+            </Host>
+          ))}
         </Host>
         <Host tag="div" className="card card-pad col gap8">
-          <KV k="Lines" v={<Host tag="span" className="tabular" style={{
-          fontWeight: 400
-        }}>
-                {linesTotal.toLocaleString("en-GH", {
-            minimumFractionDigits: 2
-          })}
-              </Host>} />
-          {cr > 0 && <KV k="Credit applied" v={<Host tag="span" className="tabular" style={{
-          color: "var(--green)",
-          fontWeight: 400
-        }}>
+          <KV
+            k="Lines"
+            v={
+              <Host
+                tag="span"
+                className="tabular"
+                style={{
+                  fontWeight: 400,
+                }}
+              >
+                {linesTotal.toLocaleString('en-GH', {
+                  minimumFractionDigits: 2,
+                })}
+              </Host>
+            }
+          />
+          {cr > 0 && (
+            <KV
+              k="Credit applied"
+              v={
+                <Host
+                  tag="span"
+                  className="tabular"
+                  style={{
+                    color: 'var(--green)',
+                    fontWeight: 400,
+                  }}
+                >
                   − {cr.toFixed(2)}
-                </Host>} />}
-          <Host tag="div" className="row h16" style={{
-          borderTop: "1px solid var(--line)",
-          paddingTop: 8
-        }}>
+                </Host>
+              }
+            />
+          )}
+          <Host
+            tag="div"
+            className="row h16"
+            style={{
+              borderTop: '1px solid var(--line)',
+              paddingTop: 8,
+            }}
+          >
             <Host tag="span">Total to pay</Host>
             <Money v={round2(linesTotal - cr)} />
           </Host>
         </Host>
-        <KV k="Delivery" v={`${fmtDay(d.deliveryDate)} · ${d.address.split(",")[0]}`} />
+        <KV k="Delivery" v={`${fmtDay(d.deliveryDate)} · ${d.address.split(',')[0]}`} />
         <KV k="Requester" v={user.name} />
-        <Link to="/buyer/home" style={{
-        fontWeight: 600,
-        textDecoration: "none"
-      }}>
+        <Link
+          to="/buyer/home"
+          style={{
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
           + Add another product
         </Link>
       </Host>
       <Host tag="div" className="footer">
-        <Btn disabled={!canRequest} onClick={() => {
-        const id = act.submitDraft();
-        nav(`/buyer/o/${id}`);
-      }}>
+        <Btn
+          disabled={!canRequest}
+          onClick={() => {
+            const id = act.submitDraft();
+            nav(`/buyer/o/${id}`);
+          }}
+        >
           Submit for approval
         </Btn>
-        <Host tag="div" className="cap" style={{
-        textAlign: "center"
-      }}>
-          {approver ? `Goes to ${approver.name}, approver` : "Goes to your approver"}
+        <Host
+          tag="div"
+          className="cap"
+          style={{
+            textAlign: 'center',
+          }}
+        >
+          {approver ? `Goes to ${approver.name}, approver` : 'Goes to your approver'}
         </Host>
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Orders() {
-  const {
-    orders,
-    now
-  } = useBuyer();
-  const [filter, setFilter] = useState<"Open" | "All">("Open");
-  const list = filter === "Open" ? orders.filter(o => !["closed", "cancelled", "expired"].includes(o.status)) : orders;
-  const desk = useMedia("(min-width: 1024px)");
+  const { orders, now } = useBuyer();
+  const [filter, setFilter] = useState<'Open' | 'All'>('Open');
+  const list =
+    filter === 'Open'
+      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(o.status))
+      : orders;
+  const desk = useMedia('(min-width: 1024px)');
   if (desk) return <OrdersDesk />;
-  return <Shell>
-      <TopBar title="Orders" right={<Host tag="button" className="btn btn-secondary btn-sm" style={{
-      height: 32,
-      fontSize: 12
-    }} onClick={() => setFilter(f => f === "Open" ? "All" : "Open")}>
+  return (
+    <Shell>
+      <TopBar
+        title="Orders"
+        right={
+          <Host
+            tag="button"
+            className="btn btn-secondary btn-sm"
+            style={{
+              height: 32,
+              fontSize: 12,
+            }}
+            onClick={() => setFilter((f) => (f === 'Open' ? 'All' : 'Open'))}
+          >
             {filter} ▾
-          </Host>} />
+          </Host>
+        }
+      />
       <Host tag="div" className="body">
-        {list.length === 0 && <Empty title="No orders yet." sub="Your first order will appear here." action={<Btn to="/buyer/home" style={{
-        width: "auto",
-        display: "inline-flex"
-      }}>
+        {list.length === 0 && (
+          <Empty
+            title="No orders yet."
+            sub="Your first order will appear here."
+            action={
+              <Btn
+                to="/buyer/home"
+                style={{
+                  width: 'auto',
+                  display: 'inline-flex',
+                }}
+              >
                 Browse produce
-              </Btn>} />}
-        {list.map(o => <Link key={o.id} to={`/buyer/o/${o.id}`} className="item">
+              </Btn>
+            }
+          />
+        )}
+        {list.map((o) => (
+          <Link key={o.id} to={`/buyer/o/${o.id}`} className="item">
             <Host tag="div" className="row">
-              <Host tag="span" className="h16">{o.id}</Host>
+              <Host tag="span" className="h16">
+                {o.id}
+              </Host>
               <Chip tone={ORDER_TONE[o.status]}>{ORDER_LABEL[o.status]}</Chip>
             </Host>
             <Host tag="div" className="row cap">
               <Host tag="span">
-                {o.lines.length} {o.lines.length === 1 ? "line" : "lines"} ·{" "}
+                {o.lines.length} {o.lines.length === 1 ? 'line' : 'lines'} ·{' '}
                 {fmtDay(o.deliveryDate)}
-                {o.status === "delivered" && o.deliveredAt ? ` · accept by ${fmtStamp(o.deliveredAt + 86400000)}` : ""}
-                {o.status === "awaiting_payment" && o.expiresAt ? ` · expires in ${expiresIn(o.expiresAt, now).split(" ")[0]} h` : ""}
+                {o.status === 'delivered' && o.deliveredAt
+                  ? ` · accept by ${fmtStamp(o.deliveredAt + 86400000)}`
+                  : ''}
+                {o.status === 'awaiting_payment' && o.expiresAt
+                  ? ` · expires in ${expiresIn(o.expiresAt, now).split(' ')[0]} h`
+                  : ''}
               </Host>
               <Money v={o.total} />
             </Host>
-          </Link>)}
+          </Link>
+        ))}
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function OrdersDesk() {
-  const {
-    orders
-  } = useBuyer();
+  const { orders } = useBuyer();
   const [sp, setSp] = useSearchParams();
-  const [filter, setFilter] = useState<"Open" | "All">("Open");
-  const list = filter === "Open" ? orders.filter(o => !["closed", "cancelled", "expired"].includes(o.status)) : orders;
-  const sel = sp.get("sel") ?? list[0]?.id;
-  return <Shell>
+  const [filter, setFilter] = useState<'Open' | 'All'>('Open');
+  const list =
+    filter === 'Open'
+      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(o.status))
+      : orders;
+  const sel = sp.get('sel') ?? list[0]?.id;
+  return (
+    <Shell>
       <Host tag="div" className="row">
-        <Host tag="span" className="h20">Orders</Host>
+        <Host tag="span" className="h20">
+          Orders
+        </Host>
         <Btn to="/buyer/home" md>
           New order
         </Btn>
@@ -809,109 +1298,154 @@ function OrdersDesk() {
         <Host tag="div" className="f">
           <Host tag="input" placeholder="Search order number" />
         </Host>
-        <Host tag="button" className={`f${filter === "Open" ? " on" : ""}`} onClick={() => setFilter(f => f === "Open" ? "All" : "Open")}>
-          Status: {filter} {filter === "Open" ? "×" : "▾"}
+        <Host
+          tag="button"
+          className={`f${filter === 'Open' ? ' on' : ''}`}
+          onClick={() => setFilter((f) => (f === 'Open' ? 'All' : 'Open'))}
+        >
+          Status: {filter} {filter === 'Open' ? '×' : '▾'}
         </Host>
-        <Host tag="div" className="f">Delivery date ▾</Host>
-        <Host tag="button" className="f" style={{
-        marginLeft: "auto",
-        fontWeight: 600
-      }} onClick={() => downloadCsv("orders.csv", list.map(o => ({
-        order: o.id,
-        lines: o.lines.map(l => l.name).join("; "),
-        delivery: o.deliveryDate,
-        total: o.total,
-        status: ORDER_LABEL[o.status]
-      })))}>
+        <Host tag="div" className="f">
+          Delivery date ▾
+        </Host>
+        <Host
+          tag="button"
+          className="f"
+          style={{
+            marginLeft: 'auto',
+            fontWeight: 600,
+          }}
+          onClick={() =>
+            downloadCsv(
+              'orders.csv',
+              list.map((o) => ({
+                order: o.id,
+                lines: o.lines.map((l) => l.name).join('; '),
+                delivery: o.deliveryDate,
+                total: o.total,
+                status: ORDER_LABEL[o.status],
+              })),
+            )
+          }
+        >
           Export CSV
         </Host>
       </Host>
       <Host tag="div" className="two">
-        <Host tag="div" className="tbl" style={{
-        border: 0,
-        borderRadius: 0
-      }}>
+        <Host
+          tag="div"
+          className="tbl"
+          style={{
+            border: 0,
+            borderRadius: 0,
+          }}
+        >
           <Host tag="table">
             <Host tag="thead">
               <Host tag="tr">
                 <Host tag="th">Order</Host>
                 <Host tag="th">Lines</Host>
                 <Host tag="th">Delivery ↓</Host>
-                <Host tag="th" className="num">Total GHS</Host>
+                <Host tag="th" className="num">
+                  Total GHS
+                </Host>
                 <Host tag="th">Status</Host>
               </Host>
             </Host>
             <Host tag="tbody">
-              {list.map(o => <Host tag="tr" key={o.id} className={o.id === sel ? "sel" : ""} onClick={() => setSp({
-              sel: o.id
-            })} style={{
-              cursor: "pointer"
-            }}>
+              {list.map((o) => (
+                <Host
+                  tag="tr"
+                  key={o.id}
+                  className={o.id === sel ? 'sel' : ''}
+                  onClick={() =>
+                    setSp({
+                      sel: o.id,
+                    })
+                  }
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                >
                   <Host tag="td">
                     <Host tag="a">{o.id}</Host>
                   </Host>
-                  <Host tag="td">{o.lines.map(l => l.name.split(",")[0]).join(", ")}</Host>
+                  <Host tag="td">{o.lines.map((l) => l.name.split(',')[0]).join(', ')}</Host>
                   <Host tag="td">{fmtDay(o.deliveryDate)}</Host>
                   <Host tag="td" className="num">
-                    {o.total.toLocaleString("en-GH", {
-                  minimumFractionDigits: 2
-                })}
+                    {o.total.toLocaleString('en-GH', {
+                      minimumFractionDigits: 2,
+                    })}
                   </Host>
                   <Host tag="td">
-                    <Chip tone={ORDER_TONE[o.status]}>
-                      {ORDER_LABEL[o.status]}
-                    </Chip>
+                    <Chip tone={ORDER_TONE[o.status]}>{ORDER_LABEL[o.status]}</Chip>
                   </Host>
-                </Host>)}
+                </Host>
+              ))}
             </Host>
           </Host>
-          <Host tag="div" className="cap" style={{
-          padding: 12
-        }}>
-            {list.length} {filter === "Open" ? "open " : ""}orders
+          <Host
+            tag="div"
+            className="cap"
+            style={{
+              padding: 12,
+            }}
+          >
+            {list.length} {filter === 'Open' ? 'open ' : ''}orders
           </Host>
         </Host>
         <Host tag="div" className="side">
           {sel ? <OrderDetailBody id={sel} compact /> : <Empty title="Select an order." sub="" />}
         </Host>
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 export function downloadCsv(name: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return;
   const cols = Object.keys(rows[0]);
-  const csv = [cols.join(","), ...rows.map(r => cols.map(c => JSON.stringify(r[c] ?? "")).join(","))].join("\n");
+  const csv = [
+    cols.join(','),
+    ...rows.map((r) => cols.map((c) => JSON.stringify(r[c] ?? '')).join(',')),
+  ].join('\n');
   Share.share({
     title: name,
-    message: csv
+    message: csv,
   }).catch(() => {});
 }
 function OrderDetail() {
-  const {
-    id
-  } = useParams();
-  const {
-    orders
-  } = useBuyer();
-  const o = orders.find(x => x.id === id);
+  const { id } = useParams();
+  const { orders } = useBuyer();
+  const o = orders.find((x) => x.id === id);
   if (!o) return <Navigate to="/buyer/orders" />;
-  return <Shell>
-      <TopBar back="/buyer/orders" title={o.status === "submitted" ? `${o.id} · approval` : o.id} right={<Chip lg tone={ORDER_TONE[o.status]}>
+  return (
+    <Shell>
+      <TopBar
+        back="/buyer/orders"
+        title={o.status === 'submitted' ? `${o.id} · approval` : o.id}
+        right={
+          <Chip lg tone={ORDER_TONE[o.status]}>
             {ORDER_LABEL[o.status]}
-          </Chip>} />
+          </Chip>
+        }
+      />
       <OrderDetailBody id={o.id} />
-    </Shell>;
+    </Shell>
+  );
 }
-function Lines({
-  o
-}: {
-  o: Order;
-}) {
-  return <Host tag="div" className="card">
-      {o.lines.map((l, i) => <Host tag="div" key={l.id} className="row" style={{
-      padding: "12px 14px",
-      borderBottom: i < o.lines.length - 1 ? "1px solid var(--line-soft)" : undefined
-    }}>
+function Lines({ o }: { o: Order }) {
+  return (
+    <Host tag="div" className="card">
+      {o.lines.map((l, i) => (
+        <Host
+          tag="div"
+          key={l.id}
+          className="row"
+          style={{
+            padding: '12px 14px',
+            borderBottom: i < o.lines.length - 1 ? '1px solid var(--line-soft)' : undefined,
+          }}
+        >
           <Host tag="div">
             <Host tag="div" className="h16">
               {l.name}, {l.grade}
@@ -920,843 +1454,1418 @@ function Lines({
               {l.qtyKg} kg × {l.unitPrice.toFixed(2)}
             </Host>
           </Host>
-          <Host tag="span" className="tabular" style={{
-        fontWeight: 600
-      }}>
-            {l.total.toLocaleString("en-GH", {
-          minimumFractionDigits: 2
-        })}
+          <Host
+            tag="span"
+            className="tabular"
+            style={{
+              fontWeight: 600,
+            }}
+          >
+            {l.total.toLocaleString('en-GH', {
+              minimumFractionDigits: 2,
+            })}
           </Host>
-        </Host>)}
-    </Host>;
+        </Host>
+      ))}
+    </Host>
+  );
 }
-function OrderDetailBody({
-  id,
-  compact
-}: {
-  id: string;
-  compact?: boolean;
-}) {
-  const {
-    state,
-    act,
-    user,
-    isApprover,
-    orders,
-    now
-  } = useBuyer();
+function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
+  const { state, act, user, isApprover, orders, now } = useBuyer();
   const nav = useNavigate();
-  const o = orders.find(x => x.id === id)!;
-  const req = state.buyerUsers.find(u => u.id === o.requestedBy);
+  const o = orders.find((x) => x.id === id)!;
+  const req = state.buyerUsers.find((u) => u.id === o.requestedBy);
   const [rejectLine, setRejectLine] = useState<OrderLine | null>(null);
-  const [rkg, setRkg] = useState("40");
-  const [rreason, setRreason] = useState("Bruised on arrival");
-  const [err, setErr] = useState("");
+  const [rkg, setRkg] = useState('40');
+  const [rreason, setRreason] = useState('Bruised on arrival');
+  const [err, setErr] = useState('');
   const step = orderStepIndex(o.status);
-  const wrap = (c: ReactNode, footer?: ReactNode) => <>
-      {compact && <Host tag="div" className="row">
-          <Host tag="span" className="h20">{o.id}</Host>
+  const wrap = (c: ReactNode, footer?: ReactNode) => (
+    <>
+      {compact && (
+        <Host tag="div" className="row">
+          <Host tag="span" className="h20">
+            {o.id}
+          </Host>
           <Chip lg tone={ORDER_TONE[o.status]}>
             {ORDER_LABEL[o.status]}
           </Chip>
-        </Host>}
-      <Host tag="div" className={compact ? "col gap14" : "body"} style={{
-      fontSize: 14,
-      gap: 14
-    }}>
+        </Host>
+      )}
+      <Host
+        tag="div"
+        className={compact ? 'col gap14' : 'body'}
+        style={{
+          fontSize: 14,
+          gap: 14,
+        }}
+      >
         {c}
       </Host>
-      {footer && (compact ? <Host tag="div" className="col gap8" style={{
-      marginTop: "auto"
-    }}>
+      {footer &&
+        (compact ? (
+          <Host
+            tag="div"
+            className="col gap8"
+            style={{
+              marginTop: 'auto',
+            }}
+          >
             {footer}
-          </Host> : <Host tag="div" className="footer">{footer}</Host>)}
-    </>;
-  const totals = <Host tag="div" className="card card-pad col gap8">
-      <KV k={`${o.lines.length} ${o.lines.length === 1 ? "line" : "lines"} · ${o.lines.reduce((a, l) => a + l.qtyKg, 0)} kg`} v={<Host tag="span" className="tabular" style={{
-      fontWeight: 400
-    }}>
-            {o.linesTotal.toLocaleString("en-GH", {
-        minimumFractionDigits: 2
-      })}
-          </Host>} />
-      {o.creditApplied > 0 && <KV k="Credit applied" v={<Host tag="span" className="tabular" style={{
-      color: "var(--green)",
-      fontWeight: 400
-    }}>
+          </Host>
+        ) : (
+          <Host tag="div" className="footer">
+            {footer}
+          </Host>
+        ))}
+    </>
+  );
+  const totals = (
+    <Host tag="div" className="card card-pad col gap8">
+      <KV
+        k={`${o.lines.length} ${o.lines.length === 1 ? 'line' : 'lines'} · ${o.lines.reduce((a, l) => a + l.qtyKg, 0)} kg`}
+        v={
+          <Host
+            tag="span"
+            className="tabular"
+            style={{
+              fontWeight: 400,
+            }}
+          >
+            {o.linesTotal.toLocaleString('en-GH', {
+              minimumFractionDigits: 2,
+            })}
+          </Host>
+        }
+      />
+      {o.creditApplied > 0 && (
+        <KV
+          k="Credit applied"
+          v={
+            <Host
+              tag="span"
+              className="tabular"
+              style={{
+                color: 'var(--green)',
+                fontWeight: 400,
+              }}
+            >
               − {o.creditApplied.toFixed(2)}
-            </Host>} />}
-      <Host tag="div" className="row" style={{
-      borderTop: "1px solid var(--line)",
-      paddingTop: 8,
-      fontSize: 20,
-      fontWeight: 600
-    }}>
+            </Host>
+          }
+        />
+      )}
+      <Host
+        tag="div"
+        className="row"
+        style={{
+          borderTop: '1px solid var(--line)',
+          paddingTop: 8,
+          fontSize: 20,
+          fontWeight: 600,
+        }}
+      >
         <Host tag="span">Total</Host>
         <Money v={o.total} size={20} />
       </Host>
-    </Host>;
-  const progress = <>
+    </Host>
+  );
+  const progress = (
+    <>
       <Progress step={step} />
-      <Host tag="div" className="row cap" style={{
-      marginTop: -8
-    }}>
+      <Host
+        tag="div"
+        className="row cap"
+        style={{
+          marginTop: -8,
+        }}
+      >
         <Host tag="span">
-          {["Submitted", "Approved", "Paid", "Allocated", "In collection", "Delivered"].map((s, i) => <Host tag="span" key={s} style={i === step ? {
-          color: "var(--green)",
-          fontWeight: 600
-        } : undefined}>
-              {s}
-              {i < 5 ? " · " : ""}
-            </Host>)}
+          {['Submitted', 'Approved', 'Paid', 'Allocated', 'In collection', 'Delivered'].map(
+            (s, i) => (
+              <Host
+                tag="span"
+                key={s}
+                style={
+                  i === step
+                    ? {
+                        color: 'var(--green)',
+                        fontWeight: 600,
+                      }
+                    : undefined
+                }
+              >
+                {s}
+                {i < 5 ? ' · ' : ''}
+              </Host>
+            ),
+          )}
         </Host>
-        <Host tag="span" style={step === 6 ? {
-        color: "var(--green)",
-        fontWeight: 600
-      } : undefined}>
+        <Host
+          tag="span"
+          style={
+            step === 6
+              ? {
+                  color: 'var(--green)',
+                  fontWeight: 600,
+                }
+              : undefined
+          }
+        >
           Closed
         </Host>
       </Host>
-    </>;
-  if (o.status === "submitted") {
+    </>
+  );
+  if (o.status === 'submitted') {
     const over = isApprover && user.limit !== undefined && o.total > user.limit;
-    const other = state.buyerUsers.find(u => u.orgId === user.orgId && u.roles.includes("approver") && (u.limit ?? Infinity) >= o.total && u.id !== user.id);
-    return wrap(<>
-        <KV k="Requested by" v={`${req?.name} · ${o.submittedAt ? fmtStamp(o.submittedAt) : ""}`} />
+    const other = state.buyerUsers.find(
+      (u) =>
+        u.orgId === user.orgId &&
+        u.roles.includes('approver') &&
+        (u.limit ?? Infinity) >= o.total &&
+        u.id !== user.id,
+    );
+    return wrap(
+      <>
+        <KV k="Requested by" v={`${req?.name} · ${o.submittedAt ? fmtStamp(o.submittedAt) : ''}`} />
         {totals}
-        <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(",")[0]}`} />
+        <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(',')[0]}`} />
         <Lines o={o} />
-        {isApprover && (over ? <>
+        {isApprover &&
+          (over ? (
+            <>
               <Host tag="div" className="tint-red row">
                 <Host tag="span">Your approval limit</Host>
                 <Money v={user.limit!} color="var(--red)" />
               </Host>
-              <Host tag="div" className="card card-pad" style={{
-          lineHeight: 1.5
-        }}>
-                This order is {ghs(round2(o.total - user.limit!))} over your
-                limit.{" "}
-                {other ? <>
-                    Ask {other.name} (limit{" "}
-                    {(other.limit ?? 0).toLocaleString("en-GH", {
-              minimumFractionDigits: 2
-            })}
+              <Host
+                tag="div"
+                className="card card-pad"
+                style={{
+                  lineHeight: 1.5,
+                }}
+              >
+                This order is {ghs(round2(o.total - user.limit!))} over your limit.{' '}
+                {other ? (
+                  <>
+                    Ask {other.name} (limit{' '}
+                    {(other.limit ?? 0).toLocaleString('en-GH', {
+                      minimumFractionDigits: 2,
+                    })}
                     ) to approve, or send it back to reduce lines.
-                  </> : "Send it back to reduce lines."}
+                  </>
+                ) : (
+                  'Send it back to reduce lines.'
+                )}
               </Host>
-            </> : <Host tag="div" className="tint-blue row">
+            </>
+          ) : (
+            <Host tag="div" className="tint-blue row">
               <Host tag="span">Your approval limit</Host>
               <Money v={user.limit ?? 0} color="var(--blue-ink)" />
-            </Host>)}
-        {!isApprover && <Host tag="div" className="tint-amber">
-            <Host tag="strong">Waiting for approval.</Host>{" "}
-            {state.buyerUsers.filter(u => u.orgId === user.orgId && u.roles.includes("approver")).map(u => u.name).join(" or ")}{" "}
+            </Host>
+          ))}
+        {!isApprover && (
+          <Host tag="div" className="tint-amber">
+            <Host tag="strong">Waiting for approval.</Host>{' '}
+            {state.buyerUsers
+              .filter((u) => u.orgId === user.orgId && u.roles.includes('approver'))
+              .map((u) => u.name)
+              .join(' or ')}{' '}
             can approve and pay. Use the demo bar to act as an approver.
-          </Host>}
-        {err && <Host tag="div" className="tint-red">{err}</Host>}
-      </>, isApprover ? <>
-          {over ? <>
+          </Host>
+        )}
+        {err && (
+          <Host tag="div" className="tint-red">
+            {err}
+          </Host>
+        )}
+      </>,
+      isApprover ? (
+        <>
+          {over ? (
+            <>
               <Btn disabled>Approve and pay</Btn>
-              {other && <Btn kind="secondary" onClick={() => act.setBuyerUser(other.id)}>
+              {other && (
+                <Btn kind="secondary" onClick={() => act.setBuyerUser(other.id)}>
                   Send to {other.name}
-                </Btn>}
-            </> : <Btn onClick={() => {
-        const r = act.approveOrder(o.id);
-        if (!r.ok) setErr(r.why ?? "");else nav(`/buyer/o/${o.id}/pay`);
-      }}>
+                </Btn>
+              )}
+            </>
+          ) : (
+            <Btn
+              onClick={() => {
+                const r = act.approveOrder(o.id);
+                if (!r.ok) setErr(r.why ?? '');
+                else nav(`/buyer/o/${o.id}/pay`);
+              }}
+            >
               Approve and pay
-            </Btn>}
-          <Btn kind="link-danger" onClick={() => {
-        act.sendBack(o.id);
-        nav("/buyer/summary");
-      }}>
+            </Btn>
+          )}
+          <Btn
+            kind="link-danger"
+            onClick={() => {
+              act.sendBack(o.id);
+              nav('/buyer/summary');
+            }}
+          >
             Send back
           </Btn>
-        </> : undefined);
+        </>
+      ) : undefined,
+    );
   }
-  if (o.status === "approved" || o.status === "awaiting_payment" || o.status === "held") return wrap(<>
+  if (o.status === 'approved' || o.status === 'awaiting_payment' || o.status === 'held')
+    return wrap(
+      <>
         <PayBody o={o} compact />
-      </>);
-  if (o.status === "delivered") {
+      </>,
+    );
+  if (o.status === 'delivered') {
     const deadline = (o.deliveredAt ?? now) + 86400000;
-    return wrap(<>
+    return wrap(
+      <>
         {progress}
         <Host tag="div" className="card card-pad col gap6">
-          <KV k="Delivered" v={o.deliveredAt ? <Stamped t={o.deliveredAt} /> : ""} />
-          <KV k="Signed by" v={o.receiver ?? ""} />
-          {o.handoverTemp !== undefined && <KV k="Handover temp" v={`${o.handoverTemp.toFixed(1)} °C`} />}
-          <Link to={`/buyer/o/${o.id}/temperature`} style={{
-          fontWeight: 600,
-          textDecoration: "none",
-          marginTop: 4
-        }}>
+          <KV k="Delivered" v={o.deliveredAt ? <Stamped t={o.deliveredAt} /> : ''} />
+          <KV k="Signed by" v={o.receiver ?? ''} />
+          {o.handoverTemp !== undefined && (
+            <KV k="Handover temp" v={`${o.handoverTemp.toFixed(1)} °C`} />
+          )}
+          <Link
+            to={`/buyer/o/${o.id}/temperature`}
+            style={{
+              fontWeight: 600,
+              textDecoration: 'none',
+              marginTop: 4,
+            }}
+          >
             Temperature record →
           </Link>
         </Host>
         <Host tag="div" className="tint-amber row">
-          <Host tag="span" style={{
-          fontWeight: 600
-        }}>Accept or dispute</Host>
+          <Host
+            tag="span"
+            style={{
+              fontWeight: 600,
+            }}
+          >
+            Accept or dispute
+          </Host>
           <Countdown deadline={deadline} now={now} />
         </Host>
         <Host tag="div" className="card">
-          {o.lines.map((l, i) => <Host tag="div" key={l.id} style={{
-          padding: "12px 14px",
-          borderBottom: i < o.lines.length - 1 ? "1px solid var(--line-soft)" : undefined
-        }} className="col gap8">
+          {o.lines.map((l, i) => (
+            <Host
+              tag="div"
+              key={l.id}
+              style={{
+                padding: '12px 14px',
+                borderBottom: i < o.lines.length - 1 ? '1px solid var(--line-soft)' : undefined,
+              }}
+              className="col gap8"
+            >
               <Host tag="div" className="row">
                 <Host tag="div">
                   <Host tag="div" className="h16">
                     {l.name}, {l.grade}
                   </Host>
                   <Host tag="div" className="cap">
-                    Ordered {l.qtyKg} kg · delivered{" "}
-                    {(l.deliveredKg ?? l.qtyKg).toFixed(1)} kg
+                    Ordered {l.qtyKg} kg · delivered {(l.deliveredKg ?? l.qtyKg).toFixed(1)} kg
                   </Host>
                 </Host>
-                {l.rejectedKg ? <Chip tone="alert">Rejected {l.rejectedKg} kg</Chip> : <Host tag="button" className="btn btn-secondary btn-md" onClick={() => {
-              setRejectLine(l);
-              setRkg(String(Math.min(40, l.qtyKg)));
-            }}>
+                {l.rejectedKg ? (
+                  <Chip tone="alert">Rejected {l.rejectedKg} kg</Chip>
+                ) : (
+                  <Host
+                    tag="button"
+                    className="btn btn-secondary btn-md"
+                    onClick={() => {
+                      setRejectLine(l);
+                      setRkg(String(Math.min(40, l.qtyKg)));
+                    }}
+                  >
                     Reject
-                  </Host>}
+                  </Host>
+                )}
               </Host>
-              {l.rejectedKg ? <Host tag="div" style={{
-            padding: "10px 12px",
-            background: "var(--paper)",
-            borderRadius: 6
-          }} className="cap">
-                  Reason: {l.rejectReason} ·{" "}
-                  {l.credit ? <>
-                      credit note{" "}
-                      <Host tag="strong" style={{
-                color: "var(--green)"
-              }}>
+              {l.rejectedKg ? (
+                <Host
+                  tag="div"
+                  style={{
+                    padding: '10px 12px',
+                    background: 'var(--paper)',
+                    borderRadius: 6,
+                  }}
+                  className="cap"
+                >
+                  Reason: {l.rejectReason} ·{' '}
+                  {l.credit ? (
+                    <>
+                      credit note{' '}
+                      <Host
+                        tag="strong"
+                        style={{
+                          color: 'var(--green)',
+                        }}
+                      >
                         {ghs(l.credit)}
-                      </Host>{" "}
+                      </Host>{' '}
                       issued to your balance
-                    </> : "recorded at handover, CryoChain is reviewing it and a credit note follows"}
-                </Host> : null}
-            </Host>)}
+                    </>
+                  ) : (
+                    'recorded at handover, CryoChain is reviewing it and a credit note follows'
+                  )}
+                </Host>
+              ) : null}
+            </Host>
+          ))}
         </Host>
-        <Sheet open={!!rejectLine} onClose={() => setRejectLine(null)} title={`Reject · ${rejectLine?.name}`}>
+        <Sheet
+          open={!!rejectLine}
+          onClose={() => setRejectLine(null)}
+          title={`Reject · ${rejectLine?.name}`}
+        >
           <Field label="Kilograms rejected">
-            <Host tag="input" className="input tabular" value={rkg} onChange={e => setRkg(e.target.value.replace(/[^0-9.]/g, ""))} />
+            <Host
+              tag="input"
+              className="input tabular"
+              value={rkg}
+              onChange={(e) => setRkg(e.target.value.replace(/[^0-9.]/g, ''))}
+            />
           </Field>
           <Field label="Reason">
-            <Host tag="select" className="input" value={rreason} onChange={e => setRreason(e.target.value)}>
-              {["Bruised on arrival", "Below grade", "Short weight", "Temperature concern", "Wrong product"].map(r => <Host tag="option" key={r}>{r}</Host>)}
+            <Host
+              tag="select"
+              className="input"
+              value={rreason}
+              onChange={(e) => setRreason(e.target.value)}
+            >
+              {[
+                'Bruised on arrival',
+                'Below grade',
+                'Short weight',
+                'Temperature concern',
+                'Wrong product',
+              ].map((r) => (
+                <Host tag="option" key={r}>
+                  {r}
+                </Host>
+              ))}
             </Host>
           </Field>
           <Host tag="div" className="cap">
-            A credit note for{" "}
-            {rejectLine ? ghs(round2(Number(rkg || 0) * rejectLine.unitPrice)) : ""}{" "}
-            is applied to your next order. The farmer is not affected.
+            A credit note for{' '}
+            {rejectLine ? ghs(round2(Number(rkg || 0) * rejectLine.unitPrice)) : ''} is applied to
+            your next order. The farmer is not affected.
           </Host>
-          <Btn kind="danger" onClick={() => {
-          if (rejectLine) act.rejectLine(o.id, rejectLine.id, Number(rkg), rreason);
-          setRejectLine(null);
-        }}>
+          <Btn
+            kind="danger"
+            onClick={() => {
+              if (rejectLine) act.rejectLine(o.id, rejectLine.id, Number(rkg), rreason);
+              setRejectLine(null);
+            }}
+          >
             Confirm rejection
           </Btn>
         </Sheet>
-      </>, <Btn onClick={() => act.acceptDelivery(o.id)}>Accept delivery</Btn>);
+      </>,
+      <Btn onClick={() => act.acceptDelivery(o.id)}>Accept delivery</Btn>,
+    );
   }
-  return wrap(<>
+  return wrap(
+    <>
       {progress}
-      {o.status === "closed" && <Host tag="div" className="card card-pad col gap6">
-          <KV k="Delivered" v={o.deliveredAt ? <Stamped t={o.deliveredAt} /> : ""} />
-          <KV k="Accepted" v={o.acceptedAt ? fmtStamp(o.acceptedAt) : ""} />
-          <KV k="Signed by" v={o.receiver ?? ""} />
-          <Link to={`/buyer/o/${o.id}/temperature`} style={{
-        fontWeight: 600,
-        textDecoration: "none",
-        marginTop: 4
-      }}>
+      {o.status === 'closed' && (
+        <Host tag="div" className="card card-pad col gap6">
+          <KV k="Delivered" v={o.deliveredAt ? <Stamped t={o.deliveredAt} /> : ''} />
+          <KV k="Accepted" v={o.acceptedAt ? fmtStamp(o.acceptedAt) : ''} />
+          <KV k="Signed by" v={o.receiver ?? ''} />
+          <Link
+            to={`/buyer/o/${o.id}/temperature`}
+            style={{
+              fontWeight: 600,
+              textDecoration: 'none',
+              marginTop: 4,
+            }}
+          >
             Temperature record →
           </Link>
-        </Host>}
-      {o.payment && <Host tag="div" className="card card-pad col gap6">
-          <KV k="Payment" v={o.payment.status === "confirmed" ? <Host tag="span" style={{
-        color: "var(--green)"
-      }}>
+        </Host>
+      )}
+      {o.payment && (
+        <Host tag="div" className="card card-pad col gap6">
+          <KV
+            k="Payment"
+            v={
+              o.payment.status === 'confirmed' ? (
+                <Host
+                  tag="span"
+                  style={{
+                    color: 'var(--green)',
+                  }}
+                >
                   Confirmed · {o.payment.ref}
-                </Host> : o.payment.status} />
+                </Host>
+              ) : (
+                o.payment.status
+              )
+            }
+          />
           {o.paidAt && <KV k="Received" v={fmtStamp(o.paidAt)} />}
-        </Host>}
-      {["paid", "allocated", "in_collection"].includes(o.status) && <Host tag="div" className="tint-blue">
-          {o.status === "paid" ? "Payment confirmed. CryoChain is allocating your order across farmers." : o.status === "allocated" ? "Allocated across farmers. Collection is scheduled for your delivery date." : "The truck is collecting now. You will see delivery stamps here."}
-        </Host>}
-      <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(",")[0]}`} />
+        </Host>
+      )}
+      {['paid', 'allocated', 'in_collection'].includes(o.status) && (
+        <Host tag="div" className="tint-blue">
+          {o.status === 'paid'
+            ? 'Payment confirmed. CryoChain is allocating your order across farmers.'
+            : o.status === 'allocated'
+              ? 'Allocated across farmers. Collection is scheduled for your delivery date.'
+              : 'The truck is collecting now. You will see delivery stamps here.'}
+        </Host>
+      )}
+      <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(',')[0]}`} />
       {totals}
       <Lines o={o} />
-    </>, o.status === "closed" ? <Btn kind="secondary" to="/buyer/payments">
+    </>,
+    o.status === 'closed' ? (
+      <Btn kind="secondary" to="/buyer/payments">
         Receipt
-      </Btn> : undefined);
+      </Btn>
+    ) : undefined,
+  );
 }
 function PayPage() {
-  const {
-    id
-  } = useParams();
-  const {
-    orders
-  } = useBuyer();
-  const o = orders.find(x => x.id === id);
+  const { id } = useParams();
+  const { orders } = useBuyer();
+  const o = orders.find((x) => x.id === id);
   if (!o) return <Navigate to="/buyer/orders" />;
-  return <Shell>
+  return (
+    <Shell>
       <TopBar back={`/buyer/o/${o.id}`} title={`Pay ${o.id}`} right={<Money v={o.total} />} />
-      <Host tag="div" className="body" style={{
-      fontSize: 14
-    }}>
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          fontSize: 14,
+        }}
+      >
         <PayBody o={o} />
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
-function PayBody({
-  o,
-  compact
-}: {
-  o: Order;
-  compact?: boolean;
-}) {
-  const {
-    state,
-    act,
-    org,
-    now
-  } = useBuyer();
-  const [momo, setMomo] = useState("024 555 0192");
-  const overseas = org.country !== "Ghana";
+function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
+  const { state, act, org, now } = useBuyer();
+  const [momo, setMomo] = useState('024 555 0192');
+  const overseas = org.country !== 'Ghana';
   const va = org.virtualAccount;
   const [demoAmt, setDemoAmt] = useState(String(o.total));
-  if (o.status === "held") return <>
+  if (o.status === 'held')
+    return (
+      <>
         <Host tag="div" className="tint-red col gap4">
-          <Host tag="span" style={{
-        fontWeight: 600
-      }}>Mismatch held</Host>
+          <Host
+            tag="span"
+            style={{
+              fontWeight: 600,
+            }}
+          >
+            Mismatch held
+          </Host>
           <Host tag="span">
-            We received {ghs(o.payment?.amount ?? 0)}, not {ghs(o.total)}. The
-            order is on hold. Transfer the remaining{" "}
-            {ghs(round2(o.total - (o.payment?.amount ?? 0)))} with reference{" "}
+            We received {ghs(o.payment?.amount ?? 0)}, not {ghs(o.total)}. The order is on hold.
+            Transfer the remaining {ghs(round2(o.total - (o.payment?.amount ?? 0)))} with reference{' '}
             {o.id}, or call 030 274 1100 for a refund.
           </Host>
         </Host>
         <Host tag="div" className="card card-pad col gap8">
-          <Host tag="div" className="lbl">Balance</Host>
-          <Host tag="div" className="cap">
-            {remoteEnabled ? "Operations confirms the balance when the bank reports it. The order stays on hold until the amounts match." : "Demo control for a second bank message."}
+          <Host tag="div" className="lbl">
+            Balance
           </Host>
-          {remoteEnabled ? null : <Btn kind="secondary" onClick={() => act.confirmBankPayment(o.id, o.total)}>
-            Simulate balance received
-          </Btn>}
+          <Host tag="div" className="cap">
+            {remoteEnabled
+              ? 'Operations confirms the balance when the bank reports it. The order stays on hold until the amounts match.'
+              : 'Demo control for a second bank message.'}
+          </Host>
+          {remoteEnabled ? null : (
+            <Btn kind="secondary" onClick={() => act.confirmBankPayment(o.id, o.total)}>
+              Simulate balance received
+            </Btn>
+          )}
         </Host>
-      </>;
-  if (o.status === "paid" || o.payment?.status === "confirmed") return <>
+      </>
+    );
+  if (o.status === 'paid' || o.payment?.status === 'confirmed')
+    return (
+      <>
         <Host tag="div" className="tint-green row">
-          <Host tag="span" style={{
-        fontWeight: 600
-      }}>Payment confirmed</Host>
+          <Host
+            tag="span"
+            style={{
+              fontWeight: 600,
+            }}
+          >
+            Payment confirmed
+          </Host>
           <Host tag="span" className="tabular">
-            {ghs(o.payment?.amount ?? o.total)} ·{" "}
-            {o.paidAt ? fmtStamp(o.paidAt) : ""}
+            {ghs(o.payment?.amount ?? o.total)} · {o.paidAt ? fmtStamp(o.paidAt) : ''}
           </Host>
         </Host>
         <Btn to={`/buyer/o/${o.id}`}>View order</Btn>
-      </>;
-  if (o.status === "awaiting_payment") return <>
+      </>
+    );
+  if (o.status === 'awaiting_payment')
+    return (
+      <>
         <Host tag="div" className="tint-amber row">
-          <Host tag="span" style={{
-        fontWeight: 600
-      }}>Awaiting confirmation</Host>
+          <Host
+            tag="span"
+            style={{
+              fontWeight: 600,
+            }}
+          >
+            Awaiting confirmation
+          </Host>
           <Host tag="span" className="tabular">
             expires in {expiresIn(o.expiresAt ?? now, now)}
           </Host>
         </Host>
-        <Host tag="div" className="cap" style={{
-      marginTop: -6
-    }}>
+        <Host
+          tag="div"
+          className="cap"
+          style={{
+            marginTop: -6,
+          }}
+        >
           Collection is scheduled only after payment is confirmed.
         </Host>
-        <Host tag="div" className="card" style={{
-      padding: 14
-    }}>
+        <Host
+          tag="div"
+          className="card"
+          style={{
+            padding: 14,
+          }}
+        >
           <Host tag="div" className="col gap10">
-            <Host tag="div" className="h16">1 · Bank transfer</Host>
+            <Host tag="div" className="h16">
+              1 · Bank transfer
+            </Host>
             <Host tag="div" className="cap">
               Your organisation's dedicated account. Use the reference exactly.
             </Host>
-            {[["Bank", va?.bank ?? "Assigned on approval"], ["Account number", va?.number ?? "—"], ["Reference", o.id], ["Amount", ghs(o.total)]].map(([k, v]) => <Host tag="div" key={k} className="row" style={{
-          padding: "10px 12px",
-          background: "var(--paper)",
-          borderRadius: 6
-        }}>
+            {[
+              ['Bank', va?.bank ?? 'Assigned on approval'],
+              ['Account number', va?.number ?? '—'],
+              ['Reference', o.id],
+              ['Amount', ghs(o.total)],
+            ].map(([k, v]) => (
+              <Host
+                tag="div"
+                key={k}
+                className="row"
+                style={{
+                  padding: '10px 12px',
+                  background: 'var(--paper)',
+                  borderRadius: 6,
+                }}
+              >
                 <Host tag="div">
-                  <Host tag="div" className="cap">{k}</Host>
-                  <Host tag="div" className="tabular" style={{
-              fontWeight: 600,
-              letterSpacing: k === "Account number" ? ".04em" : undefined
-            }}>
+                  <Host tag="div" className="cap">
+                    {k}
+                  </Host>
+                  <Host
+                    tag="div"
+                    className="tabular"
+                    style={{
+                      fontWeight: 600,
+                      letterSpacing: k === 'Account number' ? '.04em' : undefined,
+                    }}
+                  >
                     {v}
                   </Host>
                 </Host>
-                {k !== "Bank" && <Host tag="button" className="btn btn-secondary btn-md" onClick={() => copy(v)}>
+                {k !== 'Bank' && (
+                  <Host tag="button" className="btn btn-secondary btn-md" onClick={() => copy(v)}>
                     Copy
-                  </Host>}
-              </Host>)}
+                  </Host>
+                )}
+              </Host>
+            ))}
           </Host>
         </Host>
-        {remoteEnabled ? <Host tag="div" className="card card-pad col gap8">
-            <Host tag="div" className="lbl">{o.payment?.method === "bank_transfer" ? "Waiting for the bank" : "Waiting for Flutterwave"}</Host>
-            <Host tag="div" className="cap">
-              {o.payment?.checkoutError || "The order is paid only after the provider confirms the amount. Keep this page open."}
+        {remoteEnabled ? (
+          <Host tag="div" className="card card-pad col gap8">
+            <Host tag="div" className="lbl">
+              {o.payment?.method === 'bank_transfer'
+                ? 'Waiting for the bank'
+                : 'Waiting for Paystack'}
             </Host>
-            {o.payment?.checkoutUrl ? <Btn kind="secondary" onClick={() => {
-            if (typeof window !== "undefined") window.open(o.payment?.checkoutUrl, "_blank");
-          }}>Open the payment page</Btn> : null}
-          </Host> : <Host tag="div" className="card card-pad col gap8" style={{
-      borderStyle: "dashed"
-    }}>
-          <Host tag="div" className="lbl">Demo: what the bank sends back</Host>
-          <Host tag="div" style={{
-        display: "flex",
-        gap: 8
-      }}>
-            <Host tag="input" className="input tabular" value={demoAmt} onChange={e => setDemoAmt(e.target.value)} />
-            <Btn kind="secondary" style={{
-          width: "auto"
-        }} onClick={() => act.confirmBankPayment(o.id, Number(demoAmt))}>
-              Webhook
-            </Btn>
+            <Host tag="div" className="cap">
+              {o.payment?.checkoutError ||
+                'The order is paid only after the provider confirms the amount. Keep this page open.'}
+            </Host>
+            {o.payment?.checkoutUrl ? (
+              <Btn
+                kind="secondary"
+                onClick={() => {
+                  if (typeof window !== 'undefined') window.open(o.payment?.checkoutUrl, '_blank');
+                }}
+              >
+                Open the payment page
+              </Btn>
+            ) : null}
           </Host>
-          <Host tag="div" className="cap">
-            Exact amount confirms the order. Anything else is held as a
-            mismatch.
+        ) : (
+          <Host
+            tag="div"
+            className="card card-pad col gap8"
+            style={{
+              borderStyle: 'dashed',
+            }}
+          >
+            <Host tag="div" className="lbl">
+              Demo: what the bank sends back
+            </Host>
+            <Host
+              tag="div"
+              style={{
+                display: 'flex',
+                gap: 8,
+              }}
+            >
+              <Host
+                tag="input"
+                className="input tabular"
+                value={demoAmt}
+                onChange={(e) => setDemoAmt(e.target.value)}
+              />
+              <Btn
+                kind="secondary"
+                style={{
+                  width: 'auto',
+                }}
+                onClick={() => act.confirmBankPayment(o.id, Number(demoAmt))}
+              >
+                Webhook
+              </Btn>
+            </Host>
+            <Host tag="div" className="cap">
+              Exact amount confirms the order. Anything else is held as a mismatch.
+            </Host>
           </Host>
-        </Host>}
-      </>;
+        )}
+      </>
+    );
   // approved: choose a route
-  return <>
+  return (
+    <>
       <Host tag="div" className="tint-blue">
-        Approved by {state.buyerUsers.find(u => u.id === o.approvedBy)?.name}.
-        Choose how to pay {ghs(o.total)}. Collection is scheduled only after
-        payment is confirmed.
+        Approved by {state.buyerUsers.find((u) => u.id === o.approvedBy)?.name}. Choose how to pay{' '}
+        {ghs(o.total)}. Collection is scheduled only after payment is confirmed.
       </Host>
-      <Host tag="div" className="card" style={{
-      padding: 14
-    }}>
+      <Host
+        tag="div"
+        className="card"
+        style={{
+          padding: 14,
+        }}
+      >
         <Host tag="div" className="col gap10">
-          <Host tag="div" className="h16">1 · Bank transfer</Host>
+          <Host tag="div" className="h16">
+            1 · Bank transfer
+          </Host>
           <Host tag="div" className="cap">
             Your organisation's dedicated account. Use the reference exactly.
           </Host>
-          <Btn onClick={() => act.payOrder(o.id, "bank_transfer")}>
-            Show account details
-          </Btn>
+          <Btn onClick={() => act.payOrder(o.id, 'bank_transfer')}>Show account details</Btn>
         </Host>
       </Host>
-      {!overseas && <Host tag="div" className="card" style={{
-      padding: 14
-    }}>
+      {!overseas && (
+        <Host
+          tag="div"
+          className="card"
+          style={{
+            padding: 14,
+          }}
+        >
           <Host tag="div" className="col gap10">
-            <Host tag="div" className="h16">2 · Card</Host>
+            <Host tag="div" className="h16">
+              2 · Card
+            </Host>
             <Host tag="div" className="cap">
               Ghana issued cards only. Opens the bank's secure page.
             </Host>
-            <Btn kind="secondary" onClick={() => act.payOrder(o.id, "card")}>
+            <Btn kind="secondary" onClick={() => act.payOrder(o.id, 'card')}>
               Pay by card
             </Btn>
           </Host>
-        </Host>}
-      {!overseas && <Host tag="div" className="card" style={{
-      padding: 14
-    }}>
+        </Host>
+      )}
+      {!overseas && (
+        <Host
+          tag="div"
+          className="card"
+          style={{
+            padding: 14,
+          }}
+        >
           <Host tag="div" className="col gap10">
-            <Host tag="div" className="h16">3 · Mobile money</Host>
-            <Host tag="div" style={{
-          display: "flex",
-          gap: 8
-        }}>
-              <Host tag="input" className="input" value={momo} onChange={e => setMomo(e.target.value)} style={{
-            flex: 1
-          }} />
-              <Host tag="select" className="input" style={{
-            width: 110
-          }}>
+            <Host tag="div" className="h16">
+              3 · Mobile money
+            </Host>
+            <Host
+              tag="div"
+              style={{
+                display: 'flex',
+                gap: 8,
+              }}
+            >
+              <Host
+                tag="input"
+                className="input"
+                value={momo}
+                onChange={(e) => setMomo(e.target.value)}
+                style={{
+                  flex: 1,
+                }}
+              />
+              <Host
+                tag="select"
+                className="input"
+                style={{
+                  width: 110,
+                }}
+              >
                 <Host tag="option">MTN</Host>
                 <Host tag="option">Telecel</Host>
                 <Host tag="option">AirtelTigo</Host>
               </Host>
             </Host>
-            <Btn kind="secondary" onClick={() => act.payOrder(o.id, "momo")}>
+            <Btn kind="secondary" onClick={() => act.payOrder(o.id, 'momo')}>
               Send prompt
             </Btn>
           </Host>
-        </Host>}
-      {overseas && <Host tag="div" className="tint-amber">
+        </Host>
+      )}
+      {overseas && (
+        <Host tag="div" className="tint-amber">
           Buyers outside Ghana pay by bank transfer in version one.
-        </Host>}
+        </Host>
+      )}
       {compact ? null : null}
-    </>;
+    </>
+  );
 }
 function Temperature() {
-  const {
-    id
-  } = useParams();
-  const {
-    state,
-    orders
-  } = useBuyer();
-  const o = orders.find(x => x.id === id);
+  const { id } = useParams();
+  const { state, orders } = useBuyer();
+  const o = orders.find((x) => x.id === id);
   if (!o) return <Navigate to="/buyer/orders" />;
-  const run = state.runs.find(r => r.id === o.runId);
-  const temps = state.temps.filter(t => t.runId === o.runId).sort((a, b) => a.at - b.at);
-  const oor = temps.filter(t => t.outOfRange).length;
-  return <Shell>
-      <TopBar back={`/buyer/o/${o.id}`} title={`Temperature · ${o.id}`} right={<Host tag="button" className="btn btn-secondary" style={{
-      width: 40,
-      height: 40,
-      padding: 0
-    }} onClick={() => downloadCsv(`${o.id}-temperature.csv`, temps.map(t => ({
-      checkpoint: t.label,
-      value_c: t.valueC,
-      time: new Date(t.at).toISOString(),
-      source: t.source,
-      out_of_range: t.outOfRange
-    })))} aria-label="Download">
+  const run = state.runs.find((r) => r.id === o.runId);
+  const temps = state.temps.filter((t) => t.runId === o.runId).sort((a, b) => a.at - b.at);
+  const oor = temps.filter((t) => t.outOfRange).length;
+  return (
+    <Shell>
+      <TopBar
+        back={`/buyer/o/${o.id}`}
+        title={`Temperature · ${o.id}`}
+        right={
+          <Host
+            tag="button"
+            className="btn btn-secondary"
+            style={{
+              width: 40,
+              height: 40,
+              padding: 0,
+            }}
+            onClick={() =>
+              downloadCsv(
+                `${o.id}-temperature.csv`,
+                temps.map((t) => ({
+                  checkpoint: t.label,
+                  value_c: t.valueC,
+                  time: new Date(t.at).toISOString(),
+                  source: t.source,
+                  out_of_range: t.outOfRange,
+                })),
+              )
+            }
+            aria-label="Download"
+          >
             {I.download()}
-          </Host>} />
-      <Host tag="div" className="body" style={{
-      gap: 0,
-      fontSize: 14
-    }}>
-        <Host tag="div" className="cap" style={{
-        paddingBottom: 12
-      }}>
-          Range {run?.tempMin} °C to {run?.tempMax} °C · {temps.length}{" "}
-          checkpoints · {oor} out of range · readings labelled Manual are typed
-          by the driver against a gauge photograph
+          </Host>
+        }
+      />
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          gap: 0,
+          fontSize: 14,
+        }}
+      >
+        <Host
+          tag="div"
+          className="cap"
+          style={{
+            paddingBottom: 12,
+          }}
+        >
+          Range {run?.tempMin} °C to {run?.tempMax} °C · {temps.length} checkpoints · {oor} out of
+          range · readings labelled Manual are typed by the driver against a gauge photograph
         </Host>
-        {temps.length === 0 && <Host tag="div" className="tint-blue">
+        {temps.length === 0 && (
+          <Host tag="div" className="tint-blue">
             No readings yet. They appear as the truck syncs.
-          </Host>}
-        {temps.map((t, i) => <Host tag="div" key={t.id} style={{
-        display: "flex",
-        gap: 12,
-        padding: t.outOfRange ? "10px 12px" : "10px 0",
-        margin: t.outOfRange ? "0 -12px" : 0,
-        borderTop: "1px solid var(--line)",
-        borderBottom: i === temps.length - 1 ? "1px solid var(--line)" : undefined,
-        background: t.outOfRange ? "var(--red-tint)" : undefined,
-        borderRadius: t.outOfRange ? 6 : 0
-      }}>
+          </Host>
+        )}
+        {temps.map((t, i) => (
+          <Host
+            tag="div"
+            key={t.id}
+            style={{
+              display: 'flex',
+              gap: 12,
+              padding: t.outOfRange ? '10px 12px' : '10px 0',
+              margin: t.outOfRange ? '0 -12px' : 0,
+              borderTop: '1px solid var(--line)',
+              borderBottom: i === temps.length - 1 ? '1px solid var(--line)' : undefined,
+              background: t.outOfRange ? 'var(--red-tint)' : undefined,
+              borderRadius: t.outOfRange ? 6 : 0,
+            }}
+          >
             <Ph label="" w={48} h={48} />
-            <Host tag="div" style={{
-          flex: 1
-        }}>
+            <Host
+              tag="div"
+              style={{
+                flex: 1,
+              }}
+            >
               <Host tag="div" className="row">
-                <Host tag="span" style={{
-              fontWeight: 600,
-              color: t.outOfRange ? "var(--red)" : undefined
-            }}>
+                <Host
+                  tag="span"
+                  style={{
+                    fontWeight: 600,
+                    color: t.outOfRange ? 'var(--red)' : undefined,
+                  }}
+                >
                   {t.label}
                 </Host>
-                <Host tag="span" className="tabular h16" style={{
-              color: t.outOfRange ? "var(--red)" : undefined
-            }}>
+                <Host
+                  tag="span"
+                  className="tabular h16"
+                  style={{
+                    color: t.outOfRange ? 'var(--red)' : undefined,
+                  }}
+                >
                   {t.valueC.toFixed(1)} °C
                 </Host>
               </Host>
-              <Host tag="div" style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center"
-          }} className="cap">
-                <Host tag="span" className="tabular" style={{
-              color: t.outOfRange ? "var(--red)" : undefined
-            }}>
+              <Host
+                tag="div"
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+                className="cap"
+              >
+                <Host
+                  tag="span"
+                  className="tabular"
+                  style={{
+                    color: t.outOfRange ? 'var(--red)' : undefined,
+                  }}
+                >
                   {fmtStamp(t.at)}
                 </Host>
-                <Host tag="span" className="chip chip-outline" style={t.outOfRange ? {
-              borderColor: "var(--red)",
-              color: "var(--red)"
-            } : undefined}>
-                  {t.source === "manual" ? "Manual" : "Device"}
+                <Host
+                  tag="span"
+                  className="chip chip-outline"
+                  style={
+                    t.outOfRange
+                      ? {
+                          borderColor: 'var(--red)',
+                          color: 'var(--red)',
+                        }
+                      : undefined
+                  }
+                >
+                  {t.source === 'manual' ? 'Manual' : 'Device'}
                 </Host>
-                {t.outOfRange && <Host tag="span" style={{
-              fontWeight: 600,
-              color: "var(--red)"
-            }}>
+                {t.outOfRange && (
+                  <Host
+                    tag="span"
+                    style={{
+                      fontWeight: 600,
+                      color: 'var(--red)',
+                    }}
+                  >
                     Out of range
-                  </Host>}
+                  </Host>
+                )}
               </Host>
-              {t.note && <Host tag="div" className="cap" style={{
-            color: "var(--red)",
-            marginTop: 2
-          }}>
+              {t.note && (
+                <Host
+                  tag="div"
+                  className="cap"
+                  style={{
+                    color: 'var(--red)',
+                    marginTop: 2,
+                  }}
+                >
                   {t.note}
-                </Host>}
+                </Host>
+              )}
             </Host>
-          </Host>)}
+          </Host>
+        ))}
       </Host>
       <Host tag="div" className="footer">
-        <Btn kind="secondary" onClick={() => Share.share({
-        message: "CryoChain record"
-      }).catch(() => {})}>
+        <Btn
+          kind="secondary"
+          onClick={() =>
+            Share.share({
+              message: 'CryoChain record',
+            }).catch(() => {})
+          }
+        >
           Download record (PDF)
         </Btn>
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Payments() {
-  const {
-    state,
-    orders,
-    credit
-  } = useBuyer();
-  const [tab, setTab] = useState("Receipts");
-  const receipts = orders.filter(o => o.payment).sort((a, b) => (b.payment?.at ?? b.expiresAt ?? 0) - (a.payment?.at ?? a.expiresAt ?? 0));
-  const credits = state.ledger.filter(l => l.kind === "credit_note" && orders.some(o => o.id === l.orderId));
-  return <Shell>
+  const { state, orders, credit } = useBuyer();
+  const [tab, setTab] = useState('Receipts');
+  const receipts = orders
+    .filter((o) => o.payment)
+    .sort((a, b) => (b.payment?.at ?? b.expiresAt ?? 0) - (a.payment?.at ?? a.expiresAt ?? 0));
+  const credits = state.ledger.filter(
+    (l) => l.kind === 'credit_note' && orders.some((o) => o.id === l.orderId),
+  );
+  return (
+    <Shell>
       <TopBar title="Payments" />
-      <Tabs tabs={["Receipts", "Credit notes"]} value={tab} onChange={setTab} />
-      <Host tag="div" className="body" style={{
-      fontSize: 14
-    }}>
+      <Tabs tabs={['Receipts', 'Credit notes']} value={tab} onChange={setTab} />
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          fontSize: 14,
+        }}
+      >
         <Host tag="div" className="tint-green row">
-          <Host tag="span" style={{
-          fontWeight: 600
-        }}>Credit balance</Host>
+          <Host
+            tag="span"
+            style={{
+              fontWeight: 600,
+            }}
+          >
+            Credit balance
+          </Host>
           <Money v={credit} color="var(--green)" />
         </Host>
-        {tab === "Receipts" ? receipts.map(o => <Host tag="div" key={o.id} className="item">
+        {tab === 'Receipts'
+          ? receipts.map((o) => (
+              <Host tag="div" key={o.id} className="item">
                 <Host tag="div" className="row">
-                  <Host tag="span" className="h16">{o.id}</Host>
+                  <Host tag="span" className="h16">
+                    {o.id}
+                  </Host>
                   <Money v={o.payment!.amount} />
                 </Host>
                 <Host tag="div" className="row cap">
                   <Host tag="span">
-                    {o.payment!.method === "bank_transfer" ? "Bank transfer" : o.payment!.method === "card" ? "Card" : "Mobile money · MTN"}{" "}
-                    ·{" "}
-                    {o.payment!.status === "awaiting" ? "awaiting" : "ref " + o.payment!.ref}
+                    {o.payment!.method === 'bank_transfer'
+                      ? 'Bank transfer'
+                      : o.payment!.method === 'card'
+                        ? 'Card'
+                        : 'Mobile money · MTN'}{' '}
+                    · {o.payment!.status === 'awaiting' ? 'awaiting' : 'ref ' + o.payment!.ref}
                   </Host>
                   <Host tag="span" className="tabular">
-                    {o.payment!.at ? fmtStamp(o.payment!.at) : o.expiresAt ? `expires ${fmtStamp(o.expiresAt)}` : ""}
+                    {o.payment!.at
+                      ? fmtStamp(o.payment!.at)
+                      : o.expiresAt
+                        ? `expires ${fmtStamp(o.expiresAt)}`
+                        : ''}
                   </Host>
                 </Host>
                 <Host tag="div" className="row">
-                  {o.payment!.status === "confirmed" ? <Chip tone="ok">Confirmed</Chip> : o.payment!.status === "mismatch" ? <Chip tone="alert">Mismatch held</Chip> : <Chip tone="warn">Awaiting confirmation</Chip>}
-                  {o.payment!.status === "confirmed" && <Host tag="button" style={{
-            fontWeight: 600,
-            color: "var(--blue)"
-          }} onClick={() => Share.share({
-            message: "CryoChain record"
-          }).catch(() => {})}>
+                  {o.payment!.status === 'confirmed' ? (
+                    <Chip tone="ok">Confirmed</Chip>
+                  ) : o.payment!.status === 'mismatch' ? (
+                    <Chip tone="alert">Mismatch held</Chip>
+                  ) : (
+                    <Chip tone="warn">Awaiting confirmation</Chip>
+                  )}
+                  {o.payment!.status === 'confirmed' && (
+                    <Host
+                      tag="button"
+                      style={{
+                        fontWeight: 600,
+                        color: 'var(--blue)',
+                      }}
+                      onClick={() =>
+                        Share.share({
+                          message: 'CryoChain record',
+                        }).catch(() => {})
+                      }
+                    >
                       Receipt PDF
-                    </Host>}
+                    </Host>
+                  )}
                 </Host>
-              </Host>) : credits.map(l => <Host tag="div" key={l.id} className="item">
+              </Host>
+            ))
+          : credits.map((l) => (
+              <Host tag="div" key={l.id} className="item">
                 <Host tag="div" className="row">
                   <Host tag="span" className="h16">
                     {l.ref} · {l.orderId}
                   </Host>
-                  <Host tag="span" className="tabular" style={{
-            fontWeight: 600,
-            color: "var(--green)"
-          }}>
+                  <Host
+                    tag="span"
+                    className="tabular"
+                    style={{
+                      fontWeight: 600,
+                      color: 'var(--green)',
+                    }}
+                  >
                     + {ghs(l.amount)}
                   </Host>
                 </Host>
                 <Host tag="div" className="cap">
                   Credit note · {l.memo} · applied to balance
                 </Host>
-              </Host>)}
-        {tab === "Credit notes" && credits.length === 0 && <Empty title="No credit notes." sub="Rejected produce is credited here." />}
+              </Host>
+            ))}
+        {tab === 'Credit notes' && credits.length === 0 && (
+          <Empty title="No credit notes." sub="Rejected produce is credited here." />
+        )}
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Users() {
-  const {
-    state,
-    act,
-    org,
-    user,
-    isAdmin
-  } = useBuyer();
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
-  const [role, setRole] = useState<"viewer" | "requester" | "approver" | "admin">("requester");
-  const [limit, setLimit] = useState("10000");
+  const { state, act, org, user, isAdmin } = useBuyer();
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<'viewer' | 'requester' | 'approver' | 'admin'>('requester');
+  const [limit, setLimit] = useState('10000');
   const [edit, setEdit] = useState<string | null>(null);
-  const users = state.buyerUsers.filter(u => u.orgId === org.id);
-  const eu = users.find(u => u.id === edit);
-  const [elimit, setElimit] = useState("");
-  const [erole, setErole] = useState<"viewer" | "requester" | "approver" | "admin">("requester");
-  return <Shell>
-      <TopBar title="Users" right={<Host tag="span" className="cap">{org.name}</Host>} />
-      <Host tag="div" className="body" style={{
-      fontSize: 14
-    }}>
-        {isAdmin && <Host tag="div" className="card" style={{
-        padding: 14
-      }}>
+  const users = state.buyerUsers.filter((u) => u.orgId === org.id);
+  const eu = users.find((u) => u.id === edit);
+  const [elimit, setElimit] = useState('');
+  const [erole, setErole] = useState<'viewer' | 'requester' | 'approver' | 'admin'>('requester');
+  return (
+    <Shell>
+      <TopBar
+        title="Users"
+        right={
+          <Host tag="span" className="cap">
+            {org.name}
+          </Host>
+        }
+      />
+      <Host
+        tag="div"
+        className="body"
+        style={{
+          fontSize: 14,
+        }}
+      >
+        {isAdmin && (
+          <Host
+            tag="div"
+            className="card"
+            style={{
+              padding: 14,
+            }}
+          >
             <Host tag="div" className="col gap10">
-              <Host tag="div" className="h16">Invite by phone</Host>
-              <Host tag="input" className="input" placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
-              <Host tag="div" style={{
-            display: "flex",
-            gap: 8
-          }}>
-                <Host tag="input" className="input" placeholder="+233" value={phone} onChange={e => setPhone(e.target.value)} style={{
-              flex: 1
-            }} />
-                <Host tag="select" className="input" style={{
-              width: 140
-            }} value={role} onChange={e => setRole(e.target.value as typeof role)}>
-                  <Host tag="option" value="viewer">Viewer</Host>
-                  <Host tag="option" value="requester">Requester</Host>
-                  <Host tag="option" value="approver">Approver</Host>
-                  <Host tag="option" value="admin">Admin</Host>
+              <Host tag="div" className="h16">
+                Invite by phone
+              </Host>
+              <Host
+                tag="input"
+                className="input"
+                placeholder="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Host
+                tag="div"
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                }}
+              >
+                <Host
+                  tag="input"
+                  className="input"
+                  placeholder="+233"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  style={{
+                    flex: 1,
+                  }}
+                />
+                <Host
+                  tag="select"
+                  className="input"
+                  style={{
+                    width: 140,
+                  }}
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as typeof role)}
+                >
+                  <Host tag="option" value="viewer">
+                    Viewer
+                  </Host>
+                  <Host tag="option" value="requester">
+                    Requester
+                  </Host>
+                  <Host tag="option" value="approver">
+                    Approver
+                  </Host>
+                  <Host tag="option" value="admin">
+                    Admin
+                  </Host>
                 </Host>
               </Host>
-              {role === "approver" && <Field label="Approval limit, GHS per order">
-                  <Host tag="input" className="input tabular" value={limit} onChange={e => setLimit(e.target.value)} />
-                </Field>}
-              <Btn disabled={!phone} onClick={() => {
-            act.inviteUser(org.id, name, phone, role, role === "approver" ? Number(limit) : undefined);
-            setPhone("");
-            setName("");
-          }}>
+              {role === 'approver' && (
+                <Field label="Approval limit, GHS per order">
+                  <Host
+                    tag="input"
+                    className="input tabular"
+                    value={limit}
+                    onChange={(e) => setLimit(e.target.value)}
+                  />
+                </Field>
+              )}
+              <Btn
+                disabled={!phone}
+                onClick={() => {
+                  act.inviteUser(
+                    org.id,
+                    name,
+                    phone,
+                    role,
+                    role === 'approver' ? Number(limit) : undefined,
+                  );
+                  setPhone('');
+                  setName('');
+                }}
+              >
                 Send invite
               </Btn>
             </Host>
-          </Host>}
-        {users.map(u => <Host tag="div" key={u.id} className="item" style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        color: u.status === "deactivated" ? "var(--steel-ink)" : undefined
-      }}>
+          </Host>
+        )}
+        {users.map((u) => (
+          <Host
+            tag="div"
+            key={u.id}
+            className="item"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              color: u.status === 'deactivated' ? 'var(--steel-ink)' : undefined,
+            }}
+          >
             <Host tag="div">
-              <Host tag="div" className="h16">{u.name}</Host>
+              <Host tag="div" className="h16">
+                {u.name}
+              </Host>
               <Host tag="div" className="cap">
-                {u.roles.map(r => r[0].toUpperCase() + r.slice(1)).join(" · ")}
-                {u.limit !== undefined ? ` · limit ${ghs(u.limit)}` : ""}
-                {u.status === "invited" ? " · invited, not yet signed in" : u.status === "deactivated" ? " · deactivated" : ""}
+                {u.roles.map((r) => r[0].toUpperCase() + r.slice(1)).join(' · ')}
+                {u.limit !== undefined ? ` · limit ${ghs(u.limit)}` : ''}
+                {u.status === 'invited'
+                  ? ' · invited, not yet signed in'
+                  : u.status === 'deactivated'
+                    ? ' · deactivated'
+                    : ''}
               </Host>
             </Host>
-            {u.id === user.id ? <Host tag="span" className="cap">You</Host> : u.status === "invited" ? <Chip>Invited</Chip> : u.status === "deactivated" ? isAdmin ? <Host tag="button" style={{
-          fontWeight: 600,
-          color: "var(--blue)"
-        }} onClick={() => act.updateUser(u.id, {
-          status: "active"
-        })}>
+            {u.id === user.id ? (
+              <Host tag="span" className="cap">
+                You
+              </Host>
+            ) : u.status === 'invited' ? (
+              <Chip>Invited</Chip>
+            ) : u.status === 'deactivated' ? (
+              isAdmin ? (
+                <Host
+                  tag="button"
+                  style={{
+                    fontWeight: 600,
+                    color: 'var(--blue)',
+                  }}
+                  onClick={() =>
+                    act.updateUser(u.id, {
+                      status: 'active',
+                    })
+                  }
+                >
                   Reactivate
-                </Host> : null : isAdmin ? <Host tag="button" className="btn btn-secondary btn-md" onClick={() => {
-          setEdit(u.id);
-          setElimit(String(u.limit ?? ""));
-          setErole(u.roles[0]);
-        }}>
+                </Host>
+              ) : null
+            ) : isAdmin ? (
+              <Host
+                tag="button"
+                className="btn btn-secondary btn-md"
+                onClick={() => {
+                  setEdit(u.id);
+                  setElimit(String(u.limit ?? ''));
+                  setErole(u.roles[0]);
+                }}
+              >
                 Edit
-              </Host> : null}
-          </Host>)}
+              </Host>
+            ) : null}
+          </Host>
+        ))}
         <Host tag="div" className="cap">
-          Every buyer sets these themselves. CryoChain does not administer
-          another company's staff list.
+          Every buyer sets these themselves. CryoChain does not administer another company's staff
+          list.
         </Host>
         <Sheet open={!!eu} onClose={() => setEdit(null)} title={`Edit · ${eu?.name}`}>
           <Field label="Role">
-            <Host tag="select" className="input" value={erole} onChange={e => setErole(e.target.value as typeof erole)}>
-              <Host tag="option" value="viewer">Viewer</Host>
-              <Host tag="option" value="requester">Requester</Host>
-              <Host tag="option" value="approver">Approver</Host>
-              <Host tag="option" value="admin">Admin</Host>
+            <Host
+              tag="select"
+              className="input"
+              value={erole}
+              onChange={(e) => setErole(e.target.value as typeof erole)}
+            >
+              <Host tag="option" value="viewer">
+                Viewer
+              </Host>
+              <Host tag="option" value="requester">
+                Requester
+              </Host>
+              <Host tag="option" value="approver">
+                Approver
+              </Host>
+              <Host tag="option" value="admin">
+                Admin
+              </Host>
             </Host>
           </Field>
-          {(erole === "approver" || erole === "admin") && <Field label="Approval limit, GHS per order">
-              <Host tag="input" className="input tabular" value={elimit} onChange={e => setElimit(e.target.value)} />
-            </Field>}
-          <Btn onClick={() => {
-          if (eu) act.updateUser(eu.id, {
-            roles: erole === "admin" ? ["admin", "approver"] : [erole],
-            limit: elimit ? Number(elimit) : undefined
-          });
-          setEdit(null);
-        }}>
+          {(erole === 'approver' || erole === 'admin') && (
+            <Field label="Approval limit, GHS per order">
+              <Host
+                tag="input"
+                className="input tabular"
+                value={elimit}
+                onChange={(e) => setElimit(e.target.value)}
+              />
+            </Field>
+          )}
+          <Btn
+            onClick={() => {
+              if (eu)
+                act.updateUser(eu.id, {
+                  roles: erole === 'admin' ? ['admin', 'approver'] : [erole],
+                  limit: elimit ? Number(elimit) : undefined,
+                });
+              setEdit(null);
+            }}
+          >
             Save
           </Btn>
-          <Btn kind="link-danger" onClick={() => {
-          if (eu) act.updateUser(eu.id, {
-            status: "deactivated"
-          });
-          setEdit(null);
-        }}>
+          <Btn
+            kind="link-danger"
+            onClick={() => {
+              if (eu)
+                act.updateUser(eu.id, {
+                  status: 'deactivated',
+                });
+              setEdit(null);
+            }}
+          >
             Deactivate
           </Btn>
         </Sheet>
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function Deliveries() {
-  const {
-    orders
-  } = useBuyer();
-  const list = orders.filter(o => o.deliveredAt);
-  return <Shell>
+  const { orders } = useBuyer();
+  const list = orders.filter((o) => o.deliveredAt);
+  return (
+    <Shell>
       <TopBar title="Deliveries" />
       <Host tag="div" className="body">
-        {list.map(o => <Link key={o.id} to={`/buyer/o/${o.id}`} className="item">
+        {list.map((o) => (
+          <Link key={o.id} to={`/buyer/o/${o.id}`} className="item">
             <Host tag="div" className="row">
-              <Host tag="span" className="h16">{o.id}</Host>
+              <Host tag="span" className="h16">
+                {o.id}
+              </Host>
               <Chip tone={ORDER_TONE[o.status]}>{ORDER_LABEL[o.status]}</Chip>
             </Host>
             <Host tag="div" className="row cap">
               <Host tag="span">
-                Delivered {o.deliveredAt ? fmtStamp(o.deliveredAt) : ""} ·{" "}
-                {o.receiver}
+                Delivered {o.deliveredAt ? fmtStamp(o.deliveredAt) : ''} · {o.receiver}
               </Host>
               <Host tag="span">
-                {o.handoverTemp !== undefined ? `${o.handoverTemp.toFixed(1)} °C at handover` : ""}
+                {o.handoverTemp !== undefined ? `${o.handoverTemp.toFixed(1)} °C at handover` : ''}
               </Host>
             </Host>
-          </Link>)}
+          </Link>
+        ))}
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function TempRecords() {
-  const {
-    orders
-  } = useBuyer();
-  const list = orders.filter(o => o.runId);
-  return <Shell>
+  const { orders } = useBuyer();
+  const list = orders.filter((o) => o.runId);
+  return (
+    <Shell>
       <TopBar title="Temperature records" />
       <Host tag="div" className="body">
-        {list.map(o => <Link key={o.id} to={`/buyer/o/${o.id}/temperature`} className="item">
+        {list.map((o) => (
+          <Link key={o.id} to={`/buyer/o/${o.id}/temperature`} className="item">
             <Host tag="div" className="row">
-              <Host tag="span" className="h16">{o.id}</Host>
-              <Host tag="span" className="cap">{fmtDayLong(o.deliveryDate)}</Host>
+              <Host tag="span" className="h16">
+                {o.id}
+              </Host>
+              <Host tag="span" className="cap">
+                {fmtDayLong(o.deliveryDate)}
+              </Host>
             </Host>
             <Host tag="div" className="cap">
-              {o.lines.map(l => l.name.split(",")[0]).join(", ")}
+              {o.lines.map((l) => l.name.split(',')[0]).join(', ')}
             </Host>
-          </Link>)}
+          </Link>
+        ))}
       </Host>
-    </Shell>;
+    </Shell>
+  );
 }
 function BuyerEntry() {
-  const {
-    state
-  } = useStore();
-  const user = state.buyerUsers.find(u => u.id === state.session.buyerUserId);
+  const { state } = useStore();
+  const user = state.buyerUsers.find((u) => u.id === state.session.buyerUserId);
   if (!user) return <Register />;
-  const org = state.orgs.find(o => o.id === user.orgId);
-  if (!org || org.status === "pending") return <Navigate to="/buyer/pending" />;
+  const org = state.orgs.find((o) => o.id === user.orgId);
+  if (!org || org.status === 'pending') return <Navigate to="/buyer/pending" />;
   return <Navigate to="/buyer/home" />;
 }
 export function kgLabel(n: number) {
   return kg(n);
 }
 export default function BuyerApp() {
-  return <Routes>
+  return (
+    <Routes>
       <Route index element={<BuyerEntry />} />
       <Route path="code" element={<Code />} />
       <Route path="register" element={<Register />} />
@@ -1774,5 +2883,6 @@ export default function BuyerApp() {
       <Route path="payments" element={<Payments />} />
       <Route path="users" element={<Users />} />
       <Route path="*" element={<Navigate to="/buyer" />} />
-    </Routes>;
+    </Routes>
+  );
 }

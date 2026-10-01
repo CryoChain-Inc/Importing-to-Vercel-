@@ -1,0 +1,7 @@
+node_modules
+.expo
+assets
+package-lock.json
+*.png
+*.jpg
+*.svg

@@ -1,7 +1,25 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BackHandler, Platform, Pressable, Text, type TextStyle, type ViewStyle } from 'react-native';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  BackHandler,
+  Platform,
+  Pressable,
+  Text,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 import { present } from '../ui/style';
 
+// NOTE: Custom cross-platform routing shim that mirrors react-router-dom API.
+// Synchronizes with HTML5 History on web and React Native BackHandler on native mobile.
 type Entry = { path: string; search: string };
 type RouteState = { base: string; params: Record<string, string> };
 
@@ -20,7 +38,10 @@ function norm(path: string) {
 
 function readLocation(): Entry {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return { path: '/', search: '' };
-  return { path: norm(window.location.pathname), search: window.location.search.replace(/^\?/, '') };
+  return {
+    path: norm(window.location.pathname),
+    search: window.location.search.replace(/^\?/, ''),
+  };
 }
 
 function writeLocation(path: string, search: string, replace: boolean) {
@@ -39,7 +60,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
   const push = useCallback((to: string, replace = false) => {
     const [raw, search = ''] = to.split('?');
     const path = norm(raw);
-    setStack(s => {
+    setStack((s) => {
       const entry = { path, search };
       const cur = s[s.length - 1];
       if (cur && cur.path === entry.path && cur.search === entry.search) return s;
@@ -49,7 +70,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
     writeLocation(path, search, replace);
   }, []);
   const setSearch = useCallback((search: string) => {
-    setStack(s => {
+    setStack((s) => {
       const cur = s[s.length - 1];
       if (!cur) return s;
       writeLocation(cur.path, search, true);
@@ -64,7 +85,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
     }
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (stackRef.current.length <= 1) return false;
-      setStack(s => s.slice(0, -1));
+      setStack((s) => s.slice(0, -1));
       return true;
     });
     return () => sub.remove();
@@ -90,11 +111,16 @@ export function useNavigate() {
   return (to: string, opts?: { replace?: boolean }) => push(to, opts?.replace);
 }
 
-export function useParams<T extends Record<string, string | undefined> = Record<string, string | undefined>>() {
+export function useParams<
+  T extends Record<string, string | undefined> = Record<string, string | undefined>,
+>() {
   return useContext(RouteCtx).params as T;
 }
 
-export function useSearchParams(): [{ get(name: string): string | null }, (next: Record<string, string>) => void] {
+export function useSearchParams(): [
+  { get(name: string): string | null },
+  (next: Record<string, string>) => void,
+] {
   const { stack, setSearch } = useNav();
   const search = stack[stack.length - 1]?.search ?? '';
   const sp = useMemo(() => new URLSearchParams(search), [search]);
@@ -108,11 +134,13 @@ export function useSearchParams(): [{ get(name: string): string | null }, (next:
 
 function matchPattern(suffix: string, pattern: string) {
   const path = norm(suffix || '/');
-  if (pattern === '/' || pattern === '') return path === '/' ? { params: {} as Record<string, string>, score: 1, base: '' } : null;
+  if (pattern === '/' || pattern === '')
+    return path === '/' ? { params: {} as Record<string, string>, score: 1, base: '' } : null;
   const pat = pattern.startsWith('/') ? pattern : `/${pattern}`;
   if (pat.endsWith('/*')) {
     const prefix = norm(pat.slice(0, -2));
-    if (path === prefix || path.startsWith(prefix + '/')) return { params: {}, score: 2, base: prefix };
+    if (path === prefix || path.startsWith(prefix + '/'))
+      return { params: {}, score: 2, base: prefix };
     return null;
   }
   const ps = pat.split('/').filter(Boolean);
@@ -136,29 +164,57 @@ export function Routes({ children }: { children: ReactNode }) {
     if (pathname === parent.base) suffix = '/';
     else if (pathname.startsWith(parent.base + '/')) suffix = pathname.slice(parent.base.length);
   }
-  const routes = (Array.isArray(children) ? children : [children]).filter(Boolean) as { props?: { path?: string; index?: boolean; element?: ReactNode } }[];
-  let best: { element?: ReactNode; params: Record<string, string>; score: number; base: string } | null = null;
+  const routes = (Array.isArray(children) ? children : [children]).filter(Boolean) as {
+    props?: { path?: string; index?: boolean; element?: ReactNode };
+  }[];
+  let best: {
+    element?: ReactNode;
+    params: Record<string, string>;
+    score: number;
+    base: string;
+  } | null = null;
   let star: ReactNode = null;
   for (const route of routes) {
     if (!route?.props) continue;
-    if (route.props.path === '*') { star = route.props.element; continue; }
+    if (route.props.path === '*') {
+      star = route.props.element;
+      continue;
+    }
     const pattern = route.props.index || route.props.path == null ? '/' : route.props.path;
     const hit = matchPattern(suffix, pattern);
-    if (hit && (!best || hit.score > best.score)) best = { element: route.props.element, params: hit.params, score: hit.score, base: hit.base || parent.base };
+    if (hit && (!best || hit.score > best.score))
+      best = {
+        element: route.props.element,
+        params: hit.params,
+        score: hit.score,
+        base: hit.base || parent.base,
+      };
   }
   if (!best) return star ? <RouteCtx.Provider value={parent}>{star}</RouteCtx.Provider> : null;
-  return <RouteCtx.Provider value={{ base: best.base, params: { ...parent.params, ...best.params } }}>{best.element}</RouteCtx.Provider>;
+  return (
+    <RouteCtx.Provider value={{ base: best.base, params: { ...parent.params, ...best.params } }}>
+      {best.element}
+    </RouteCtx.Provider>
+  );
 }
 
-export function Route(_props: { path?: string; index?: boolean; element?: ReactNode }) { return null; }
-
-export function Navigate({ to, replace = true }: { to: string; replace?: boolean }) {
-  const nav = useNavigate();
-  useEffect(() => { nav(to, { replace }); }, [to, replace, nav]);
+export function Route(_props: { path?: string; index?: boolean; element?: ReactNode }) {
   return null;
 }
 
-function linkStyles(className: string | undefined, style: object | undefined, textMode: boolean): { view: ViewStyle; text: TextStyle } {
+export function Navigate({ to, replace = true }: { to: string; replace?: boolean }) {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav(to, { replace });
+  }, [to, replace, nav]);
+  return null;
+}
+
+function linkStyles(
+  className: string | undefined,
+  style: object | undefined,
+  textMode: boolean,
+): { view: ViewStyle; text: TextStyle } {
   const p = present(className, style);
   if (!className) {
     p.text.color = p.text.color ?? '#1F78B4';
@@ -168,18 +224,56 @@ function linkStyles(className: string | undefined, style: object | undefined, te
   return p;
 }
 
-export function Link({ to, children, className, style, onClick }: { to: string; children?: ReactNode; className?: string; style?: object; onClick?: () => void }) {
+export function Link({
+  to,
+  children,
+  className,
+  style,
+  onClick,
+}: {
+  to: string;
+  children?: ReactNode;
+  className?: string;
+  style?: object;
+  onClick?: () => void;
+}) {
   const nav = useNavigate();
   const layout = /\b(item|tile|card|row|col|btn)\b/.test(className ?? '');
   const s = linkStyles(className, style, !layout);
-  return <Pressable onPress={() => { onClick?.(); nav(to); }} style={s.view}>{layout ? children : <Text style={s.text}>{children}</Text>}</Pressable>;
+  return (
+    <Pressable
+      onPress={() => {
+        onClick?.();
+        nav(to);
+      }}
+      style={s.view}
+    >
+      {layout ? children : <Text style={s.text}>{children}</Text>}
+    </Pressable>
+  );
 }
 
 Link.displayName = 'Link';
 
-export function NavLink({ to, children, end, className, style }: { to: string; children?: ReactNode; end?: boolean; className?: string | ((s: { isActive: boolean }) => string); style?: object }) {
+export function NavLink({
+  to,
+  children,
+  end,
+  className,
+  style,
+}: {
+  to: string;
+  children?: ReactNode;
+  end?: boolean;
+  className?: string | ((s: { isActive: boolean }) => string);
+  style?: object;
+}) {
   const { pathname } = useLocation();
   const active = end ? pathname === to : pathname === to || pathname.startsWith(to + '/');
   const cn = typeof className === 'function' ? className({ isActive: active }) : className;
-  return <Link to={to} className={cn} style={style}>{children}</Link>;
+  return (
+    <Link to={to} className={cn} style={style}>
+      {children}
+    </Link>
+  );
 }
