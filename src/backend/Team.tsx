@@ -89,7 +89,7 @@ export function TeamFields() {
         </Host>
       </Field>
       {role === 'farmer' ? (
-        <Field label="Farmer number, for example F-1001">
+        <Field label="Farmer number, for example FM-0101">
           <Host
             tag="input"
             className="input"
@@ -217,7 +217,7 @@ function PendingApproval({ person, onDone }: { person: Profile; onDone: (message
         </Host>
       </Field>
       {role === 'farmer' ? (
-        <Field label="Farmer number, for example F-1001">
+        <Field label="Farmer number, for example FM-0101">
           <Host
             tag="input"
             className="input"

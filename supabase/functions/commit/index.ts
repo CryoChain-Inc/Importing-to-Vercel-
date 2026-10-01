@@ -35,6 +35,28 @@ function staff(role: string) {
   return role === 'ops' || role === 'agent' || role === 'driver';
 }
 
+const FARMER_NOT_ON_REGISTER =
+  'That farmer number is not on the register. The field agent registers the farmer first.';
+
+/**
+ * Resolves a typed farmer number to the internal farmer id on the register.
+ * Accepts the visible code (FM-0101) or the internal id (F1, F-1042), trimmed and case-insensitive.
+ */
+function findFarmerId(state: Record<string, unknown>, typed: unknown): string {
+  const wanted = String(typed ?? '')
+    .trim()
+    .toLowerCase();
+  if (!wanted) return '';
+  const farmers = Array.isArray(state.farmers)
+    ? (state.farmers as { id?: unknown; code?: unknown }[])
+    : [];
+  const match = farmers.find(
+    (f) =>
+      String(f.code ?? '').toLowerCase() === wanted || String(f.id ?? '').toLowerCase() === wanted,
+  );
+  return match ? String(match.id ?? '') : '';
+}
+
 async function load(admin: ReturnType<typeof Object>, profile: Profile) {
   const row = await readWorkspace(admin as never);
   if (!row) return json({ empty: true, version: 0, profile });
@@ -225,19 +247,9 @@ async function invite(
     return json({ error: 'Unknown role.' }, 400);
   const row = await readWorkspace(admin as never);
   if (!row) return json({ error: 'Open the node before inviting staff.' }, 409);
-  if (role === 'farmer') {
-    const farmerId = String(body.farmerId ?? '');
-    const farmers = Array.isArray(row.state.farmers) ? (row.state.farmers as { id: string }[]) : [];
-    // Verification requirement: Field agent must register farmer at farm gate before online portal access.
-    if (!farmers.some((f) => f.id === farmerId))
-      return json(
-        {
-          error:
-            'That farmer number is not on the register. The field agent registers the farmer first.',
-        },
-        400,
-      );
-  }
+  // Verification requirement: Field agent must register farmer at farm gate before online portal access.
+  const farmerId = role === 'farmer' ? findFarmerId(row.state, body.farmerId) : '';
+  if (role === 'farmer' && !farmerId) return json({ error: FARMER_NOT_ON_REGISTER }, 400);
   const created = await (
     admin as {
       auth: {
@@ -296,7 +308,7 @@ async function invite(
     state.devices = devices;
     patch.device_id = id;
   }
-  if (role === 'farmer') patch.farmer_id = String(body.farmerId ?? '');
+  if (role === 'farmer') patch.farmer_id = farmerId;
   const audit = Array.isArray(state.audit) ? (state.audit as Record<string, unknown>[]) : [];
   audit.unshift({
     id: `AU-${Number(state.seq ?? seq) + 2}`,
@@ -374,18 +386,8 @@ async function approve(
   const row = await readWorkspace(admin as never);
   if (!row) return json({ error: 'Open the node before approving access.' }, 409);
   const displayName = String(found.data.display_name ?? '').trim() || 'Staff';
-  if (role === 'farmer') {
-    const farmerId = String(body.farmerId ?? '');
-    const farmers = Array.isArray(row.state.farmers) ? (row.state.farmers as { id: string }[]) : [];
-    if (!farmers.some((f) => f.id === farmerId))
-      return json(
-        {
-          error:
-            'That farmer number is not on the register. The field agent registers the farmer first.',
-        },
-        400,
-      );
-  }
+  const farmerId = role === 'farmer' ? findFarmerId(row.state, body.farmerId) : '';
+  if (role === 'farmer' && !farmerId) return json({ error: FARMER_NOT_ON_REGISTER }, 400);
   const state = structuredClone(row.state);
   const patch: Record<string, unknown> = { role, display_name: displayName };
   if (role === 'agent' || role === 'driver') {
@@ -411,7 +413,7 @@ async function approve(
       patch.device_id = id;
     }
   }
-  if (role === 'farmer') patch.farmer_id = String(body.farmerId ?? '');
+  if (role === 'farmer') patch.farmer_id = farmerId;
   const audit = Array.isArray(state.audit) ? (state.audit as Record<string, unknown>[]) : [];
   audit.unshift({
     id: `AU-${Number(state.seq ?? 1000) + 2}`,
