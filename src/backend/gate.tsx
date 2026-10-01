@@ -320,14 +320,46 @@ export function MissingProfile() {
   );
 }
 
+const REQUEST_ROLES = [
+  { value: 'agent', label: 'Field agent' },
+  { value: 'driver', label: 'Driver' },
+  { value: 'farmer', label: 'Farmer' },
+] as const;
+
 export function PendingAccess() {
   const { profile, refresh, signOut } = useAuth();
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [role, setRole] = useState<(typeof REQUEST_ROLES)[number]['value']>('agent');
+  const [sent, setSent] = useState('');
   const become = async () => {
+    setError('');
     const res = await commit({ op: 'become', role: 'buyer' });
     if (res.error) setError(res.error);
     else await refresh();
   };
+  const request = async () => {
+    setError('');
+    setInfo('');
+    const res = await commit({ op: 'request', role });
+    if (res.error) setError(res.error);
+    else {
+      setSent(role);
+      setInfo(
+        'Request sent. The node manager approves it from Team access. Press Check again after they approve.',
+      );
+    }
+  };
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      const requested = data.user?.user_metadata?.requested_role;
+      if (requested === 'agent' || requested === 'driver' || requested === 'farmer') {
+        setRole(requested);
+        setSent(requested);
+      }
+    });
+  }, []);
+  const requestedLabel = REQUEST_ROLES.find((item) => item.value === sent)?.label;
   return (
     <View
       style={{
@@ -342,22 +374,58 @@ export function PendingAccess() {
         Waiting for access
       </Text>
       <Text style={{ lineHeight: 22, color: colors.ink }}>
-        {profile?.display_name || 'This account'} is signed in, and operations has not assigned a
-        role yet. A buyer can register an organisation from here. Farmers, agents, drivers, and
-        staff wait for an invite from the node manager.
+        {profile?.display_name || 'This account'} is signed in. Choose field agent, driver, or
+        farmer and send a request. The node manager approves it from Team access. A buyer can
+        register an organisation without waiting.
       </Text>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {REQUEST_ROLES.map((item) => (
+          <Pressable key={item.value} onPress={() => setRole(item.value)}>
+            <Text
+              style={{
+                fontFamily: fontFamily(role === item.value ? '700' : '500'),
+                color: colors.blue,
+              }}
+            >
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <Pressable
-        onPress={() => void become()}
+        onPress={() => void request()}
         style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
       >
         <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
+          Request {REQUEST_ROLES.find((item) => item.value === role)?.label.toLowerCase()} access
+        </Text>
+      </Pressable>
+      {requestedLabel ? (
+        <Text style={{ lineHeight: 22, color: colors.ink }}>
+          Waiting for the node manager to approve {requestedLabel.toLowerCase()} access.
+        </Text>
+      ) : null}
+      <Pressable
+        onPress={() => void become()}
+        style={{ borderWidth: 1, borderColor: colors.blue, borderRadius: 8, padding: 14 }}
+      >
+        <Text style={{ color: colors.blue, textAlign: 'center', fontFamily: fontFamily('600') }}>
           Register a buyer organisation
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() => void refresh()}
+        style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 14 }}
+      >
+        <Text style={{ color: colors.ink, textAlign: 'center', fontFamily: fontFamily('600') }}>
+          Check again
         </Text>
       </Pressable>
       <Pressable onPress={() => void signOut()}>
         <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text>
       </Pressable>
       {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
+      {info ? <Text style={{ lineHeight: 22, color: colors.ink }}>{info}</Text> : null}
     </View>
   );
 }

@@ -3,6 +3,16 @@ import { Host } from '../ui/host';
 import { Btn, Field } from '../ui/kit';
 import { commit, type Profile } from './remote';
 
+const FIELD_ROLES = [
+  { value: 'agent', label: 'Field agent' },
+  { value: 'driver', label: 'Driver' },
+  { value: 'farmer', label: 'Farmer' },
+] as const;
+
+function roleLabel(role: string) {
+  return FIELD_ROLES.find((item) => item.value === role)?.label ?? role;
+}
+
 export function TeamFields() {
   const [roster, setRoster] = useState<Profile[]>([]);
   const [email, setEmail] = useState('');
@@ -39,8 +49,9 @@ export function TeamFields() {
         Team access
       </Host>
       <Host tag="div" className="cap">
-        Staff receive an email to set a password. Link a farmer only after a field agent has
-        registered them. An agent or driver invite creates their handset record.
+        People who already created an account choose field agent, driver, or farmer and wait here.
+        Approve that request below. Send invite is only for someone who does not have a login yet.
+        Link a farmer only after a field agent has registered them.
       </Host>
       <Field label="Name">
         <Host
@@ -113,23 +124,111 @@ export function TeamFields() {
         </Host>
       ) : null}
       <Host tag="div" className="h16">
+        Waiting for approval
+      </Host>
+      {roster.filter((person) => person.role === 'pending').length === 0 ? (
+        <Host tag="div" className="cap">
+          No one is waiting.
+        </Host>
+      ) : null}
+      {roster
+        .filter((person) => person.role === 'pending')
+        .map((person) => (
+          <PendingApproval
+            key={person.id}
+            person={person}
+            onDone={(message) => {
+              setNote(message);
+              load();
+            }}
+          />
+        ))}
+      <Host tag="div" className="h16">
         People
       </Host>
-      {roster.map((person) => (
-        <Host tag="div" key={person.id} className="item">
-          <Host tag="div" className="row">
-            <Host tag="span" className="h16">
-              {person.display_name || 'Unnamed'}
+      {roster
+        .filter((person) => person.role !== 'pending')
+        .map((person) => (
+          <Host tag="div" key={person.id} className="item">
+            <Host tag="div" className="row">
+              <Host tag="span" className="h16">
+                {person.display_name || 'Unnamed'}
+              </Host>
+              <Host tag="span" className="cap">
+                {person.role}
+              </Host>
             </Host>
-            <Host tag="span" className="cap">
-              {person.role}
+            <Host tag="div" className="cap">
+              {person.farmer_id || person.ops_user_id || person.device_id || person.org_id || ''}
             </Host>
           </Host>
-          <Host tag="div" className="cap">
-            {person.farmer_id || person.ops_user_id || person.device_id || person.org_id || ''}
-          </Host>
-        </Host>
-      ))}
+        ))}
     </>
+  );
+}
+
+function PendingApproval({ person, onDone }: { person: Profile; onDone: (message: string) => void }) {
+  const requested = FIELD_ROLES.some((item) => item.value === person.requested_role)
+    ? person.requested_role!
+    : 'agent';
+  const [role, setRole] = useState<string>(requested);
+  const [farmerId, setFarmerId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const approve = async () => {
+    setBusy(true);
+    const res = await commit({
+      op: 'approve',
+      userId: person.id,
+      role,
+      farmerId,
+      displayName: person.display_name,
+    });
+    setBusy(false);
+    if (res.error) onDone(res.error);
+    else
+      onDone(
+        `${person.display_name || 'This login'} is now a ${roleLabel(role).toLowerCase()}. They press Check again on Waiting for access.`,
+      );
+  };
+
+  return (
+    <Host tag="div" className="item">
+      <Host tag="div" className="row">
+        <Host tag="span" className="h16">
+          {person.display_name || 'Unnamed'}
+        </Host>
+        <Host tag="span" className="cap">
+          pending
+        </Host>
+      </Host>
+      <Host tag="div" className="cap">
+        {person.requested_role
+          ? `Requested ${roleLabel(person.requested_role).toLowerCase()}`
+          : 'No role requested yet. Choose one and approve.'}
+      </Host>
+      <Field label="Role">
+        <Host tag="select" className="input" value={role} onChange={(e) => setRole(e.target.value)}>
+          {FIELD_ROLES.map((option) => (
+            <Host key={option.value} tag="option" value={option.value}>
+              {option.label}
+            </Host>
+          ))}
+        </Host>
+      </Field>
+      {role === 'farmer' ? (
+        <Field label="Farmer number, for example F-1001">
+          <Host
+            tag="input"
+            className="input"
+            value={farmerId}
+            onChange={(e) => setFarmerId(e.target.value)}
+          />
+        </Field>
+      ) : null}
+      <Btn kind="secondary" md disabled={busy} onClick={() => void approve()}>
+        {busy ? 'Approving…' : 'Approve'}
+      </Btn>
+    </Host>
   );
 }

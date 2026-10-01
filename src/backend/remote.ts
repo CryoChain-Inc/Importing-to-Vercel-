@@ -12,6 +12,7 @@ export type Profile = {
   farmer_id: string | null;
   ops_user_id: string | null;
   device_id: string | null;
+  requested_role?: 'buyer' | 'farmer' | 'agent' | 'driver' | 'ops' | null;
   draft: { lines: State['session']['draft']['lines']; deliveryDate: string; address: string };
 };
 
@@ -25,6 +26,7 @@ export type CommitResult = {
   error?: string;
   roster?: Profile[];
   link?: string;
+  requestedRole?: string;
 };
 
 // Deduplicates concurrent background dispatches (transfers, SMS, payments) to prevent duplicate runs.

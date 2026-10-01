@@ -23,6 +23,8 @@ Deno.serve(async (req) => {
     if (op === 'become') return await become(admin, profile, String(body.role ?? ''));
     if (op === 'roster') return await roster(admin, profile);
     if (op === 'invite') return await invite(admin, user.email ?? '', profile, body);
+    if (op === 'request') return await requestRole(admin, profile, String(body.role ?? ''));
+    if (op === 'approve') return await approve(admin, user.email ?? '', profile, body);
     return json({ error: 'Unknown operation.' }, 400);
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'Save failed.' }, 400);
@@ -193,7 +195,17 @@ async function roster(admin: ReturnType<typeof Object>, profile: Profile) {
     )
     .order('created_at');
   if (error) return json({ error: error.message }, 400);
-  return json({ roster: data });
+  const rows = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  const requested = await requestedRoleByUser(
+    admin,
+    rows.map((row) => String(row.id ?? '')),
+  );
+  return json({
+    roster: rows.map((row) => ({
+      ...row,
+      requested_role: requested.get(String(row.id ?? '')) ?? null,
+    })),
+  });
 }
 
 async function invite(
@@ -309,4 +321,177 @@ async function invite(
     .update(patch)
     .eq('id', userId);
   return json({ ok: true, version: written.version });
+}
+
+const FIELD_ROLES = ['farmer', 'agent', 'driver'];
+
+async function requestRole(admin: ReturnType<typeof Object>, profile: Profile, role: string) {
+  if (profile.role !== 'pending') return json({ error: 'This login already has a role.' }, 403);
+  if (!FIELD_ROLES.includes(role))
+    return json({ error: 'Choose field agent, driver, or farmer.' }, 400);
+  const saved = await writeRequestedRole(admin, profile.id, role);
+  if (saved) return json({ error: saved }, 400);
+  return json({ ok: true, requestedRole: role });
+}
+
+async function approve(
+  admin: ReturnType<typeof Object>,
+  actorEmail: string,
+  profile: Profile,
+  body: Record<string, unknown>,
+) {
+  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  const userId = String(body.userId ?? '');
+  const role = String(body.role ?? '');
+  if (!userId) return json({ error: 'Choose a pending person.' }, 400);
+  if (!FIELD_ROLES.includes(role))
+    return json({ error: 'Approve a field agent, driver, or farmer.' }, 400);
+  const found = await (
+    admin as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            c: string,
+            v: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: Record<string, unknown> | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from('profiles')
+    .select('id, role, display_name, device_id')
+    .eq('id', userId)
+    .maybeSingle();
+  if (found.error || !found.data)
+    return json({ error: found.error?.message ?? 'That login is not on this node.' }, 400);
+  if (found.data.role !== 'pending')
+    return json({ error: 'Only a login that is still waiting can be approved.' }, 400);
+  const row = await readWorkspace(admin as never);
+  if (!row) return json({ error: 'Open the node before approving access.' }, 409);
+  const displayName = String(found.data.display_name ?? '').trim() || 'Staff';
+  if (role === 'farmer') {
+    const farmerId = String(body.farmerId ?? '');
+    const farmers = Array.isArray(row.state.farmers) ? (row.state.farmers as { id: string }[]) : [];
+    if (!farmers.some((f) => f.id === farmerId))
+      return json(
+        {
+          error:
+            'That farmer number is not on the register. The field agent registers the farmer first.',
+        },
+        400,
+      );
+  }
+  const state = structuredClone(row.state);
+  const patch: Record<string, unknown> = { role, display_name: displayName };
+  if (role === 'agent' || role === 'driver') {
+    const currentId = typeof found.data.device_id === 'string' ? found.data.device_id : '';
+    if (currentId) patch.device_id = currentId;
+    else {
+      const id = `DEV-${crypto.randomUUID().slice(0, 8)}`;
+      const devices = Array.isArray(state.devices)
+        ? (state.devices as Record<string, unknown>[])
+        : [];
+      devices.push({
+        id,
+        role,
+        userName: displayName,
+        online: true,
+        outbox: [],
+        seq: 0,
+        appVersion: '1.0.0',
+        storageMb: 0,
+        clockSkewMin: 0,
+      });
+      state.devices = devices;
+      patch.device_id = id;
+    }
+  }
+  if (role === 'farmer') patch.farmer_id = String(body.farmerId ?? '');
+  const audit = Array.isArray(state.audit) ? (state.audit as Record<string, unknown>[]) : [];
+  audit.unshift({
+    id: `AU-${Number(state.seq ?? 1000) + 2}`,
+    at: Date.now(),
+    actor: profile.display_name || actorEmail,
+    action: 'Approved login',
+    entity: displayName,
+    detail: role,
+  });
+  state.audit = audit;
+  blankSession(state);
+  const written = await writeWorkspace(admin as never, row.version, state);
+  if (!written) return json({ error: 'The record changed while approving. Try again.' }, 409);
+  await (
+    admin as {
+      from: (t: string) => {
+        update: (v: unknown) => { eq: (c: string, v: string) => Promise<unknown> };
+      };
+    }
+  )
+    .from('profiles')
+    .update(patch)
+    .eq('id', userId);
+  await writeRequestedRole(admin, userId, '');
+  return json({ ok: true, version: written.version });
+}
+
+type ListedUser = { id: string; user_metadata?: Record<string, unknown> };
+
+function authAdmin(admin: ReturnType<typeof Object>) {
+  return (
+    admin as {
+      auth: {
+        admin: {
+          getUserById: (id: string) => Promise<{
+            data: { user: ListedUser | null };
+            error: { message: string } | null;
+          }>;
+          updateUserById: (
+            id: string,
+            attrs: { user_metadata: Record<string, unknown> },
+          ) => Promise<{ error: { message: string } | null }>;
+          listUsers: (opts: { page: number; perPage: number }) => Promise<{
+            data: { users: ListedUser[] } | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    }
+  ).auth.admin;
+}
+
+async function writeRequestedRole(admin: ReturnType<typeof Object>, userId: string, role: string) {
+  const auth = authAdmin(admin);
+  const current = await auth.getUserById(userId);
+  if (current.error) return current.error.message;
+  const metadata = { ...(current.data.user?.user_metadata ?? {}) };
+  if (role) metadata.requested_role = role;
+  else delete metadata.requested_role;
+  const updated = await auth.updateUserById(userId, { user_metadata: metadata });
+  return updated.error?.message ?? '';
+}
+
+async function requestedRoleByUser(admin: ReturnType<typeof Object>, ids: string[]) {
+  const wanted = new Set(ids);
+  const found = new Map<string, string>();
+  try {
+    const auth = authAdmin(admin);
+    for (let page = 1; page <= 5; page++) {
+      const listed = await auth.listUsers({ page, perPage: 200 });
+      const users = listed.data?.users ?? [];
+      for (const user of users) {
+        const role = user.user_metadata?.requested_role;
+        if (!wanted.has(user.id) || typeof role !== 'string' || !FIELD_ROLES.includes(role)) continue;
+        found.set(user.id, role);
+      }
+      if (users.length < 200) break;
+    }
+  } catch {
+    /* The roster still loads when Auth listing is unavailable. */
+  }
+  return found;
 }
