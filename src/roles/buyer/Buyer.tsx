@@ -2101,7 +2101,7 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
             <Host tag="div" className="lbl">
               {o.payment?.method === 'bank_transfer'
                 ? 'Waiting for the bank'
-                : 'Waiting for Flutterwave'}
+                : 'Waiting for Paystack'}
             </Host>
             <Host tag="div" className="cap">
               {o.payment?.checkoutError ||

@@ -616,7 +616,7 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
             ref,
             orderId: o.id,
             at: Date.now(),
-            by: 'Flutterwave webhook',
+            by: 'Paystack webhook',
           });
         }
       });

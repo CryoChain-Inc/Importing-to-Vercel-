@@ -65,6 +65,7 @@ export type Payment = {
   at?: number;
   checkoutUrl?: string;
   checkoutError?: string;
+  provider?: 'paystack';
 };
 export type Order = {
   id: ID;

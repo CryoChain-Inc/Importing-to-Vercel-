@@ -387,7 +387,7 @@ function Allocation() {
       {(o.status === 'awaiting_payment' || o.status === 'held') && (
         <Host tag="div" className="card card-pad col gap8">
           <Host tag="div" className="cap">
-            Card and mobile money are confirmed by the Flutterwave webhook. For a bank transfer,
+            Card and mobile money are confirmed by the Paystack webhook. For a bank transfer,
             confirm here only after the statement shows the full amount with this order as the
             reference.
           </Host>
