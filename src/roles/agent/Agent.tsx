@@ -3,7 +3,15 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../domain/store';
 import type { Consignment, Farmer } from '../../domain/types';
-import { CONS_LABEL, CONS_TONE, fmtStamp, fmtTime, ghs, round2 } from '../../domain/logic';
+import {
+  CONS_LABEL,
+  CONS_TONE,
+  fmtStamp,
+  fmtTime,
+  ghs,
+  round2,
+  runAssignedTo,
+} from '../../domain/logic';
 import {
   Btn,
   Chip,
@@ -22,7 +30,7 @@ import { capturePhoto, readPosition, shotDone } from '../../backend/media';
 function useAgent() {
   const { state, act, now } = useStore();
   const dev = state.devices.find((d) => d.id === state.session.agentDeviceId)!;
-  const mine = state.runs.filter((r) => r.agentId === dev.userName);
+  const mine = state.runs.filter((r) => runAssignedTo(r.agentId, dev));
   const run =
     mine
       .filter((r) => r.status === 'in_progress' || r.status === 'planned')

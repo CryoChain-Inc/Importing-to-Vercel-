@@ -47,10 +47,13 @@ import {
   dispatchTransfer,
   startCheckout,
   stateForNewNode,
+  verifyTransfer,
 } from '../backend/remote';
 import { readPosition } from '../backend/media';
 
 const KEY = 'cryochain-proto-v5';
+/** How long a sent payout may wait for its webhook before the app polls Paystack for it. */
+const VERIFY_AFTER = 90 * 1000;
 const clone = <T,>(v: T): T =>
   typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v));
 async function load(): Promise<State> {
@@ -637,7 +640,7 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
             ref,
             orderId: o.id,
             at: Date.now(),
-            by: 'Flutterwave webhook, verified by status call',
+            by: 'Paystack webhook, verified by status call',
           });
         } else {
           o.status = 'held';
@@ -650,7 +653,7 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
             ref,
             orderId: o.id,
             at: Date.now(),
-            by: 'Flutterwave webhook',
+            by: 'Paystack webhook',
             memo: `Mismatch: expected ${ghs(o.total)}`,
           });
           openException(
@@ -892,6 +895,9 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
     }) {
       let id = '';
       mutate((s) => {
+        const driver = s.devices.find((d) => d.id === input.driverId && d.role === 'driver');
+        const agent = s.devices.find((d) => d.id === input.agentId && d.role === 'agent');
+        if (!driver || !agent) return;
         id = nid(s, 'RUN');
         const stops: State['runs'][number]['stops'] = [];
         const seen = new Map<string, number>();
@@ -944,10 +950,28 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           opsName(s),
           'Created collection run',
           id,
-          `${stops.length - 1} farm stops, ${orderIds.join(', ')}`,
+          `${stops.length - 1} farm stops, ${orderIds.join(', ')}, driver ${driver.userName}, agent ${agent.userName}`,
         );
       });
       return id;
+    },
+    assignRunCrew(runId: string, driverId: string, agentId: string) {
+      mutate((s) => {
+        const r = s.runs.find((x) => x.id === runId);
+        if (!r || r.status !== 'planned') return;
+        const driver = s.devices.find((d) => d.id === driverId && d.role === 'driver');
+        const agent = s.devices.find((d) => d.id === agentId && d.role === 'agent');
+        if (!driver || !agent) return;
+        r.driverId = driver.id;
+        r.agentId = agent.id;
+        audit(
+          s,
+          opsName(s),
+          'Assigned run crew',
+          runId,
+          `driver ${driver.userName}, agent ${agent.userName}`,
+        );
+      });
     },
     addToRun(runId: string, consignmentId: string) {
       mutate((s) => {
@@ -1186,6 +1210,12 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         f.momo = momo;
         f.network = network;
         f.walletBad = false;
+        // A new number has to be checked with the provider again before the next payout.
+        f.momoVerified = false;
+        f.momoName = undefined;
+        f.momoVerifiedAt = undefined;
+        f.momoVerifyError = undefined;
+        f.recipientCode = undefined;
         s.transfers
           .filter((t) => t.farmerId === farmerId && t.status === 'failed')
           .forEach((t) => {
@@ -1591,11 +1621,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const res = await dispatchSms(message.id);
         if (res.error) setSyncNote(res.error);
       }
-    for (const transfer of current.transfers)
+    for (const transfer of current.transfers) {
       if (transfer.status === 'queued') {
         const res = await dispatchTransfer(transfer.id);
         if (res.error) setSyncNote(res.error);
+      } else if (
+        transfer.status === 'sent' &&
+        transfer.reference &&
+        Date.now() - (transfer.at ?? 0) > VERIFY_AFTER
+      ) {
+        // Paystack normally finishes a transfer through the webhook. If that has not arrived, ask.
+        await verifyTransfer(transfer.id);
       }
+    }
     for (const order of current.orders) {
       const payment = order.payment;
       if (

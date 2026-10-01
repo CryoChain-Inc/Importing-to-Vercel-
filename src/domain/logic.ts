@@ -1,6 +1,7 @@
 import type {
   Config,
   Consignment,
+  Device,
   Farmer,
   Order,
   OrderStatus,
@@ -248,7 +249,7 @@ export function simulateTransfer(
 ): { status: Transfer['status']; providerRef?: string; error?: string } {
   if (!f) return { status: 'failed', error: 'Farmer record missing' };
   if (f.walletBad) return { status: 'failed', error: 'Wallet number not registered on network' };
-  return { status: 'succeeded', providerRef: `FLW-${t.idempotencyKey.slice(0, 8).toUpperCase()}` };
+  return { status: 'succeeded', providerRef: `PSK-${t.idempotencyKey.slice(0, 8).toUpperCase()}` };
 }
 export function orderLinesTotal(lines: { total: number }[]) {
   return round2(lines.reduce((s, l) => s + l.total, 0));
@@ -300,4 +301,17 @@ export function uuid() {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   if (c?.randomUUID) return c.randomUUID();
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+/** A run belongs to the handset Ops picked. Older runs stored the display name instead of the device id. */
+export function runAssignedTo(assigned: string, device: Pick<Device, 'id' | 'userName'>) {
+  return assigned === device.id || assigned === device.userName;
+}
+
+export function assignedStaffName(devices: Device[], assigned: string) {
+  return (
+    devices.find((d) => d.id === assigned)?.userName ??
+    devices.find((d) => d.userName === assigned)?.userName ??
+    assigned
+  );
 }

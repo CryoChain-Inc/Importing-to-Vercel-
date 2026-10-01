@@ -27,6 +27,12 @@ export type CommitResult = {
   roster?: Profile[];
   link?: string;
   requestedRole?: string;
+  status?: string;
+  provider?: string;
+  balance?: number;
+  needed?: number;
+  name?: string;
+  match?: boolean;
 };
 
 // Deduplicates concurrent background dispatches (transfers, SMS, payments) to prevent duplicate runs.
@@ -258,6 +264,21 @@ export function dispatchSms(id: string) {
 
 export function dispatchTransfer(id: string) {
   return invoke('payout-transfer', { id }, `transfer:${id}`);
+}
+
+/** Asks Paystack for the current status of a transfer we sent. Safety net for a missed webhook. */
+export function verifyTransfer(id: string) {
+  return invoke('payout-transfer', { op: 'verify', id }, `transfer-verify:${id}`);
+}
+
+/** Balance check before a payout run executes. The run is blocked when Paystack cannot cover it. */
+export function payoutPreflight(runId: string) {
+  return invoke('payout-transfer', { op: 'preflight', runId }, `payout-preflight:${runId}`);
+}
+
+/** Wallet name lookup, stored on the farmer with a timestamp. */
+export function resolveWallet(farmerId: string) {
+  return invoke('payout-transfer', { op: 'resolve', farmerId }, `wallet:${farmerId}`);
 }
 
 export function startCheckout(orderId: string, method: 'card' | 'momo', phone: string) {
