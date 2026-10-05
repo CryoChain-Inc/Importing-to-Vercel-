@@ -1,5 +1,5 @@
 import { Children, useEffect, useState, type ReactNode } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import { Host } from '../ui/host';
 import { Btn, Chip, Field } from '../ui/kit';
 import { colors } from '../ui/theme';
@@ -64,7 +64,10 @@ export function TeamFields() {
 
   const send = async () => {
     setNote('');
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : '';
+    const redirectTo =
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.location
+        ? window.location.origin
+        : '';
     const res = await commit({
       op: 'invite',
       email,

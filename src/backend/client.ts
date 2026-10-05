@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import { supabaseAnonKey, supabaseUrl } from './config';
 
 const PASSWORD_SETUP_KEY = 'cc-password-setup';
@@ -12,11 +13,11 @@ export type PasswordLink = 'invite' | 'recovery';
  * while adopting the session, so the kind is stored before the client is created.
  */
 function linkKindFromLocation(): PasswordLink | null {
-  if (typeof window === 'undefined') return null;
-  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) return null;
+  const hash = window.location.hash?.startsWith('#') ? window.location.hash.slice(1) : '';
   const type =
     new URLSearchParams(hash).get('type') ||
-    new URLSearchParams(window.location.search).get('type');
+    new URLSearchParams(window.location.search || '').get('type');
   if (type === 'invite' || type === 'recovery') return type;
   return null;
 }
@@ -63,7 +64,7 @@ export const supabase = createClient(
       storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: Platform.OS === 'web',
     },
   },
 );
