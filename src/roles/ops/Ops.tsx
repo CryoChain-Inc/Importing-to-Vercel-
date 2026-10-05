@@ -24,6 +24,8 @@ import {
   approvalsNeeded,
   assignedStaffName,
   canApprove,
+  approvalStillOpen,
+  payoutRequiresTwo,
   fmtDay,
   fmtStamp,
   ghs,
@@ -1668,8 +1670,10 @@ function Payouts() {
   const [checking, setChecking] = useState<string | null>(null);
   const [walletNote, setWalletNote] = useState('');
   const chosen = sel ?? payable.map((s) => s.id);
-  const total = round2(payable.filter((s) => chosen.includes(s.id)).reduce((a, s) => a + s.net, 0));
-  const two = total > state.config.payoutThreshold;
+  const selected = payable.filter((s) => chosen.includes(s.id));
+  const total = round2(selected.reduce((a, s) => a + s.net, 0));
+  const hasCorrection = selected.some((s) => !!s.correctionOf);
+  const two = payoutRequiresTwo(total, state.config.payoutThreshold, hasCorrection);
   return (
     <Shell title="Payout runs">
       <Host tag="div" className="two">
@@ -1803,7 +1807,13 @@ function Payouts() {
             <KV k="Total" v={<Money v={total} />} />
             <KV
               k="Approval"
-              v={two ? 'Two approvers, above threshold' : 'Node manager alone, under threshold'}
+              v={
+                two
+                  ? hasCorrection && total <= state.config.payoutThreshold
+                    ? 'Two approvers, includes a correction'
+                    : 'Two approvers, above threshold'
+                  : 'One approver, within threshold'
+              }
             />
             <Btn
               disabled={!chosen.length}
@@ -1816,7 +1826,10 @@ function Payouts() {
               Create payout run
             </Btn>
             <Host tag="div" className="cap">
-              Raised by {me.name}. The person who raises a run can never approve it.
+              Raised by {me.name}. Creating the run counts as your approval.
+              {two
+                ? ' Another person must approve it before Paystack is paid.'
+                : ' That single approval is enough, and Paystack can be paid now.'}
             </Host>
             {remoteEnabled ? (
               <Host tag="div" className="cap">
@@ -1852,6 +1865,9 @@ function Payouts() {
               <Host tag="div" className="row cap">
                 <Host tag="span">
                   {r.count} transfers · {fmtStamp(r.createdAt)}
+                  {approvalStillOpen(r)
+                    ? ` · ${r.approvals.length} of ${approvalsNeeded(r)} approvals`
+                    : ''}
                 </Host>
                 <Money v={r.total} />
               </Host>
@@ -1891,8 +1907,20 @@ function PayoutDetail() {
       setErr(check.error ?? 'Paystack balance check failed.');
       return;
     }
+    const mine = state.transfers.filter((t) => t.runId === runId);
+    const held = mine.some((t) => t.status === 'held');
+    const sendable = mine.some(
+      (t) =>
+        t.status === 'queued' || t.status === 'held' || (t.status === 'failed' && t.attempts < 3),
+    );
+    if (!sendable) {
+      setInfo('Nothing on this run is waiting to be sent.');
+      return;
+    }
     setInfo(
-      `Paystack balance GHS ${(check.balance ?? 0).toFixed(2)} covers GHS ${(check.needed ?? 0).toFixed(2)}. Transfers are being sent.`,
+      held
+        ? `Paystack balance GHS ${(check.balance ?? 0).toFixed(2)} covers GHS ${(check.needed ?? 0).toFixed(2)}. The held transfer is being sent now.`
+        : `Paystack balance GHS ${(check.balance ?? 0).toFixed(2)} covers GHS ${(check.needed ?? 0).toFixed(2)}. Transfers are being sent.`,
     );
     act.executePayoutRun(runId);
   };
@@ -1910,9 +1938,12 @@ function PayoutDetail() {
       );
   };
   const ts = state.transfers.filter((t) => r.transferIds.includes(t.id));
-  // Financial dual control: Evaluates required sign-offs (1 or 2) and enforces segregation of duties.
   const need = approvalsNeeded(r);
   const can = canApprove(r, me.id, state.config.approverIds);
+  const iApproved = r.approvals.some((a) => a.userId === me.id);
+  const creatorApproved = r.approvals.some((a) => a.userId === r.createdBy);
+  const aboveThreshold = r.total > r.threshold;
+  const waiting = approvalStillOpen(r);
   const steps = [
     {
       title: `Created by ${r.createdByName}`,
@@ -1927,7 +1958,10 @@ function PayoutDetail() {
         r.approvals[i]
           ? {
               title: `Approver ${i === 0 ? 'one' : 'two'} · ${r.approvals[i].name}`,
-              sub: `Approved · ${fmtStamp(r.approvals[i].at)}`,
+              sub:
+                r.approvals[i].userId === r.createdBy
+                  ? `Approved by creating the run · ${fmtStamp(r.approvals[i].at)}`
+                  : `Approved · ${fmtStamp(r.approvals[i].at)}`,
               done: true,
             }
           : {
@@ -2026,7 +2060,11 @@ function PayoutDetail() {
                     <Chip tone={TR_TONE[t.status]}>{TR_LABEL[t.status]}</Chip>
                   </Host>
                   <Host tag="td" className="cap">
-                    {t.providerRef ?? t.lastError ?? '—'}
+                    {t.status === 'held'
+                      ? waiting
+                        ? 'Over the wallet daily limit. Paystack is called after the second approval.'
+                        : 'Over the wallet daily limit, so it was not sent. Re-execute sends it to Paystack.'
+                      : (t.providerRef ?? t.lastError ?? '—')}
                     {t.status === 'failed' && t.providerRef && t.lastError ? (
                       <Host tag="div">{t.lastError}</Host>
                     ) : null}
@@ -2125,7 +2163,12 @@ function PayoutDetail() {
         </Host>
         <Host tag="div" className="side">
           <Stepper steps={steps} />
-          {r.status === 'pending_approval' && (
+          <Host tag="div" className="cap">
+            {r.requiresTwo
+              ? `${aboveThreshold ? `Above ${ghs(r.threshold)}` : 'Includes a corrected settlement'}, so two approvers are required.${creatorApproved ? ` ${r.createdByName} counts as one.` : ''}`
+              : `Within ${ghs(r.threshold)}, so one approver is enough.${creatorApproved ? ` ${r.createdByName} approved it.` : ''}`}
+          </Host>
+          {waiting && (
             <>
               <Field label="Note (optional)">
                 <Host
@@ -2137,48 +2180,63 @@ function PayoutDetail() {
               </Field>
               {can.ok ? (
                 <Btn
+                  disabled={busy === 'execute'}
                   onClick={() => {
                     const res = act.approvePayoutRun(r.id, note);
-                    if (!res.ok) setErr(res.why);
+                    if (!res.ok) {
+                      setErr(res.why);
+                      return;
+                    }
+                    void execute();
                   }}
                 >
-                  Approve as {me.name}
+                  {busy === 'execute' ? 'Approving and paying…' : `Approve and pay as ${me.name}`}
                 </Btn>
+              ) : iApproved ? (
+                <Host tag="div" className="tint-amber">
+                  You approved this run by creating it. Another person must approve it before
+                  Paystack is paid.
+                </Host>
               ) : (
-                <>
-                  <Btn disabled>Approve</Btn>
-                  <Host tag="div" className="tint-amber">
-                    {can.why} Use the demo bar to act as an approver.
-                  </Host>
-                </>
+                <Host tag="div" className="tint-amber">
+                  {can.why}
+                </Host>
               )}
-              <Btn kind="link-danger" onClick={() => act.rejectPayoutRun(r.id, note || 'Rejected')}>
-                Reject run
-              </Btn>
-            </>
-          )}
-          {(r.status === 'approved' || r.status === 'executing' || r.status === 'partial') && (
-            <>
-              <Btn kind="field" disabled={busy === 'execute'} onClick={() => void execute()}>
-                {busy === 'execute'
-                  ? 'Checking Paystack balance…'
-                  : r.status === 'approved'
-                    ? 'Execute payout run'
-                    : 'Re-execute remaining'}
-              </Btn>
-              {r.status === 'approved' && !remoteEnabled && (
-                <Btn kind="secondary" onClick={() => act.executePayoutRun(r.id, 1)}>
-                  Demo: crash the worker after 1 transfer
+              {r.status === 'pending_approval' && (
+                <Btn
+                  kind="link-danger"
+                  onClick={() => act.rejectPayoutRun(r.id, note || 'Rejected')}
+                >
+                  Reject run
                 </Btn>
               )}
             </>
           )}
+          {!waiting &&
+            (r.status === 'approved' || r.status === 'executing' || r.status === 'partial') && (
+              <>
+                <Btn kind="field" disabled={busy === 'execute'} onClick={() => void execute()}>
+                  {busy === 'execute'
+                    ? 'Checking Paystack balance…'
+                    : ts.some((t) => t.status === 'held')
+                      ? 'Send held transfer'
+                      : r.status === 'approved'
+                        ? 'Execute payout run'
+                        : 'Re-execute remaining'}
+                </Btn>
+                {r.status === 'approved' && !remoteEnabled && (
+                  <Btn kind="secondary" onClick={() => act.executePayoutRun(r.id, 1)}>
+                    Demo: crash the worker after 1 transfer
+                  </Btn>
+                )}
+              </>
+            )}
           {r.status === 'completed' && (
             <Host tag="div" className="tint-green">
               <Host tag="strong">Completed.</Host> Every farmer paid. SMS sent with the reference.
             </Host>
           )}
-          {r.status === 'partial' && (
+          {r.status === 'partial' && !waiting && (
             <Host tag="div" className="tint-amber">
               <Host tag="strong">Partial.</Host> Failed transfers sit in Exceptions with the 24 hour
               clock running. The rest are paid.

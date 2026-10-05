@@ -37,6 +37,7 @@ import {
   isoDay,
   isShort,
   maskMomo,
+  payoutReady,
   payoutRequiresTwo,
   round2,
   simulateTransfer,
@@ -463,6 +464,8 @@ function processTransfer(s: State, t: Transfer) {
 }
 function settleRunStatus(s: State, runId: string) {
   const run = s.payoutRuns.find((r) => r.id === runId)!;
+  if (run.status === 'pending_approval' || run.status === 'cancelled' || run.status === 'draft')
+    return;
   const ts = s.transfers.filter((t) => run.transferIds.includes(t.id));
   if (ts.every((t) => t.status === 'succeeded' || t.status === 'manual')) run.status = 'completed';
   else if (ts.some((t) => t.status === 'queued' || t.status === 'sent')) run.status = 'executing';
@@ -567,7 +570,10 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           requestedBy: u.id,
           deliveryDate: isIsoDay(d.deliveryDate)
             ? d.deliveryDate.slice(0, 10)
-            : addDays(isoDay(Date.now()), Number.isFinite(s.config.leadDays) ? s.config.leadDays : 0),
+            : addDays(
+                isoDay(Date.now()),
+                Number.isFinite(s.config.leadDays) ? s.config.leadDays : 0,
+              ),
           address: d.address,
           status: 'submitted',
           lines: d.lines.map((l) => ({ ...l })),
@@ -1050,6 +1056,9 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         const total = round2(sts.reduce((a, x) => a + x.net, 0));
         const hasCorrection = sts.some((x) => !!x.correctionOf);
         const requiresTwo = payoutRequiresTwo(total, s.config.payoutThreshold, hasCorrection);
+        const at = Date.now();
+        // Creating the run is this person's approval. A second named approver is still required above the threshold.
+        const approvals = [{ userId: u.id, name: u.name, at }];
         const transferIds: string[] = [];
         sts.forEach((x) => {
           const f = farmer(s, x.farmerId)!;
@@ -1086,13 +1095,13 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           id,
           createdBy: u.id,
           createdByName: u.name,
-          createdAt: Date.now(),
+          createdAt: at,
           total,
           count: sts.length,
           threshold: s.config.payoutThreshold,
           requiresTwo,
-          approvals: [],
-          status: requiresTwo ? 'pending_approval' : 'approved',
+          approvals,
+          status: approvals.length >= (requiresTwo ? 2 : 1) ? 'approved' : 'pending_approval',
           transferIds,
         });
         audit(
@@ -1100,7 +1109,16 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           u.name,
           'Created payout run',
           id,
-          `${sts.length} transfers, ${ghs(total)}${requiresTwo ? ', two approvals required' : ''}`,
+          `${sts.length} transfers, ${ghs(total)}${requiresTwo ? ', two approvals required' : ', one approval required'}`,
+        );
+        audit(
+          s,
+          u.name,
+          'Approved payout run',
+          id,
+          requiresTwo
+            ? 'Approval 1 of 2, by creating the run'
+            : 'Sole approval, by creating the run',
         );
       });
       return id;
@@ -1117,7 +1135,11 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         }
         r.approvals.push({ userId: u.id, name: u.name, at: Date.now() });
         if (note) r.note = note;
-        if (r.approvals.length >= approvalsNeeded(r)) r.status = 'approved';
+        if (
+          r.approvals.length >= approvalsNeeded(r) &&
+          (r.status === 'pending_approval' || r.status === 'draft')
+        )
+          r.status = 'approved';
         audit(s, u.name, 'Approved payout run', id);
       });
       return res;
@@ -1146,7 +1168,12 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         let n = 0;
         for (const tid of r.transferIds) {
           const t = s.transfers.find((x) => x.id === tid)!;
-          if (t.status === 'succeeded' || t.status === 'manual' || t.status === 'held') continue;
+          // A wallet-limit hold must not survive a fully approved run. Release it so Paystack is called.
+          if (t.status === 'held') {
+            t.status = 'queued';
+            t.lastError = undefined;
+          }
+          if (t.status === 'succeeded' || t.status === 'manual') continue;
           if (t.status === 'failed' && t.attempts >= 3) continue;
           if (crashAfter !== undefined && n >= crashAfter) {
             audit(
@@ -1627,7 +1654,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (res.error) setSyncNote(res.error);
       }
     for (const transfer of current.transfers) {
+      const run = current.payoutRuns.find((item) => item.id === transfer.runId);
       if (transfer.status === 'queued') {
+        if (run && !payoutReady(run)) continue;
         const res = await dispatchTransfer(transfer.id);
         if (res.error) setSyncNote(res.error);
       } else if (

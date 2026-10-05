@@ -227,24 +227,41 @@ export function isShort(c: Consignment, tolerancePct: number) {
 
 /**
  * Dual-control rule: Payout runs exceeding the threshold OR containing manual corrections require two sign-offs.
+ * At or under the threshold, the person who creates the run is the only approver required.
  */
 export function payoutRequiresTwo(total: number, threshold: number, hasCorrection: boolean) {
   return total > threshold || hasCorrection;
 }
 
 /**
- * Segregation of duties check: The user who created the payout run cannot approve it.
+ * The person who creates a run counts as one approver. Above the threshold a different person
+ * must approve before any money is sent. Nobody can approve the same run twice.
  */
-export function canApprove(run: PayoutRun, userId: string, approverIds: string[]) {
-  if (run.createdBy === userId)
-    return { ok: false, why: 'The person who raised a run cannot approve it.' };
-  if (!approverIds.includes(userId)) return { ok: false, why: 'Not a named approver.' };
+export function approvalsNeeded(run: PayoutRun) {
+  return run.requiresTwo ? 2 : 1;
+}
+
+/** True once this run has the approvals it needs and Paystack may be called. */
+export function payoutReady(run: PayoutRun) {
+  if (run.status === 'cancelled' || run.status === 'draft') return false;
+  if (run.approvals.length >= approvalsNeeded(run)) return true;
+  // Runs created before the creator was recorded as an approver were already released.
+  if (!run.requiresTwo && run.status !== 'pending_approval') return true;
+  return false;
+}
+
+export function approvalStillOpen(run: PayoutRun) {
+  if (run.status === 'cancelled' || run.status === 'completed') return false;
+  if (run.approvals.length >= approvalsNeeded(run)) return false;
+  if (!run.requiresTwo && run.status !== 'pending_approval' && run.status !== 'draft') return false;
+  return true;
+}
+
+export function canApprove(run: PayoutRun, userId: string, _approverIds: string[]) {
+  if (!approvalStillOpen(run)) return { ok: false, why: 'This run is not waiting for approval.' };
   if (run.approvals.some((a) => a.userId === userId))
     return { ok: false, why: 'Already approved by this user.' };
   return { ok: true, why: '' };
-}
-export function approvalsNeeded(run: PayoutRun) {
-  return run.requiresTwo ? 2 : 1;
 }
 export function walletLimitFor(f: Farmer, cfg: Config) {
   if (f.tier === 'minimum') return cfg.walletLimits.minimum;
