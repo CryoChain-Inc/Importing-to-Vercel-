@@ -28,6 +28,7 @@ import {
   orderStepIndex,
   round2,
 } from '../../domain/logic';
+import { colors } from '../../ui/theme';
 import {
   Btn,
   BottomNav,
@@ -40,7 +41,6 @@ import {
   Logo,
   Money,
   Ph,
-  Progress,
   Sheet,
   Stamped,
   Tabs,
@@ -1208,12 +1208,85 @@ function Summary() {
     </Shell>
   );
 }
+const ORDER_TRACK = [
+  { label: 'Submitted', now: 'Waiting for an approver.' },
+  { label: 'Approved', now: 'Approved. Payment is the next step.' },
+  { label: 'Paid', now: 'Payment confirmed. CryoChain is allocating this order across farmers.' },
+  { label: 'Allocated', now: 'Allocated across farmers. Collection is scheduled for the delivery date.' },
+  { label: 'In collection', now: 'The truck is collecting from the farms now.' },
+  { label: 'Delivered', now: 'At the door. Accept the delivery, or reject a line before the window closes.' },
+  { label: 'Closed', now: 'You accepted this delivery.' },
+];
+
+function shownStatus(o: Order) {
+  return o.acceptedAt && o.status === 'delivered' ? 'closed' : o.status;
+}
+
+function OrderTrack({ step }: { step: number }) {
+  if (step < 0) return null;
+  return (
+    <Host tag="div" className="card" style={{ paddingVertical: 12, paddingHorizontal: 14 }}>
+      {ORDER_TRACK.map((stage, i) => {
+        const done = i < step;
+        const current = i === step;
+        const last = i === ORDER_TRACK.length - 1;
+        return (
+          <Host
+            key={stage.label}
+            tag="div"
+            style={{ flexDirection: 'row', gap: 12, alignItems: 'stretch' }}
+          >
+            <Host tag="div" style={{ width: 16, alignItems: 'center' }}>
+              <Host
+                tag="div"
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  marginTop: 4,
+                  backgroundColor: done || current ? colors.green : colors.paper,
+                  borderWidth: 2,
+                  borderColor: done || current ? colors.green : colors.steel,
+                }}
+              />
+              {last ? null : (
+                <Host
+                  tag="div"
+                  style={{
+                    width: 2,
+                    flexGrow: 1,
+                    minHeight: 16,
+                    backgroundColor: i < step ? colors.green : colors.line,
+                  }}
+                />
+              )}
+            </Host>
+            <Host tag="div" style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 12 }}>
+              <Host
+                tag="div"
+                style={{
+                  fontSize: 14,
+                  fontWeight: current ? 600 : 500,
+                  color: current ? colors.ink : done ? colors.slate : colors.steelInk,
+                }}
+              >
+                {stage.label}
+              </Host>
+              {current ? <Host tag="div" className="cap">{stage.now}</Host> : null}
+            </Host>
+          </Host>
+        );
+      })}
+    </Host>
+  );
+}
+
 function Orders() {
   const { orders, now } = useBuyer();
   const [filter, setFilter] = useState<'Open' | 'All'>('Open');
   const list =
     filter === 'Open'
-      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(o.status))
+      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(shownStatus(o)))
       : orders;
   const desk = useMedia('(min-width: 1024px)');
   if (desk) return <OrdersDesk />;
@@ -1259,7 +1332,7 @@ function Orders() {
               <Host tag="span" className="h16">
                 {o.id}
               </Host>
-              <Chip tone={ORDER_TONE[o.status]}>{ORDER_LABEL[o.status]}</Chip>
+              <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
             </Host>
             <Host tag="div" className="row cap">
               <Host tag="span">
@@ -1286,7 +1359,7 @@ function OrdersDesk() {
   const [filter, setFilter] = useState<'Open' | 'All'>('Open');
   const list =
     filter === 'Open'
-      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(o.status))
+      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(shownStatus(o)))
       : orders;
   const sel = sp.get('sel') ?? list[0]?.id;
   return (
@@ -1328,7 +1401,7 @@ function OrdersDesk() {
                 lines: o.lines.map((l) => l.name).join('; '),
                 delivery: o.deliveryDate,
                 total: o.total,
-                status: ORDER_LABEL[o.status],
+                status: ORDER_LABEL[shownStatus(o)],
               })),
             )
           }
@@ -1383,7 +1456,7 @@ function OrdersDesk() {
                     })}
                   </Host>
                   <Host tag="td">
-                    <Chip tone={ORDER_TONE[o.status]}>{ORDER_LABEL[o.status]}</Chip>
+                    <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
                   </Host>
                 </Host>
               ))}
@@ -1429,8 +1502,8 @@ function OrderDetail() {
         back="/buyer/orders"
         title={o.status === 'submitted' ? `${o.id} · approval` : o.id}
         right={
-          <Chip lg tone={ORDER_TONE[o.status]}>
-            {ORDER_LABEL[o.status]}
+          <Chip lg tone={ORDER_TONE[shownStatus(o)]}>
+            {ORDER_LABEL[shownStatus(o)]}
           </Chip>
         }
       />
@@ -1484,7 +1557,9 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
   const [rkg, setRkg] = useState('40');
   const [rreason, setRreason] = useState('Bruised on arrival');
   const [err, setErr] = useState('');
-  const step = orderStepIndex(o.status);
+  const accepted = Boolean(o.acceptedAt) || o.status === 'closed';
+  const step = accepted ? 6 : orderStepIndex(o.status);
+  const track = <OrderTrack step={step} />;
   const wrap = (c: ReactNode, footer?: ReactNode) => (
     <>
       {compact && (
@@ -1492,8 +1567,8 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
           <Host tag="span" className="h20">
             {o.id}
           </Host>
-          <Chip lg tone={ORDER_TONE[o.status]}>
-            {ORDER_LABEL[o.status]}
+          <Chip lg tone={ORDER_TONE[shownStatus(o)]}>
+            {ORDER_LABEL[shownStatus(o)]}
           </Chip>
         </Host>
       )}
@@ -1575,53 +1650,6 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
       </Host>
     </Host>
   );
-  const progress = (
-    <>
-      <Progress step={step} />
-      <Host
-        tag="div"
-        className="row cap"
-        style={{
-          marginTop: -8,
-        }}
-      >
-        <Host tag="span">
-          {['Submitted', 'Approved', 'Paid', 'Allocated', 'In collection', 'Delivered'].map(
-            (s, i) => (
-              <Host
-                tag="span"
-                key={s}
-                style={
-                  i === step
-                    ? {
-                        color: 'var(--green)',
-                        fontWeight: 600,
-                      }
-                    : undefined
-                }
-              >
-                {s}
-                {i < 5 ? ' · ' : ''}
-              </Host>
-            ),
-          )}
-        </Host>
-        <Host
-          tag="span"
-          style={
-            step === 6
-              ? {
-                  color: 'var(--green)',
-                  fontWeight: 600,
-                }
-              : undefined
-          }
-        >
-          Closed
-        </Host>
-      </Host>
-    </>
-  );
   if (o.status === 'submitted') {
     const over = isApprover && user.limit !== undefined && o.total > user.limit;
     const other = state.buyerUsers.find(
@@ -1633,6 +1661,7 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
     );
     return wrap(
       <>
+        {track}
         <KV k="Requested by" v={`${req?.name} · ${o.submittedAt ? fmtStamp(o.submittedAt) : ''}`} />
         {totals}
         <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(',')[0]}`} />
@@ -1725,14 +1754,15 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
   if (o.status === 'approved' || o.status === 'awaiting_payment' || o.status === 'held')
     return wrap(
       <>
+        {track}
         <PayBody o={o} compact />
       </>,
     );
-  if (o.status === 'delivered') {
+  if (o.status === 'delivered' && !accepted) {
     const deadline = (o.deliveredAt ?? now) + 86400000;
     return wrap(
       <>
-        {progress}
+        {track}
         <Host tag="div" className="card card-pad col gap6">
           <KV k="Delivered" v={o.deliveredAt ? <Stamped t={o.deliveredAt} /> : ''} />
           <KV k="Signed by" v={o.receiver ?? ''} />
@@ -1882,8 +1912,8 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
   }
   return wrap(
     <>
-      {progress}
-      {o.status === 'closed' && (
+      {track}
+      {accepted && (
         <Host tag="div" className="card card-pad col gap6">
           <KV k="Delivered" v={o.deliveredAt ? <Stamped t={o.deliveredAt} /> : ''} />
           <KV k="Accepted" v={o.acceptedAt ? fmtStamp(o.acceptedAt) : ''} />
@@ -1922,20 +1952,11 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
           {o.paidAt && <KV k="Received" v={fmtStamp(o.paidAt)} />}
         </Host>
       )}
-      {['paid', 'allocated', 'in_collection'].includes(o.status) && (
-        <Host tag="div" className="tint-blue">
-          {o.status === 'paid'
-            ? 'Payment confirmed. CryoChain is allocating your order across farmers.'
-            : o.status === 'allocated'
-              ? 'Allocated across farmers. Collection is scheduled for your delivery date.'
-              : 'The truck is collecting now. You will see delivery stamps here.'}
-        </Host>
-      )}
       <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(',')[0]}`} />
       {totals}
       <Lines o={o} />
     </>,
-    o.status === 'closed' ? (
+    accepted ? (
       <Btn kind="secondary" to="/buyer/payments">
         Receipt
       </Btn>
@@ -2815,7 +2836,7 @@ function Deliveries() {
               <Host tag="span" className="h16">
                 {o.id}
               </Host>
-              <Chip tone={ORDER_TONE[o.status]}>{ORDER_LABEL[o.status]}</Chip>
+              <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
             </Host>
             <Host tag="div" className="row cap">
               <Host tag="span">

@@ -201,8 +201,19 @@ export function mergeBuyer(
         String(o.status) === 'awaiting_payment' ||
         String(o.status) === 'submitted';
       if (serverAhead && clientEarly) return prev;
-      if (payment?.status === 'confirmed')
-        return { ...o, status: prev.status, payment: prev.payment, paidAt: prev.paidAt };
+      if (payment?.status === 'confirmed') {
+        const serverStatus = String(prev.status);
+        const clientStatus = String(o.status);
+        // The buyer may close a delivered order. Anything else stays on the server status.
+        const accepted =
+          clientStatus === 'closed' && (serverStatus === 'delivered' || serverStatus === 'closed');
+        return {
+          ...o,
+          status: accepted ? 'closed' : serverStatus,
+          payment: prev.payment,
+          paidAt: prev.paidAt,
+        };
+      }
       return o;
     });
   next.orders = [...serverOrders.filter((o) => o.orgId !== orgId), ...kept];

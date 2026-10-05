@@ -1776,6 +1776,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [trackedRun, driverDevice]);
   useEffect(() => {
+    if (!state?.orders.some((order) => order.acceptedAt && order.status === 'delivered')) return;
+    mutate((s) => {
+      for (const order of s.orders) {
+        if (order.acceptedAt && order.status === 'delivered') order.status = 'closed';
+      }
+    });
+  }, [state, mutate]);
+  useEffect(() => {
     if (!state?.orders.some((order) => !isIsoDay(order.deliveryDate))) return;
     mutate((s) => {
       for (const order of s.orders) {
