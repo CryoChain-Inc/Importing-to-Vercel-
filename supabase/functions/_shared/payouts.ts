@@ -130,16 +130,34 @@ function openTransferException(
   doc.exceptions = exceptions;
 }
 
+type PayoutRunDoc = {
+  id: string;
+  transferIds: string[];
+  status: string;
+  requiresTwo?: boolean;
+  approvals?: unknown[];
+  executedAt?: number;
+};
+
+/** Money can move only after the run has every approval it requires. */
+export function payoutMaySend(doc: Doc, runId: string) {
+  const run = ((doc.payoutRuns ?? []) as PayoutRunDoc[]).find((r) => r.id === runId);
+  if (!run) return false;
+  if (run.status === 'cancelled' || run.status === 'draft') return false;
+  const count = Array.isArray(run.approvals) ? run.approvals.length : 0;
+  const need = run.requiresTwo ? 2 : 1;
+  if (count >= need) return true;
+  if (!run.requiresTwo && run.status !== 'pending_approval') return true;
+  return false;
+}
+
 /** Recomputes the payout run's status from its transfers. */
 export function settleRun(doc: Doc, runId: string) {
-  const runs = (doc.payoutRuns ?? []) as {
-    id: string;
-    transferIds: string[];
-    status: string;
-    executedAt?: number;
-  }[];
+  const runs = (doc.payoutRuns ?? []) as PayoutRunDoc[];
   const run = runs.find((r) => r.id === runId);
   if (!run) return;
+  if (run.status === 'pending_approval' || run.status === 'cancelled' || run.status === 'draft')
+    return;
   const mine = transfersOf(doc).filter((t) => run.transferIds.includes(t.id));
   if (mine.every((t) => t.status === 'succeeded' || t.status === 'manual'))
     run.status = 'completed';

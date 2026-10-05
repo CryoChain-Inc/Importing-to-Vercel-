@@ -15,6 +15,7 @@ import {
   farmersOf,
   markFailed,
   markPaid,
+  payoutMaySend,
   recordWalletCheck,
   transfersOf,
 } from '../_shared/payouts.ts';
@@ -82,7 +83,9 @@ async function preflight(admin: Admin, secret: string, runId: string) {
     .filter(
       (t) =>
         run.transferIds.includes(t.id) &&
-        (t.status === 'queued' || (t.status === 'failed' && t.attempts < MAX_ATTEMPTS)),
+        (t.status === 'queued' ||
+          t.status === 'held' ||
+          (t.status === 'failed' && t.attempts < MAX_ATTEMPTS)),
     )
     .reduce((sum, t) => sum + toPesewas(t.amount), 0);
   const balance = await ghsBalance(secret);
@@ -188,7 +191,16 @@ async function send(admin: Admin, secret: string, id: string) {
     return json({ ok: true, status: transfer.status });
   // A sent transfer is Paystack's to finish. Re-sending would risk paying twice, so poll instead.
   if (transfer.status === 'sent') return verify(admin, secret, id);
-  if (transfer.status === 'held') return json({ ok: true, status: 'held' });
+  const row = await readWorkspace(admin);
+  if (!row || !payoutMaySend(row.state, transfer.runId))
+    return json(
+      {
+        ok: false,
+        error: 'This payout is waiting for a second approver before money can be sent.',
+      },
+      409,
+    );
+  // A wallet-limit hold is released once the run is approved, so this transfer is sent.
   if (transfer.status === 'failed' && transfer.attempts >= MAX_ATTEMPTS)
     return json(
       { ok: false, status: 'failed', error: 'Attempts exhausted. Fix the wallet or pay manually.' },
