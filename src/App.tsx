@@ -18,6 +18,7 @@ import {
   AuthScreen,
   MissingProfile,
   PendingAccess,
+  SetPasswordScreen,
   SetupScreen,
   useAuth,
 } from './backend/gate';
@@ -183,9 +184,10 @@ function Workspace() {
 }
 
 function SignedIn() {
-  const { ready, session, profile } = useAuth();
+  const { ready, session, profile, mustSetPassword } = useAuth();
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
   if (!session) return <AuthScreen />;
+  if (mustSetPassword) return <SetPasswordScreen />;
   if (!profile) return <MissingProfile />;
   if (profile.role === 'pending') return <PendingAccess />;
   return <Workspace />;

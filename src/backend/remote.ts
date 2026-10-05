@@ -213,6 +213,23 @@ async function messageOf(error: {
   return error.message ?? 'The request failed.';
 }
 
+export async function claimInvite(email: string, password: string): Promise<{ error?: string }> {
+  const { data, error } = await supabase.functions.invoke('claim-invite', {
+    body: { email, password },
+  });
+  if (error) {
+    const message = await messageOf(error);
+    if (message.includes('Failed to send a request'))
+      return {
+        error:
+          'The claim-invite function did not respond. Restart the local Supabase stack so it loads the new function.',
+      };
+    return { error: message };
+  }
+  if (data?.error) return { error: String(data.error) };
+  return {};
+}
+
 export async function commit(body: Record<string, unknown>): Promise<CommitResult> {
   const op = String(body.op ?? 'load');
   if (op === 'load' || op === 'bootstrap' || op === 'save') {

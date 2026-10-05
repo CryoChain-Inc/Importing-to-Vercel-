@@ -250,6 +250,7 @@ async function invite(
   // Verification requirement: Field agent must register farmer at farm gate before online portal access.
   const farmerId = role === 'farmer' ? findFarmerId(row.state, body.farmerId) : '';
   if (role === 'farmer' && !farmerId) return json({ error: FARMER_NOT_ON_REGISTER }, 400);
+  const redirectTo = appOrigin(body.redirectTo);
   const created = await (
     admin as {
       auth: {
@@ -264,7 +265,10 @@ async function invite(
         };
       };
     }
-  ).auth.admin.inviteUserByEmail(email, { data: { display_name: displayName } });
+  ).auth.admin.inviteUserByEmail(email, {
+    data: { display_name: displayName, needs_password: true },
+    ...(redirectTo ? { redirectTo } : {}),
+  });
   if (created.error || !created.data.user)
     return json(
       { error: created.error?.message ?? 'Invite failed. Check Auth email settings in Supabase.' },
@@ -333,6 +337,18 @@ async function invite(
     .update(patch)
     .eq('id', userId);
   return json({ ok: true, version: written.version });
+}
+
+function appOrigin(value: unknown) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.origin;
+  } catch {
+    return '';
+  }
 }
 
 const FIELD_ROLES = ['farmer', 'agent', 'driver'];
@@ -487,7 +503,8 @@ async function requestedRoleByUser(admin: ReturnType<typeof Object>, ids: string
       const users = listed.data?.users ?? [];
       for (const user of users) {
         const role = user.user_metadata?.requested_role;
-        if (!wanted.has(user.id) || typeof role !== 'string' || !FIELD_ROLES.includes(role)) continue;
+        if (!wanted.has(user.id) || typeof role !== 'string' || !FIELD_ROLES.includes(role))
+          continue;
         found.set(user.id, role);
       }
       if (users.length < 200) break;
