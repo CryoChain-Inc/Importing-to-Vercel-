@@ -1,5 +1,12 @@
 import { Host } from '../../ui/host';
-import { useState, type ReactNode } from 'react';
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../domain/store';
 import type { Device, Exception, Order, Run, Settlement } from '../../domain/types';
@@ -38,6 +45,7 @@ import {
   Stepper,
 } from '../../ui/kit';
 import { Desk } from '../../layouts/shells';
+import { colors } from '../../ui/theme';
 import { TeamFields } from '../../backend/Team';
 import { remoteEnabled } from '../../backend/config';
 import { payoutPreflight, resolveWallet, verifyTransfer } from '../../backend/remote';
@@ -169,45 +177,118 @@ function Shell({
     </Desk>
   );
 }
+type ColSize = { flex: number; minWidth: number };
+
+function columnFor(label: string, numeric: boolean): ColSize {
+  const name = label.trim().toLowerCase();
+  if (numeric) return { flex: 0.7, minWidth: 72 };
+  if (
+    /body|detail|note|buyer|farmer|product|receiver|organisation|wallet|reference|payment method|dedicated|flags|lines|message|contact/.test(
+      name,
+    )
+  )
+    return { flex: 2.2, minWidth: 150 };
+  if (
+    /when|date|time|sent|captured|delivered|received|occurred|deadline|last sync|cold box/.test(
+      name,
+    )
+  )
+    return { flex: 1.15, minWidth: 112 };
+  if (
+    /status|grade|role|tier|seq|photo|photos|size|app|online|sync|type|stops|orders|users|country|action|source|code|pending/.test(
+      name,
+    )
+  )
+    return { flex: 0.85, minWidth: 80 };
+  if (name.length <= 6) return { flex: 0.75, minWidth: 72 };
+  return { flex: 1, minWidth: 96 };
+}
+
+function sizeRow(row: ReactNode, cols: ColSize[]) {
+  if (!isValidElement(row)) return row;
+  const cells = (row.props as { children?: ReactNode }).children;
+  return cloneElement(row, {
+    children: Children.map(cells, (cell, i) => {
+      if (!isValidElement(cell) || !cols[i]) return cell;
+      const prev = (cell.props as { style?: object }).style ?? {};
+      return cloneElement(cell as ReactElement<{ style?: object }>, {
+        style: { ...cols[i], ...prev },
+      });
+    }),
+  } as { children: ReactNode });
+}
+
 const Tbl = ({
   head,
   children,
   foot,
+  empty,
+  cols,
 }: {
   head: ReactNode[];
   children: ReactNode;
   foot?: ReactNode;
-}) => (
-  <Host tag="div" className="tbl">
-    <Host tag="table">
-      <Host tag="thead">
-        <Host tag="tr">
-          {head.map((h, i) => (
-            <Host
-              tag="th"
-              key={i}
-              className={typeof h === 'string' && h.startsWith('#') ? 'num' : ''}
-            >
-              {typeof h === 'string' ? h.replace(/^#/, '') : h}
-            </Host>
-          ))}
+  empty?: ReactNode;
+  cols?: ColSize[];
+}) => {
+  const rows = Children.toArray(children).filter(Boolean);
+  const widths =
+    cols ??
+    head.map((cell) =>
+      columnFor(
+        typeof cell === 'string' ? cell.replace(/^#/, '') : '',
+        typeof cell === 'string' && cell.startsWith('#'),
+      ),
+    );
+  const sized = rows.map((row) => sizeRow(row, widths));
+  return (
+    <Host tag="div" className="tbl">
+      <Host tag="table">
+        <Host tag="thead">
+          <Host tag="tr" className="head">
+            {head.map((h, i) => (
+              <Host
+                tag="th"
+                key={i}
+                className={typeof h === 'string' && h.startsWith('#') ? 'num' : ''}
+                style={widths[i]}
+              >
+                {typeof h === 'string' ? h.replace(/^#/, '') : h}
+              </Host>
+            ))}
+          </Host>
         </Host>
+        {sized.length ? (
+          <Host tag="tbody">{sized}</Host>
+        ) : (
+          <Host
+            tag="div"
+            className="empty"
+            style={{ paddingVertical: 32, paddingHorizontal: 20, width: '100%' }}
+          >
+            <Host tag="div" className="cap" style={{ textAlign: 'center', maxWidth: 460 }}>
+              {empty ?? 'Nothing to show.'}
+            </Host>
+          </Host>
+        )}
       </Host>
-      <Host tag="tbody">{children}</Host>
+      {foot && sized.length > 0 ? (
+        <Host
+          tag="div"
+          className="cap"
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            borderTopWidth: 1,
+            borderTopColor: colors.lineSoft,
+          }}
+        >
+          {foot}
+        </Host>
+      ) : null}
     </Host>
-    {foot && (
-      <Host
-        tag="div"
-        className="cap"
-        style={{
-          padding: 12,
-        }}
-      >
-        {foot}
-      </Host>
-    )}
-  </Host>
-);
+  );
+};
 function orgName(state: ReturnType<typeof useOps>['state'], id: string) {
   return state.orgs.find((o) => o.id === id)?.name ?? id;
 }
@@ -227,24 +308,44 @@ function coverage(state: ReturnType<typeof useOps>['state'], o: Order) {
     tone: (!any ? 'neutral' : short ? 'warn' : 'info') as 'neutral' | 'warn' | 'info',
   };
 }
+const ORDER_COLS = [
+  { flex: 0.7, minWidth: 72 },
+  { flex: 2.6, minWidth: 160 },
+  { flex: 1, minWidth: 96 },
+  { flex: 0.9, minWidth: 88 },
+  { flex: 1.1, minWidth: 108 },
+  { flex: 1.05, minWidth: 104 },
+  { flex: 0.75, minWidth: 72 },
+];
+
+function inThisWeek(iso: string) {
+  const day = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(day.getTime())) return false;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return day >= start && day < end;
+}
+
 function OrderBook() {
   const { state } = useOps();
   const [f, setF] = useState<'Open' | 'All'>('Open');
+  const [when, setWhen] = useState<'week' | 'all'>('all');
+  const open = [
+    'paid',
+    'allocated',
+    'in_collection',
+    'delivered',
+    'held',
+    'awaiting_payment',
+    'submitted',
+    'approved',
+  ];
   const list = state.orders
-    .filter(
-      (o) =>
-        f === 'All' ||
-        [
-          'paid',
-          'allocated',
-          'in_collection',
-          'delivered',
-          'held',
-          'awaiting_payment',
-          'submitted',
-          'approved',
-        ].includes(o.status),
-    )
+    .filter((o) => f === 'All' || open.includes(o.status))
+    .filter((o) => when === 'all' || inThisWeek(o.deliveryDate))
     .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
   return (
     <Shell
@@ -278,13 +379,25 @@ function OrderBook() {
         >
           Status: {f} {f === 'Open' ? '×' : '▾'}
         </Host>
-        <Host tag="div" className="f">
-          Delivery date: This week ▾
+        <Host
+          tag="button"
+          className={`f${when === 'week' ? ' on' : ''}`}
+          onClick={() => setWhen((value) => (value === 'week' ? 'all' : 'week'))}
+        >
+          Delivery date: {when === 'week' ? 'This week ×' : 'All ▾'}
         </Host>
       </Host>
       <Tbl
+        cols={ORDER_COLS}
         head={['Order', 'Buyer', 'Delivery ↓', '#Total GHS', 'Payment', 'Allocation', 'Run']}
-        foot={`${list.length} orders`}
+        foot={`${list.length} ${list.length === 1 ? 'order' : 'orders'}`}
+        empty={
+          when === 'week'
+            ? 'No orders are booked for delivery this week.'
+            : f === 'Open'
+              ? 'No open orders. Submitted, paid, and in-progress orders show here.'
+              : 'No orders yet.'
+        }
       >
         {list.map((o) => {
           const c = coverage(state, o);
@@ -873,27 +986,37 @@ function Runs() {
           Consignments (in stop order)
         </Host>
         {byOrder.map((oid) => (
-          <Host tag="div" key={oid} className="card card-pad col gap6">
+          <Host tag="div" key={oid} className="card" style={{ width: '100%', overflow: 'hidden' }}>
             <Host
               tag="div"
               style={{
                 fontWeight: 600,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: colors.lineSoft,
               }}
             >
               {oid} · {orgName(state, state.orders.find((o) => o.id === oid)!.orgId)}
             </Host>
             {unassigned
               .filter((c) => c.orderId === oid)
-              .map((c) => (
-                <Host
-                  tag="label"
-                  key={c.id}
-                  className="row"
-                  style={{
-                    fontSize: 14,
-                  }}
-                >
-                  <Host tag="span">
+              .map((c) => {
+                const farmer = state.farmers.find((f) => f.id === c.farmerId);
+                return (
+                  <Host
+                    tag="div"
+                    key={c.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      width: '100%',
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderTopWidth: 1,
+                      borderTopColor: colors.line,
+                    }}
+                  >
                     <Host
                       tag="input"
                       type="checkbox"
@@ -903,15 +1026,21 @@ function Runs() {
                           e.target.checked ? [...s, c.id] : s.filter((x) => x !== c.id),
                         )
                       }
-                    />{' '}
-                    {state.farmers.find((f) => f.id === c.farmerId)?.name} · {c.productName}{' '}
-                    {c.plannedKg} kg
+                    />
+                    <Host tag="div" style={{ flex: 1, minWidth: 0 }}>
+                      <Host tag="div" style={{ fontWeight: 600 }}>
+                        {farmer?.name ?? 'Farmer'}
+                      </Host>
+                      <Host tag="div" className="cap">
+                        {`${c.productName} · ${c.plannedKg} kg`}
+                      </Host>
+                    </Host>
+                    <Host tag="div" className="cap">
+                      {farmer?.village ?? ''}
+                    </Host>
                   </Host>
-                  <Host tag="span" className="cap">
-                    {state.farmers.find((f) => f.id === c.farmerId)?.village}
-                  </Host>
-                </Host>
-              ))}
+                );
+              })}
           </Host>
         ))}
         <Btn
@@ -1429,7 +1558,7 @@ function Settlements() {
         >
           Status: {f === 'Open' ? 'Not paid ×' : 'All ▾'}
         </Host>
-        <Host tag="span" className="cap">
+        <Host tag="span" className="cap" style={{ flex: 1, minWidth: 220 }}>
           A settlement is fixed at the cold box: kg × price. It is never edited; a correction is a
           new linked record with two approvers.
         </Host>
@@ -2873,10 +3002,11 @@ function AccountCell({ orgId, bank, number }: { orgId: string; bank: string; num
       </Host>
     );
   return (
-    <Host tag="div" className="col gap4">
+    <Host tag="div" className="col gap4" style={{ minWidth: 180 }}>
       <Host
         tag="input"
         className="input"
+        style={{ minHeight: 36, height: 36 }}
         value={b}
         placeholder="Bank"
         onChange={(e) => setB(e.target.value)}
@@ -2884,6 +3014,7 @@ function AccountCell({ orgId, bank, number }: { orgId: string; bank: string; num
       <Host
         tag="input"
         className="input"
+        style={{ minHeight: 36, height: 36 }}
         value={n}
         placeholder="Account number"
         onChange={(e) => setN(e.target.value)}

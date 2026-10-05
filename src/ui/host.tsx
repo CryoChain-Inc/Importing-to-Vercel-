@@ -210,7 +210,12 @@ function gridChildren(template: string, children: ReactNode) {
   );
   return (
     <View
-      style={{ flexDirection: 'row', flexWrap: equal ? 'wrap' : 'nowrap', alignItems: 'stretch' }}
+      style={{
+        flexDirection: 'row',
+        flexWrap: equal ? 'wrap' : 'nowrap',
+        alignItems: 'flex-start',
+        marginHorizontal: -8,
+      }}
     >
       {items.map((child, i) => {
         const wide =
@@ -218,12 +223,12 @@ function gridChildren(template: string, children: ReactNode) {
           String((child.props as { className?: string }).className ?? '').includes('wide');
         const col = cols[Math.min(i, cols.length - 1)] as Col;
         const box: ViewStyle = wide
-          ? { width: '100%', padding: 4 }
+          ? { width: '100%', padding: 8, minWidth: 0 }
           : equal
-            ? { width: `${100 / cols.length}%`, padding: 4 }
+            ? { width: `${100 / cols.length}%`, padding: 8, minWidth: 0 }
             : col.kind === 'px'
-              ? { width: col.n, paddingHorizontal: 4 }
-              : { flex: col.n, minWidth: 0, paddingHorizontal: 4 };
+              ? { width: col.n, padding: 8, flexShrink: 0 }
+              : { flex: col.n, minWidth: 0, padding: 8 };
         return (
           <View key={i} style={box}>
             {child}
@@ -375,6 +380,7 @@ export function Host(props: {
     );
   }
   if (tag === 'tr') {
+    const head = className?.split(/\s+/).includes('head');
     return (
       <Pressable
         disabled={!onClick}
@@ -382,10 +388,11 @@ export function Host(props: {
         style={[
           {
             flexDirection: 'row',
-            alignItems: 'center',
             borderBottomWidth: 1,
-            borderBottomColor: colors.lineSoft,
-            backgroundColor: looks.view.backgroundColor,
+            borderBottomColor: head ? colors.line : colors.lineSoft,
+            backgroundColor: head ? colors.lineSoft : looks.view.backgroundColor,
+            minHeight: head ? 42 : undefined,
+            alignItems: head ? 'center' : 'flex-start',
           },
           className?.includes('sel') ? { backgroundColor: colors.mist } : null,
         ]}
@@ -412,8 +419,22 @@ export function Host(props: {
         }
       : { width: 132, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' };
     return (
-      <View style={[cell, looks.view]}>
-        {mode === 'text' ? <Text style={cellText}>{children}</Text> : paint(children, cellText)}
+      <View
+        style={[
+          cell,
+          looks.view,
+          looks.view.gap != null
+            ? { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }
+            : null,
+        ]}
+      >
+        {mode === 'text' ? (
+          <Text style={cellText} numberOfLines={tag === 'th' ? 1 : undefined}>
+            {children}
+          </Text>
+        ) : (
+          paint(children, cellText)
+        )}
       </View>
     );
   }

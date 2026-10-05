@@ -165,6 +165,7 @@ export function classStyle(className?: string): RNStyle {
     if (token === 'row')
       Object.assign(view, {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: 12,

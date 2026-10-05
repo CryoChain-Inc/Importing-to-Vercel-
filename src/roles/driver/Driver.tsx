@@ -94,18 +94,27 @@ function TempSheet({
           doors shut. Ops is alerted on the next sync.
         </Host>
       )}
-      <Host tag="div" className="photo-grid">
-        <PhotoSlot
-          label="Gauge"
-          done={photo}
-          required
-          onTake={() => {
-            void capturePhoto('gauge').then((shot) => {
-              if (shot) setPhoto(true);
-            });
-          }}
-        />
-        <Host tag="div" className="card card-pad col gap4">
+      <Host
+        tag="div"
+        style={{ flexDirection: 'row', alignItems: 'stretch', gap: 10, width: '100%' }}
+      >
+        <Host tag="div" style={{ width: 112 }}>
+          <PhotoSlot
+            label="Gauge"
+            done={photo}
+            required
+            onTake={() => {
+              void capturePhoto('gauge').then((shot) => {
+                if (shot) setPhoto(true);
+              });
+            }}
+          />
+        </Host>
+        <Host
+          tag="div"
+          className="card card-pad col gap4"
+          style={{ flex: 1, justifyContent: 'center' }}
+        >
           <Host tag="span" className="lbl">
             Time
           </Host>

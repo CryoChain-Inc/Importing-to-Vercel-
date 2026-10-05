@@ -30,12 +30,22 @@ export const fmtStamp = (t: number) => {
   const d = new Date(t);
   return `${fmtTime(t)} · ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 };
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+export const isIsoDay = (iso: string) => ISO_DAY.test(String(iso ?? '').slice(0, 10));
+const dayDate = (iso: string) => {
+  const day = String(iso ?? '').slice(0, 10);
+  if (!ISO_DAY.test(day)) return null;
+  const d = new Date(`${day}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
 export const fmtDay = (iso: string) => {
-  const d = new Date(iso + 'T00:00:00');
+  const d = dayDate(iso);
+  if (!d) return '—';
   return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 };
 export const fmtDayLong = (iso: string) => {
-  const d = new Date(iso + 'T00:00:00');
+  const d = dayDate(iso);
+  if (!d) return '—';
   const L = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return `${L[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 };

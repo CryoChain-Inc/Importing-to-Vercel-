@@ -30,8 +30,11 @@ import {
   canApprove,
   computeSettlement,
   creditBalance,
+  addDays,
   fmtDay,
   ghs,
+  isIsoDay,
+  isoDay,
   isShort,
   maskMomo,
   payoutRequiresTwo,
@@ -562,7 +565,9 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           id,
           orgId: u.orgId,
           requestedBy: u.id,
-          deliveryDate: d.deliveryDate,
+          deliveryDate: isIsoDay(d.deliveryDate)
+            ? d.deliveryDate.slice(0, 10)
+            : addDays(isoDay(Date.now()), Number.isFinite(s.config.leadDays) ? s.config.leadDays : 0),
           address: d.address,
           status: 'submitted',
           lines: d.lines.map((l) => ({ ...l })),
@@ -1770,6 +1775,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const timer = setInterval(tick, minutes * 60000);
     return () => clearInterval(timer);
   }, [trackedRun, driverDevice]);
+  useEffect(() => {
+    if (!state?.orders.some((order) => order.acceptedAt && order.status === 'delivered')) return;
+    mutate((s) => {
+      for (const order of s.orders) {
+        if (order.acceptedAt && order.status === 'delivered') order.status = 'closed';
+      }
+    });
+  }, [state, mutate]);
+  useEffect(() => {
+    if (!state?.orders.some((order) => !isIsoDay(order.deliveryDate))) return;
+    mutate((s) => {
+      for (const order of s.orders) {
+        if (isIsoDay(order.deliveryDate)) continue;
+        const lead = Number.isFinite(s.config.leadDays) ? s.config.leadDays : 0;
+        const day = addDays(isoDay(order.submittedAt || Date.now()), lead);
+        order.deliveryDate = isIsoDay(day) ? day : isoDay(Date.now());
+      }
+    });
+  }, [state, mutate]);
   const act = useMemo(() => buildActions(() => ref.current as State, mutate), [mutate]);
   const getState = useCallback(() => ref.current as State, []);
   if (!state)
