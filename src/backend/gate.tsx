@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
+import { Phone } from '../layouts/shells';
+import { Logo } from '../ui/kit';
 import { colors, fontFamily } from '../ui/theme';
 import {
   clearPasswordSetup,
@@ -181,8 +183,177 @@ export function SetupScreen() {
   );
 }
 
+const LOOP = [
+  'Order and pay',
+  'Allocate',
+  'Weigh and grade',
+  'Collect cold',
+  'Deliver',
+  'Pay farmers',
+];
+
+function LandingPanel() {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.ink,
+        paddingHorizontal: 44,
+        paddingVertical: 48,
+        justifyContent: 'space-between',
+        gap: 24,
+      }}
+    >
+      <View style={{ gap: 24 }}>
+        <Logo h={26} style={{ filter: 'invert', alignSelf: 'flex-start' }} />
+        <Text
+          style={{
+            fontFamily: fontFamily('400', true),
+            fontSize: 40,
+            lineHeight: 46,
+            color: '#fff',
+            maxWidth: 520,
+            marginTop: 24,
+          }}
+        >
+          Cold from the farm gate to your door.
+        </Text>
+        <Text style={{ fontSize: 16, lineHeight: 26, color: colors.steel, maxWidth: 520 }}>
+          One operational system for buyers, farmers, field agents, drivers and operations. Buyers
+          pay before collection. Farmers are paid within 24 hours of delivery. Everything the field
+          captures works with no signal.
+        </Text>
+        <View style={{ gap: 10, maxWidth: 520 }}>
+          {[LOOP.slice(0, 3), LOOP.slice(3)].map((row, rowIndex) => (
+            <View key={rowIndex} style={{ flexDirection: 'row', gap: 10 }}>
+              {row.map((step, index) => (
+                <View
+                  key={step}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.18)',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: colors.steel }}>
+                    0{rowIndex * 3 + index + 1}
+                  </Text>
+                  <Text style={{ fontFamily: fontFamily('600'), fontSize: 13, color: '#fff' }}>
+                    {step}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
+      <Text style={{ fontSize: 12, color: colors.steel }}>Version one prototype · Nsawam node</Text>
+    </View>
+  );
+}
+
+function AuthSplit({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
+  if (!wide) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.paper }}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={{ backgroundColor: colors.ink, padding: 24 }}>
+          <Logo h={26} style={{ filter: 'invert', alignSelf: 'flex-start' }} />
+          <Text
+            style={{
+              fontFamily: fontFamily('400', true),
+              fontSize: 32,
+              lineHeight: 38,
+              color: '#fff',
+              marginTop: 20,
+            }}
+          >
+            Cold from the farm gate to your door.
+          </Text>
+        </View>
+        <View style={{ padding: 24, gap: 14, maxWidth: 480 }}>{children}</View>
+      </ScrollView>
+    );
+  }
+  return (
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.paper }}>
+      <LandingPanel />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'center',
+          paddingHorizontal: 48,
+          paddingVertical: 40,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={{ width: '100%', maxWidth: 420, alignSelf: 'center', gap: 14 }}>
+          {children}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function ModePill({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: on ? colors.ink : colors.steel,
+        backgroundColor: on ? colors.ink : '#fff',
+      }}
+    >
+      <Text
+        style={{ fontFamily: fontFamily('600'), fontSize: 14, color: on ? '#fff' : colors.ink }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function AuthButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={{
+        height: 48,
+        borderRadius: 6,
+        backgroundColor: disabled ? colors.steel : colors.blue,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ color: '#fff', fontFamily: fontFamily('600'), fontSize: 16 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function AuthScreen() {
   const [mode, setMode] = useState<'email' | 'phone'>('email');
+  const [creating, setCreating] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -200,7 +371,11 @@ export function AuthScreen() {
       setError('Enter the email and a password.');
       return;
     }
-    if (name.trim()) {
+    if (creating) {
+      if (!name.trim()) {
+        setError('Enter your name.');
+        return;
+      }
       const { data, error: signError } = await supabase.auth.signUp({
         email: address,
         password,
@@ -281,50 +456,46 @@ export function AuthScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.paper }}
-      contentContainerStyle={{ padding: 28, gap: 12, maxWidth: 480 }}
-    >
-      <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>
-        Sign in
+    <AuthSplit>
+      <Text style={{ fontSize: 12, fontFamily: fontFamily('600'), color: colors.steelInk }}>
+        Account
       </Text>
-      <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
-        The first person to create an account becomes the node manager and opens an empty operating
-        record. If operations invited you, enter your name, that email, and a password, then create
-        the account. The password is saved on the invited login.
+      <Text
+        style={{
+          fontFamily: fontFamily('600'),
+          fontSize: 24,
+          lineHeight: 29,
+          color: colors.ink,
+          marginTop: -6,
+        }}
+      >
+        {mode === 'phone' ? 'Phone sign-in' : creating ? 'Create account' : 'Sign in'}
       </Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Pressable onPress={() => setMode('email')}>
-          <Text
-            style={{ fontFamily: fontFamily(mode === 'email' ? '700' : '500'), color: colors.blue }}
-          >
-            Email
-          </Text>
-        </Pressable>
-        <Pressable onPress={() => setMode('phone')}>
-          <Text
-            style={{ fontFamily: fontFamily(mode === 'phone' ? '700' : '500'), color: colors.blue }}
-          >
-            Phone
-          </Text>
-        </Pressable>
-      </View>
+      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.steelInk, marginTop: -6 }}>
+        {creating
+          ? 'The first account becomes the node manager. If operations already invited this email, the password is saved on that login.'
+          : 'Use the email and password for your CryoChain login.'}
+      </Text>
+      {mode === 'email' ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <ModePill label="Sign in" on={!creating} onPress={() => setCreating(false)} />
+          <ModePill label="Create account" on={creating} onPress={() => setCreating(true)} />
+        </View>
+      ) : null}
       {mode === 'email' ? (
         <>
-          <Field label="Your name, only when creating an account" value={name} onChange={setName} />
+          {creating ? (
+            <Field label="Your name" value={name} onChange={setName} autoCapitalize="words" />
+          ) : null}
           <Field label="Email" value={email} onChange={setEmail} keyboard="email-address" />
           <Field label="Password" value={password} onChange={setPassword} secure />
-          <Pressable
+          <AuthButton
+            label={creating ? 'Create account' : 'Sign in'}
             onPress={() => void submitEmail()}
-            style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
-          >
-            <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
-              {name ? 'Create account' : 'Sign in'}
-            </Text>
-          </Pressable>
-          {name ? null : (
+          />
+          {creating ? null : (
             <Pressable onPress={() => void forgot()}>
-              <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>
+              <Text style={{ color: colors.blue, fontFamily: fontFamily('600'), fontSize: 14 }}>
                 Forgot password
               </Text>
             </Pressable>
@@ -334,19 +505,30 @@ export function AuthScreen() {
         <>
           <Field label="Phone" value={phone} onChange={setPhone} keyboard="phone-pad" />
           {sent ? <Field label="Code" value={code} onChange={setCode} /> : null}
-          <Pressable
+          <AuthButton
+            label={sent ? 'Verify code' : 'Send code'}
             onPress={() => void (sent ? verify() : sendCode())}
-            style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
-          >
-            <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
-              {sent ? 'Verify code' : 'Send code'}
-            </Text>
-          </Pressable>
+          />
         </>
       )}
-      {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
-      {info ? <Text style={{ color: colors.ink, lineHeight: 22 }}>{info}</Text> : null}
-    </ScrollView>
+      <Pressable
+        onPress={() => {
+          setMode(mode === 'email' ? 'phone' : 'email');
+          setError('');
+          setInfo('');
+        }}
+      >
+        <Text style={{ color: colors.blue, fontFamily: fontFamily('600'), fontSize: 14 }}>
+          {mode === 'email' ? 'Use a phone code instead' : 'Use email instead'}
+        </Text>
+      </Pressable>
+      {error ? (
+        <Text style={{ color: colors.red, lineHeight: 20, fontSize: 14 }}>{error}</Text>
+      ) : null}
+      {info ? (
+        <Text style={{ color: colors.ink, lineHeight: 21, fontSize: 14 }}>{info}</Text>
+      ) : null}
+    </AuthSplit>
   );
 }
 
@@ -374,11 +556,19 @@ export function SetPasswordScreen() {
     if (message) setError(message);
   };
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.paper }}
-      contentContainerStyle={{ padding: 28, gap: 12, maxWidth: 480 }}
-    >
-      <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>
+    <AuthSplit>
+      <Text style={{ fontSize: 12, fontFamily: fontFamily('600'), color: colors.steelInk }}>
+        Account
+      </Text>
+      <Text
+        style={{
+          fontFamily: fontFamily('600'),
+          fontSize: 24,
+          lineHeight: 29,
+          color: colors.ink,
+          marginTop: -6,
+        }}
+      >
         {recovery ? 'Choose a new password' : 'Set a password'}
       </Text>
       <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
@@ -388,25 +578,20 @@ export function SetPasswordScreen() {
       </Text>
       <Field label="Password" value={password} onChange={setPassword} secure />
       <Field label="Confirm password" value={confirm} onChange={setConfirm} secure />
-      <Pressable
+      <AuthButton
+        label={busy ? 'Saving…' : 'Save password'}
         onPress={() => void save()}
         disabled={busy}
-        style={{
-          backgroundColor: colors.blue,
-          borderRadius: 8,
-          padding: 14,
-          opacity: busy ? 0.7 : 1,
-        }}
-      >
-        <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
-          {busy ? 'Saving…' : 'Save password'}
+      />
+      <Pressable onPress={() => void signOut()} disabled={busy}>
+        <Text style={{ color: colors.blue, fontFamily: fontFamily('600'), fontSize: 14 }}>
+          Sign out
         </Text>
       </Pressable>
-      <Pressable onPress={() => void signOut()} disabled={busy}>
-        <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text>
-      </Pressable>
-      {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
-    </ScrollView>
+      {error ? (
+        <Text style={{ color: colors.red, lineHeight: 20, fontSize: 14 }}>{error}</Text>
+      ) : null}
+    </AuthSplit>
   );
 }
 
@@ -416,28 +601,35 @@ function Field({
   onChange,
   secure,
   keyboard,
+  autoCapitalize = 'none',
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   secure?: boolean;
   keyboard?: 'email-address' | 'phone-pad';
+  autoCapitalize?: 'none' | 'words';
 }) {
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontSize: 12, color: colors.steelInk }}>{label}</Text>
+      <Text style={{ fontSize: 12, fontFamily: fontFamily('600'), color: colors.steelInk }}>
+        {label}
+      </Text>
       <TextInput
         value={value}
         onChangeText={onChange}
         secureTextEntry={secure}
         keyboardType={keyboard}
-        autoCapitalize="none"
+        autoCapitalize={autoCapitalize}
+        autoCorrect={false}
         style={{
+          height: 48,
           borderWidth: 1,
-          borderColor: colors.line,
-          borderRadius: 8,
-          padding: 12,
+          borderColor: colors.steel,
+          borderRadius: 6,
+          paddingHorizontal: 12,
           fontSize: 16,
+          fontFamily: fontFamily('400'),
           color: colors.ink,
           backgroundColor: '#fff',
         }}
@@ -487,9 +679,21 @@ export function MissingProfile() {
 }
 
 const REQUEST_ROLES = [
-  { value: 'agent', label: 'Field agent' },
-  { value: 'driver', label: 'Driver' },
-  { value: 'farmer', label: 'Farmer' },
+  {
+    value: 'agent',
+    label: 'Field agent',
+    detail: 'Weigh, grade, and photograph at the farm gate.',
+  },
+  {
+    value: 'driver',
+    label: 'Driver',
+    detail: 'Stops, temperature checks, and delivery.',
+  },
+  {
+    value: 'farmer',
+    label: 'Farmer',
+    detail: 'Your pickups, prices, and payments.',
+  },
 ] as const;
 
 export function PendingAccess() {
@@ -526,73 +730,137 @@ export function PendingAccess() {
     });
   }, []);
   const requestedLabel = REQUEST_ROLES.find((item) => item.value === sent)?.label;
+  const chosen = REQUEST_ROLES.find((item) => item.value === role);
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: colors.paper,
-        padding: 28,
-        justifyContent: 'center',
-        gap: 12,
-      }}
-    >
-      <Text style={{ fontFamily: fontFamily('600'), fontSize: 24, color: colors.ink }}>
-        Waiting for access
-      </Text>
-      <Text style={{ lineHeight: 22, color: colors.ink }}>
-        {profile?.display_name || 'This account'} is signed in. Choose field agent, driver, or
-        farmer and send a request. The node manager approves it from Team access. A buyer can
-        register an organisation without waiting.
-      </Text>
-      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-        {REQUEST_ROLES.map((item) => (
-          <Pressable key={item.value} onPress={() => setRole(item.value)}>
-            <Text
-              style={{
-                fontFamily: fontFamily(role === item.value ? '700' : '500'),
-                color: colors.blue,
-              }}
-            >
-              {item.label}
-            </Text>
-          </Pressable>
-        ))}
+    <Phone>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          backgroundColor: '#fff',
+          borderBottomWidth: 1,
+          borderBottomColor: colors.line,
+        }}
+      >
+        <Logo h={22} />
+        <Pressable onPress={() => void signOut()}>
+          <Text style={{ color: colors.blue, fontFamily: fontFamily('600'), fontSize: 14 }}>
+            Sign out
+          </Text>
+        </Pressable>
       </View>
-      <Pressable
-        onPress={() => void request()}
-        style={{ backgroundColor: colors.blue, borderRadius: 8, padding: 14 }}
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.paper }}
+        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 28 }}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
-          Request {REQUEST_ROLES.find((item) => item.value === role)?.label.toLowerCase()} access
+        <Text
+          style={{
+            fontFamily: fontFamily('400', true),
+            fontSize: 28,
+            lineHeight: 34,
+            color: colors.ink,
+          }}
+        >
+          Waiting for access
         </Text>
-      </Pressable>
-      {requestedLabel ? (
-        <Text style={{ lineHeight: 22, color: colors.ink }}>
-          Waiting for the node manager to approve {requestedLabel.toLowerCase()} access.
+        <Text style={{ fontSize: 15, lineHeight: 22, color: colors.steelInk }}>
+          {profile?.display_name || 'This account'} is signed in. Choose one role. The node manager
+          approves it from Team access.
         </Text>
-      ) : null}
-      <Pressable
-        onPress={() => void become()}
-        style={{ borderWidth: 1, borderColor: colors.blue, borderRadius: 8, padding: 14 }}
-      >
-        <Text style={{ color: colors.blue, textAlign: 'center', fontFamily: fontFamily('600') }}>
-          Register a buyer organisation
-        </Text>
-      </Pressable>
-      <Pressable
-        onPress={() => void refresh()}
-        style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 14 }}
-      >
-        <Text style={{ color: colors.ink, textAlign: 'center', fontFamily: fontFamily('600') }}>
-          Check again
-        </Text>
-      </Pressable>
-      <Pressable onPress={() => void signOut()}>
-        <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text>
-      </Pressable>
-      {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
-      {info ? <Text style={{ lineHeight: 22, color: colors.ink }}>{info}</Text> : null}
-    </View>
+        <View style={{ gap: 8 }}>
+          {REQUEST_ROLES.map((item) => {
+            const on = role === item.value;
+            return (
+              <Pressable
+                key={item.value}
+                onPress={() => setRole(item.value)}
+                style={{
+                  minHeight: 72,
+                  borderRadius: 8,
+                  borderWidth: on ? 2 : 1,
+                  borderColor: on ? colors.ink : colors.steel,
+                  backgroundColor: on ? colors.ink : '#fff',
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: fontFamily('600'),
+                    fontSize: 16,
+                    color: on ? '#fff' : colors.ink,
+                  }}
+                >
+                  {item.label}
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 2,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    color: on ? colors.steel : colors.steelInk,
+                  }}
+                >
+                  {item.detail}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <AuthButton
+          label={`Request ${chosen?.label.toLowerCase() ?? 'role'} access`}
+          onPress={() => void request()}
+        />
+        {requestedLabel ? (
+          <Text style={{ fontSize: 14, lineHeight: 20, color: colors.ink }}>
+            Waiting for the node manager to approve {requestedLabel.toLowerCase()} access.
+          </Text>
+        ) : null}
+        <Pressable
+          onPress={() => void become()}
+          style={{
+            height: 48,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: colors.blue,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#fff',
+          }}
+        >
+          <Text style={{ color: colors.blue, fontFamily: fontFamily('600'), fontSize: 15 }}>
+            Register a buyer organisation
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void refresh()}
+          style={{
+            height: 48,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: colors.steel,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#fff',
+          }}
+        >
+          <Text style={{ color: colors.ink, fontFamily: fontFamily('600'), fontSize: 15 }}>
+            Check again
+          </Text>
+        </Pressable>
+        {error ? (
+          <Text style={{ color: colors.red, fontSize: 14, lineHeight: 20 }}>{error}</Text>
+        ) : null}
+        {info ? (
+          <Text style={{ color: colors.ink, fontSize: 14, lineHeight: 20 }}>{info}</Text>
+        ) : null}
+      </ScrollView>
+    </Phone>
   );
 }
 

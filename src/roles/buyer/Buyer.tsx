@@ -1,5 +1,5 @@
 import { Host } from '../../ui/host';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Share } from 'react-native';
 import {
   Link,
@@ -23,6 +23,7 @@ import {
   fmtDayLong,
   fmtStamp,
   ghs,
+  isoDay,
   kg,
   orderStepIndex,
   round2,
@@ -822,7 +823,11 @@ function Product() {
   const [grade, setGrade] = useState(p.grades[0].grade);
   const [q, setQ] = useState(Math.max(p.minKg, 300));
   const draft = state.session.draft;
-  const earliest = addDays(new Date().toISOString().slice(0, 10), state.config.leadDays);
+  const earliest = addDays(isoDay(Date.now()), state.config.leadDays);
+  useEffect(() => {
+    if (draft.deliveryDate) return;
+    act.draftSet({ deliveryDate: earliest });
+  }, [act, draft.deliveryDate, earliest]);
   const price = p.grades.find((g) => g.grade === grade)!.pricePerKg;
   return (
     <Shell>

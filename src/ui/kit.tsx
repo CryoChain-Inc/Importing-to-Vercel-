@@ -15,6 +15,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Tone } from '../domain/logic';
 import { countdown, fmtStamp } from '../domain/logic';
+import { useChrome } from './chrome';
 import { colors, fontFamily } from './theme';
 
 export const LOGO = 'https://cryochain.co/assets/logo-horizontal-DkoP_Knb.png';
@@ -35,7 +36,7 @@ export function Logo({
         width: 'auto',
         alignSelf,
         display: 'block',
-        filter: style?.filter ? 'invert(1)' : undefined,
+        filter: style?.filter ? 'brightness(0) invert(1)' : undefined,
       },
     });
   }
@@ -776,21 +777,34 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
+  const chrome = useChrome();
+  const { width } = useWindowDimensions();
+  const framed = chrome === 'phone' && width >= 480;
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable
         onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(26,35,48,.45)', justifyContent: 'flex-end' }}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(26,35,48,.45)',
+          justifyContent: 'flex-end',
+          alignItems: framed ? 'center' : 'stretch',
+        }}
       >
         <Pressable
           onPress={() => {}}
           style={{
             backgroundColor: colors.paper,
+            width: '100%',
+            maxWidth: framed ? 360 : undefined,
+            marginBottom: framed ? 16 : 0,
             borderTopLeftRadius: 12,
             borderTopRightRadius: 12,
+            borderBottomLeftRadius: framed ? 12 : 0,
+            borderBottomRightRadius: framed ? 12 : 0,
             padding: 16,
             gap: 12,
-            maxHeight: '90%',
+            maxHeight: framed ? '80%' : '90%',
           }}
         >
           <View
@@ -803,7 +817,13 @@ export function Sheet({
               <Text style={{ color: colors.steelInk, fontSize: 18 }}>✕</Text>
             </Pressable>
           </View>
-          <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={{ width: '100%' }}
+            contentContainerStyle={{ gap: 12, width: '100%' }}
+          >
+            {children}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
