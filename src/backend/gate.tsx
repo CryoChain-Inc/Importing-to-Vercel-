@@ -2,17 +2,37 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { colors, fontFamily } from '../ui/theme';
-import { supabase } from './client';
-import { commit, type Profile } from './remote';
+import {
+  clearPasswordSetup,
+  markPasswordSaved,
+  passwordSavedFor,
+  peekPasswordSetup,
+  supabase,
+} from './client';
+import { claimInvite, commit, type Profile } from './remote';
 
 type AuthValue = {
   ready: boolean;
   session: Session | null;
   profile: Profile | null;
   profileError: string | null;
+  mustSetPassword: boolean;
   refresh: () => Promise<void>;
+  finishPassword: (password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 };
+
+function passwordStillOpen(user: Session['user'] | null | undefined) {
+  const link = peekPasswordSetup();
+  if (link === 'recovery') return true;
+  if (user && passwordSavedFor(user.id)) return false;
+  if (link === 'invite') return true;
+  if (!user) return false;
+  const flag = user.user_metadata?.needs_password;
+  if (flag === true) return true;
+  if (flag === false) return false;
+  return Boolean(user.invited_at);
+}
 
 let emailLinkAdopted = false;
 /**
@@ -44,11 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [mustSetPassword, setMustSetPassword] = useState(false);
 
   const refresh = async () => {
     await sessionFromEmailLink();
     const { data } = await supabase.auth.getSession();
     setSession(data.session);
+    setMustSetPassword(Boolean(data.session) && passwordStillOpen(data.session?.user));
     if (!data.session) {
       setProfile(null);
       setProfileError(null);
@@ -94,12 +116,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const finishPassword = async (password: string) => {
+    const { data, error } = await supabase.auth.updateUser({
+      password,
+      data: { needs_password: false },
+    });
+    if (error) return error.message;
+    if (data.user) markPasswordSaved(data.user.id);
+    clearPasswordSetup();
+    setMustSetPassword(false);
+    await refresh();
+    return null;
+  };
   const signOut = async () => {
+    clearPasswordSetup();
     await supabase.auth.signOut();
     setProfile(null);
+    setMustSetPassword(false);
   };
   return (
-    <AuthCtx.Provider value={{ ready, session, profile, profileError, refresh, signOut }}>
+    <AuthCtx.Provider
+      value={{
+        ready,
+        session,
+        profile,
+        profileError,
+        mustSetPassword,
+        refresh,
+        finishPassword,
+        signOut,
+      }}
+    >
       {children}
     </AuthCtx.Provider>
   );
@@ -148,21 +195,72 @@ export function AuthScreen() {
   const submitEmail = async () => {
     setError('');
     setInfo('');
-    if (name) {
-      const { error: signError } = await supabase.auth.signUp({
-        email,
+    const address = email.trim().toLowerCase();
+    if (!address || !password) {
+      setError('Enter the email and a password.');
+      return;
+    }
+    if (name.trim()) {
+      const { data, error: signError } = await supabase.auth.signUp({
+        email: address,
         password,
-        options: { data: { display_name: name } },
+        options: { data: { display_name: name.trim() } },
       });
-      if (signError) setError(signError.message);
-      else
+      // An invite already has a login. signUp can open a one-time session without
+      // storing the password, so the password is attached to that same login.
+      const invited = Boolean(
+        data.user?.invited_at || data.user?.user_metadata?.needs_password === true,
+      );
+      const taken =
+        !!signError &&
+        /already registered|already been registered|already exists/i.test(signError.message);
+      if (signError && !taken) {
+        setError(signError.message);
+        return;
+      }
+      if (!invited && !taken) {
         setInfo(
           'Account created. If Supabase asks you to confirm the email, open that message, then sign in here.',
         );
+        return;
+      }
+      if (invited) await supabase.auth.signOut();
+      const claimed = await claimInvite(address, password);
+      if (claimed.error) {
+        setError(claimed.error);
+        return;
+      }
+      const { error: inError } = await supabase.auth.signInWithPassword({
+        email: address,
+        password,
+      });
+      if (inError) setError(inError.message);
       return;
     }
-    const { error: signError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signError } = await supabase.auth.signInWithPassword({
+      email: address,
+      password,
+    });
     if (signError) setError(signError.message);
+  };
+
+  const forgot = async () => {
+    setError('');
+    setInfo('');
+    const address = email.trim().toLowerCase();
+    if (!address) {
+      setError('Enter the email address, then use Forgot password.');
+      return;
+    }
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(address, {
+      redirectTo,
+    });
+    if (resetError) setError(resetError.message);
+    else
+      setInfo(
+        'Check that email for a link to choose a new password. On the local stack the message is in Mailpit at http://127.0.0.1:54324.',
+      );
   };
 
   const sendCode = async () => {
@@ -192,7 +290,8 @@ export function AuthScreen() {
       </Text>
       <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
         The first person to create an account becomes the node manager and opens an empty operating
-        record. Everyone else waits until operations invites them.
+        record. If operations invited you, enter your name, that email, and a password, then create
+        the account. The password is saved on the invited login.
       </Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Pressable onPress={() => setMode('email')}>
@@ -223,6 +322,13 @@ export function AuthScreen() {
               {name ? 'Create account' : 'Sign in'}
             </Text>
           </Pressable>
+          {name ? null : (
+            <Pressable onPress={() => void forgot()}>
+              <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>
+                Forgot password
+              </Text>
+            </Pressable>
+          )}
         </>
       ) : (
         <>
@@ -240,6 +346,66 @@ export function AuthScreen() {
       )}
       {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
       {info ? <Text style={{ color: colors.ink, lineHeight: 22 }}>{info}</Text> : null}
+    </ScrollView>
+  );
+}
+
+export function SetPasswordScreen() {
+  const { session, finishPassword, signOut } = useAuth();
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const recovery = peekPasswordSetup() === 'recovery';
+  const email = session?.user.email ?? 'this account';
+  const save = async () => {
+    setError('');
+    if (password.length < 6) {
+      setError('Use at least 6 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Those passwords do not match.');
+      return;
+    }
+    setBusy(true);
+    const message = await finishPassword(password);
+    setBusy(false);
+    if (message) setError(message);
+  };
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.paper }}
+      contentContainerStyle={{ padding: 28, gap: 12, maxWidth: 480 }}
+    >
+      <Text style={{ fontFamily: fontFamily('600'), fontSize: 28, color: colors.ink }}>
+        {recovery ? 'Choose a new password' : 'Set a password'}
+      </Text>
+      <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
+        {recovery
+          ? `Choose a new password for ${email}. You will use it the next time you sign in.`
+          : `Choose a password for ${email}. This stays on the account operations invited. You will use this email and password each time you sign in.`}
+      </Text>
+      <Field label="Password" value={password} onChange={setPassword} secure />
+      <Field label="Confirm password" value={confirm} onChange={setConfirm} secure />
+      <Pressable
+        onPress={() => void save()}
+        disabled={busy}
+        style={{
+          backgroundColor: colors.blue,
+          borderRadius: 8,
+          padding: 14,
+          opacity: busy ? 0.7 : 1,
+        }}
+      >
+        <Text style={{ color: '#fff', textAlign: 'center', fontFamily: fontFamily('600') }}>
+          {busy ? 'Saving…' : 'Save password'}
+        </Text>
+      </Pressable>
+      <Pressable onPress={() => void signOut()} disabled={busy}>
+        <Text style={{ color: colors.blue, fontFamily: fontFamily('600') }}>Sign out</Text>
+      </Pressable>
+      {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
     </ScrollView>
   );
 }

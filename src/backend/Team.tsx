@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Host } from '../ui/host';
 import { Btn, Field } from '../ui/kit';
+import { supabaseUrl } from './config';
 import { commit, type Profile } from './remote';
 
 const FIELD_ROLES = [
@@ -33,10 +34,25 @@ export function TeamFields() {
 
   const send = async () => {
     setNote('');
-    const res = await commit({ op: 'invite', email, displayName, role, farmerId, title, approver });
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : '';
+    const res = await commit({
+      op: 'invite',
+      email,
+      displayName,
+      role,
+      farmerId,
+      title,
+      approver,
+      redirectTo,
+    });
     if (res.error) setNote(res.error);
     else {
-      setNote(`Invite sent to ${email}. They set a password from the Supabase email.`);
+      const local = /localhost|127\.0\.0\.1/.test(supabaseUrl);
+      setNote(
+        local
+          ? `Invite sent to ${email}. Open Mailpit at http://127.0.0.1:54324, follow the link, and choose a password. Or, on the sign-in screen, create an account with this same email — that password is saved on the invite.`
+          : `Invite sent to ${email}. The email link opens a page where they choose a password for this account.`,
+      );
       setEmail('');
       setDisplayName('');
       load();
@@ -167,7 +183,13 @@ export function TeamFields() {
   );
 }
 
-function PendingApproval({ person, onDone }: { person: Profile; onDone: (message: string) => void }) {
+function PendingApproval({
+  person,
+  onDone,
+}: {
+  person: Profile;
+  onDone: (message: string) => void;
+}) {
   const requested = FIELD_ROLES.some((item) => item.value === person.requested_role)
     ? person.requested_role!
     : 'agent';
