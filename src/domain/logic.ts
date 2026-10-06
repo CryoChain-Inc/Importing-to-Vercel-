@@ -225,6 +225,33 @@ export function isShort(c: Consignment, tolerancePct: number) {
   return c.farmGateKg !== undefined && c.farmGateKg < c.plannedKg * (1 - tolerancePct / 100);
 }
 
+/** Delivered and closed orders are handed over. A shortfall is not filled with another farm stop. */
+export function allocationClosed(
+  orderStatus: OrderStatus,
+  runStatus?: 'planned' | 'in_progress' | 'delivered' | 'closed',
+) {
+  return (
+    orderStatus === 'delivered' ||
+    orderStatus === 'closed' ||
+    runStatus === 'delivered' ||
+    runStatus === 'closed'
+  );
+}
+
+const IN_COLD_BOX = new Set<Consignment['status']>(['cold_boxed', 'in_transit', 'delivered']);
+
+/**
+ * The driver collects only crop the agent has weighed and locked in the cold box.
+ * A stop whose sales were all declined has nothing to collect, so the truck can leave.
+ */
+export function stopCollection(consignments: Consignment[]) {
+  const live = consignments.filter((c) => c.status !== 'declined' && c.status !== 'cancelled');
+  return {
+    ready: live.length > 0 && live.every((c) => IN_COLD_BOX.has(c.status)),
+    nothingToCollect: consignments.length > 0 && live.length === 0,
+  };
+}
+
 /**
  * Dual-control rule: Payout runs exceeding the threshold OR containing manual corrections require two sign-offs.
  * At or under the threshold, the person who creates the run is the only approver required.

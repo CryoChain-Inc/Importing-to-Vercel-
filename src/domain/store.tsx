@@ -35,8 +35,10 @@ import {
   ghs,
   isIsoDay,
   isoDay,
+  allocationClosed,
   isShort,
   maskMomo,
+  stopCollection,
   payoutReady,
   payoutRequiresTwo,
   round2,
@@ -846,6 +848,8 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
     ) {
       mutate((s) => {
         const o = order(s, orderId)!;
+        const run = o.runId ? s.runs.find((r) => r.id === o.runId) : undefined;
+        if (allocationClosed(o.status, run?.status)) return;
         const line = o.lines.find((l) => l.id === lineId)!;
         o.allocationVersion += 1;
         items
@@ -1454,8 +1458,20 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         const st = r.stops.find((x) => x.seq === seq)!;
         const now = Date.now();
         if (kind === 'arrived') st.arrivedAt = now;
-        if (kind === 'collected') st.collectedAt = now;
-        if (kind === 'departed') st.departedAt = now;
+        if (st.kind === 'farm' && (kind === 'collected' || kind === 'departed')) {
+          const gate = stopCollection(
+            s.consignments.filter((c) => c.runId === runId && c.stopSeq === seq),
+          );
+          if (kind === 'collected') {
+            if (!st.arrivedAt || !gate.ready) return;
+            st.collectedAt = now;
+          } else {
+            if (!st.arrivedAt) return;
+            if (!st.collectedAt && !gate.nothingToCollect) return;
+            if (!gate.ready && !gate.nothingToCollect) return;
+            st.departedAt = now;
+          }
+        } else if (kind === 'departed') st.departedAt = now;
         if (d.online && r.status === 'planned') r.status = 'in_progress';
         deviceEvent(s, d.id, 'run.stamp', { runId, seq, kind }, 1);
       });

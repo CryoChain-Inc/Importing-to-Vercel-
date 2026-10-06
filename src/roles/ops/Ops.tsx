@@ -29,6 +29,7 @@ import {
   fmtDay,
   fmtStamp,
   ghs,
+  allocationClosed,
   lineCoverage,
   maskMomo,
   round2,
@@ -465,8 +466,11 @@ function Allocation() {
     >
   >({});
   if (!o) return <Navigate to="/ops" />;
-  const paid = ['paid', 'allocated', 'in_collection', 'delivered', 'closed'].includes(o.status);
   const run = state.runs.find((r) => r.id === o.runId);
+  const handedOver = allocationClosed(o.status, run?.status);
+  const paid =
+    ['paid', 'allocated', 'in_collection', 'delivered', 'closed'].includes(o.status) &&
+    !handedOver;
   return (
     <Shell
       title={`${o.id} · ${orgName(state, o.orgId)}`}
@@ -497,7 +501,7 @@ function Allocation() {
         </Host>
         <Money v={o.total} />
       </Host>
-      {!paid && (
+      {!paid && !handedOver && (
         <Host tag="div" className="tint-amber">
           Allocation only from paid orders. This one is {ORDER_LABEL[o.status].toLowerCase()}.
         </Host>
