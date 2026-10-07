@@ -239,6 +239,7 @@ export function Link({
 }) {
   const nav = useNavigate();
   const layout = /\b(item|tile|card|row|col|btn)\b/.test(className ?? '');
+  const card = /\b(item|tile)\b/.test(className ?? '');
   const s = linkStyles(className, style, !layout);
   return (
     <Pressable
@@ -246,7 +247,40 @@ export function Link({
         onClick?.();
         nav(to);
       }}
-      style={s.view}
+      android_ripple={card ? { color: 'rgba(31,120,180,.12)' } : undefined}
+      style={(state) => {
+        const { pressed } = state;
+        const hovered = Boolean((state as { hovered?: boolean }).hovered);
+        const lifted = hovered && !pressed;
+        return [
+          s.view,
+          Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null,
+          card
+            ? Platform.OS === 'web'
+              ? ({
+                  transitionProperty: 'transform, box-shadow, border-color',
+                  transitionDuration: '160ms',
+                  transitionTimingFunction: 'ease',
+                  transform: [{ scale: pressed ? 0.98 : lifted ? 1.02 : 1 }],
+                  boxShadow: pressed
+                    ? '0 1px 2px rgba(26,35,48,.08)'
+                    : lifted
+                      ? '0 10px 24px rgba(26,35,48,.16)'
+                      : '0 2px 8px rgba(26,35,48,.12)',
+                  borderColor: lifted || pressed ? '#1F78B4' : s.view.borderColor,
+                } as object)
+              : {
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                  shadowColor: '#1A2330',
+                  shadowOpacity: pressed ? 0.06 : 0.14,
+                  shadowRadius: pressed ? 2 : 8,
+                  shadowOffset: { width: 0, height: pressed ? 1 : 3 },
+                  elevation: pressed ? 1 : 3,
+                  borderColor: pressed ? '#1F78B4' : s.view.borderColor,
+                }
+            : null,
+        ];
+      }}
     >
       {layout ? children : <Text style={s.text}>{children}</Text>}
     </Pressable>

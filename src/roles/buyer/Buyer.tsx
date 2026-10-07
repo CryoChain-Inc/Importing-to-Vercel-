@@ -51,8 +51,8 @@ import {
 import { Desk, Phone } from '../../layouts/shells';
 const NAV = [
   {
-    to: '/buyer/home',
-    label: 'Home',
+    to: '/buyer/new-order',
+    label: 'New order',
   },
   {
     to: '/buyer/orders',
@@ -125,7 +125,7 @@ function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean })
             label: 'Users',
           },
           {
-            to: '/buyer/home',
+            to: '/buyer/new-order',
             label: 'New order',
           },
         ]}
@@ -346,7 +346,7 @@ function Code() {
             marginTop: 24,
           }}
         >
-          <Btn disabled={!full} onClick={() => nav('/buyer/home')}>
+          <Btn disabled={!full} onClick={() => nav('/buyer/new-order')}>
             Sign in
           </Btn>
         </Host>
@@ -585,23 +585,31 @@ function Pending() {
 function Home() {
   const { state, org, credit, orders, act } = useBuyer();
   const nav = useNavigate();
+  const desk = useMedia('(min-width: 1024px)');
   const last = orders.find((o) => o.status === 'closed');
   return (
     <Shell>
-      <Host
-        tag="div"
-        className="row"
-        style={{
-          padding: '14px 16px',
-          background: '#fff',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        <Logo h={22} />
-        <Host tag="span" className="cap">
-          {org.name}
+      {desk ? (
+        <Host
+          tag="div"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <Host tag="span" className="h20">
+            New order
+          </Host>
+          <Host tag="span" className="cap">
+            {org.name}
+          </Host>
         </Host>
-      </Host>
+      ) : (
+        <TopBar title="New order" />
+      )}
       <Host
         tag="div"
         className="body"
@@ -637,8 +645,41 @@ function Home() {
           }}
         >
           {state.categories.map((c, i) => (
-            <Link key={c.id} to={`/buyer/c/${c.id}`} className={`tile${i === 0 ? ' wide' : ''}`}>
-              {c.name}
+            <Link
+              key={c.id}
+              to={`/buyer/c/${c.id}`}
+              className={`tile${i === 0 ? ' wide' : ''}`}
+              style={{ backgroundColor: '#fff' }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: fontFamily('600'),
+                    fontSize: 16,
+                    color: colors.ink,
+                  }}
+                >
+                  {c.name}
+                </Text>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: colors.blue,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 18, lineHeight: 20 }}>›</Text>
+                </View>
+              </View>
             </Link>
           ))}
         </Host>
@@ -700,7 +741,7 @@ function Category() {
   return (
     <Shell>
       <TopBar
-        back="/buyer/home"
+        back="/buyer/new-order"
         title={cat.name}
         right={
           <Host tag="span" className="cap">
@@ -756,6 +797,19 @@ function Category() {
                   </Host>
                 </Host>
               </Host>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: colors.mist,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                }}
+              >
+                <Text style={{ color: colors.blue, fontSize: 18, lineHeight: 20 }}>›</Text>
+              </View>
             </Link>
           ) : (
             <Host
@@ -1061,14 +1115,14 @@ function Summary() {
   if (!d.lines.length)
     return (
       <Shell>
-        <TopBar back="/buyer/home" title="Order summary" />
+        <TopBar back="/buyer/new-order" title="Order summary" />
         <Host tag="div" className="body">
           <Empty
             title="No lines yet."
             sub="Add produce from a category to start an order."
             action={
               <Btn
-                to="/buyer/home"
+                to="/buyer/new-order"
                 style={{
                   width: 'auto',
                   display: 'inline-flex',
@@ -1083,7 +1137,7 @@ function Summary() {
     );
   return (
     <Shell>
-      <TopBar back="/buyer/home" title="Order summary" />
+      <TopBar back="/buyer/new-order" title="Order summary" />
       <Host
         tag="div"
         className="body"
@@ -1183,7 +1237,7 @@ function Summary() {
         <KV k="Delivery" v={`${fmtDay(d.deliveryDate)} · ${d.address.split(',')[0]}`} />
         <KV k="Requester" v={user.name} />
         <Link
-          to="/buyer/home"
+          to="/buyer/new-order"
           style={{
             fontWeight: 600,
             textDecoration: 'none',
@@ -1597,7 +1651,7 @@ function Orders() {
             action={
               orders.length === 0 ? (
                 <Btn
-                  to="/buyer/home"
+                  to="/buyer/new-order"
                   style={{
                     width: 'auto',
                     display: 'inline-flex',
@@ -1685,7 +1739,7 @@ function OrdersDesk() {
               flexShrink: 0,
             }}
           >
-            <Btn to="/buyer/home" md style={{ flexShrink: 0 }}>
+            <Btn to="/buyer/new-order" md style={{ flexShrink: 0 }}>
               New order
             </Btn>
             <Host
@@ -3178,6 +3232,12 @@ function Deliveries() {
     <Shell>
       <TopBar title="Deliveries" />
       <Host tag="div" className="body">
+        {list.length === 0 ? (
+          <Empty
+            title="No deliveries yet."
+            sub="Orders show here once they have been delivered."
+          />
+        ) : null}
         {list.map((o) => (
           <Link key={o.id} to={`/buyer/o/${o.id}`} className="item">
             <Host tag="div" className="row">
@@ -3207,6 +3267,12 @@ function TempRecords() {
     <Shell>
       <TopBar title="Temperature records" />
       <Host tag="div" className="body">
+        {list.length === 0 ? (
+          <Empty
+            title="No temperature records yet."
+            sub="Readings show here once an order is on a truck."
+          />
+        ) : null}
         {list.map((o) => (
           <Link key={o.id} to={`/buyer/o/${o.id}/temperature`} className="item">
             <Host tag="div" className="row">
@@ -3232,7 +3298,7 @@ function BuyerEntry() {
   if (!user) return <Register />;
   const org = state.orgs.find((o) => o.id === user.orgId);
   if (!org || org.status === 'pending') return <Navigate to="/buyer/pending" />;
-  return <Navigate to="/buyer/home" />;
+  return <Navigate to="/buyer/new-order" />;
 }
 export function kgLabel(n: number) {
   return kg(n);
@@ -3244,7 +3310,8 @@ export default function BuyerApp() {
       <Route path="code" element={<Code />} />
       <Route path="register" element={<Register />} />
       <Route path="pending" element={<Pending />} />
-      <Route path="home" element={<Home />} />
+      <Route path="new-order" element={<Home />} />
+      <Route path="home" element={<Navigate to="/buyer/new-order" />} />
       <Route path="c/:id" element={<Category />} />
       <Route path="p/:id" element={<Product />} />
       <Route path="summary" element={<Summary />} />
