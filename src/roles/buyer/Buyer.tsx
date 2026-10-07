@@ -1,6 +1,6 @@
 import { Host } from '../../ui/host';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Share } from 'react-native';
+import { Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import {
   Link,
   Navigate,
@@ -28,7 +28,7 @@ import {
   orderStepIndex,
   round2,
 } from '../../domain/logic';
-import { colors } from '../../ui/theme';
+import { colors, fontFamily } from '../../ui/theme';
 import {
   Btn,
   BottomNav,
@@ -51,8 +51,8 @@ import {
 import { Desk, Phone } from '../../layouts/shells';
 const NAV = [
   {
-    to: '/buyer/home',
-    label: 'Home',
+    to: '/buyer/new-order',
+    label: 'New order',
   },
   {
     to: '/buyer/orders',
@@ -71,8 +71,14 @@ function useBuyer() {
   const { state, act, now } = useStore();
   const user = state.buyerUsers.find((u) => u.id === state.session.buyerUserId)!;
   const org = state.orgs.find((o) => o.id === user.orgId)!;
+  const seen = new Set<string>();
   const orders = state.orders
     .filter((o) => o.orgId === org.id)
+    .filter((o) => {
+      if (seen.has(o.id)) return false;
+      seen.add(o.id);
+      return true;
+    })
     .sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
   return {
     state,
@@ -92,10 +98,11 @@ function useBuyer() {
 }
 function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean }) {
   const desk = useMedia('(min-width: 1024px)');
-  const { org, user, credit } = useBuyer();
+  const { org, user } = useBuyer();
   if (desk && nav)
     return (
       <Desk
+        logoHeight={48}
         nav={[
           {
             to: '/buyer/orders',
@@ -118,7 +125,7 @@ function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean })
             label: 'Users',
           },
           {
-            to: '/buyer/home',
+            to: '/buyer/new-order',
             label: 'New order',
           },
         ]}
@@ -127,16 +134,6 @@ function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean })
             {org.name}
             <Host tag="br" />
             {user.name} · {user.roles.map((r) => r[0].toUpperCase() + r.slice(1)).join(', ')}
-            <Host tag="br" />
-            Credit{' '}
-            <Host
-              tag="strong"
-              style={{
-                color: 'var(--green)',
-              }}
-            >
-              {ghs(credit)}
-            </Host>
           </>
         }
       >
@@ -339,7 +336,7 @@ function Code() {
             marginTop: 24,
           }}
         >
-          <Btn disabled={!full} onClick={() => nav('/buyer/home')}>
+          <Btn disabled={!full} onClick={() => nav('/buyer/new-order')}>
             Sign in
           </Btn>
         </Host>
@@ -395,8 +392,8 @@ function Register() {
         }}
       >
         <Host tag="div" className="cap">
-          Signed in. Submit this form to open your organisation. Operations approves it before you
-          can order.
+          Signed in. Submit this form to open your organisation. The node manager approves it before
+          you can order.
         </Host>
         <Host
           tag="div"
@@ -568,7 +565,7 @@ function Pending() {
           }}
         >
           <Btn kind="secondary" to="/ops/buyers">
-            Open ops approval queue (demo)
+            Open node manager approval queue
           </Btn>
         </Host>
       </Host>
@@ -578,23 +575,31 @@ function Pending() {
 function Home() {
   const { state, org, credit, orders, act } = useBuyer();
   const nav = useNavigate();
+  const desk = useMedia('(min-width: 1024px)');
   const last = orders.find((o) => o.status === 'closed');
   return (
     <Shell>
-      <Host
-        tag="div"
-        className="row"
-        style={{
-          padding: '14px 16px',
-          background: '#fff',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        <Logo h={22} />
-        <Host tag="span" className="cap">
-          {org.name}
+      {desk ? (
+        <Host
+          tag="div"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <Host tag="span" className="h20">
+            New order
+          </Host>
+          <Host tag="span" className="cap">
+            {org.name}
+          </Host>
         </Host>
-      </Host>
+      ) : (
+        <TopBar title="New order" />
+      )}
       <Host
         tag="div"
         className="body"
@@ -630,8 +635,41 @@ function Home() {
           }}
         >
           {state.categories.map((c, i) => (
-            <Link key={c.id} to={`/buyer/c/${c.id}`} className={`tile${i === 0 ? ' wide' : ''}`}>
-              {c.name}
+            <Link
+              key={c.id}
+              to={`/buyer/c/${c.id}`}
+              className={`tile${i === 0 ? ' wide' : ''}`}
+              style={{ backgroundColor: '#fff' }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: fontFamily('600'),
+                    fontSize: 16,
+                    color: colors.ink,
+                  }}
+                >
+                  {c.name}
+                </Text>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: colors.blue,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 18, lineHeight: 20 }}>›</Text>
+                </View>
+              </View>
             </Link>
           ))}
         </Host>
@@ -693,7 +731,7 @@ function Category() {
   return (
     <Shell>
       <TopBar
-        back="/buyer/home"
+        back="/buyer/new-order"
         title={cat.name}
         right={
           <Host tag="span" className="cap">
@@ -749,6 +787,19 @@ function Category() {
                   </Host>
                 </Host>
               </Host>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: colors.mist,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                }}
+              >
+                <Text style={{ color: colors.blue, fontSize: 18, lineHeight: 20 }}>›</Text>
+              </View>
             </Link>
           ) : (
             <Host
@@ -815,6 +866,136 @@ function Category() {
     </Shell>
   );
 }
+function OrderDatePicker({
+  value,
+  min,
+  onChange,
+}: {
+  value: string;
+  min: string;
+  onChange: (iso: string) => void;
+}) {
+  const selected = value ? new Date(`${value}T12:00:00`) : new Date(`${min}T12:00:00`);
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState({ y: selected.getFullYear(), m: selected.getMonth() });
+  const first = new Date(cursor.y, cursor.m, 1);
+  const lead = (first.getDay() + 6) % 7;
+  const count = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: count }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7) cells.push(null);
+  return (
+    <View style={{ position: 'relative', zIndex: open ? 20 : 1 }}>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={{
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: colors.steel,
+          borderRadius: 6,
+          backgroundColor: '#fff',
+          paddingHorizontal: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text style={{ fontSize: 16, color: colors.ink }}>{fmtDay(value)}</Text>
+        <Text style={{ color: colors.steelInk, fontSize: 12 }}>{open ? '▴' : '▾'}</Text>
+      </Pressable>
+      {open ? (
+        <View
+          style={{
+            marginTop: 8,
+            padding: 12,
+            backgroundColor: '#fff',
+            borderWidth: 1,
+            borderColor: colors.line,
+            borderRadius: 8,
+            gap: 8,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>‹</Text>
+            </Pressable>
+            <Text style={{ fontFamily: fontFamily('600'), fontSize: 14, color: colors.ink }}>
+              {MONTH_NAMES[cursor.m]} {cursor.y}
+            </Text>
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>›</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
+              <Text
+                key={day}
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  fontSize: 11,
+                  color: colors.steelInk,
+                  fontFamily: fontFamily('600'),
+                }}
+              >
+                {day}
+              </Text>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {cells.map((day, i) => {
+              if (!day) return <View key={`e-${i}`} style={{ width: '14.28%', height: 36 }} />;
+              const iso = isoDay(new Date(cursor.y, cursor.m, day, 12).getTime());
+              const blocked = iso < min;
+              const on = iso === value;
+              return (
+                <Pressable
+                  key={iso}
+                  disabled={blocked}
+                  onPress={() => {
+                    onChange(iso);
+                    setOpen(false);
+                  }}
+                  style={{
+                    width: '14.28%',
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 18,
+                    backgroundColor: on ? colors.blue : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: blocked ? colors.steel : on ? '#fff' : colors.ink,
+                      fontFamily: fontFamily(on ? '600' : '400'),
+                    }}
+                  >
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function Product() {
   const { state, act, org } = useBuyer();
   const { id } = useParams();
@@ -822,10 +1003,18 @@ function Product() {
   const p = state.products.find((x) => x.id === id)!;
   const [grade, setGrade] = useState(p.grades[0].grade);
   const [q, setQ] = useState(Math.max(p.minKg, 300));
+  const [addingAddress, setAddingAddress] = useState(false);
+  const [addressDraft, setAddressDraft] = useState('');
   const draft = state.session.draft;
-  const earliest = addDays(isoDay(Date.now()), state.config.leadDays);
+  const today = isoDay(Date.now());
+  const earliest = addDays(today, state.config.leadDays);
+  const savedAddress = org.address.trim();
   useEffect(() => {
-    if (draft.deliveryDate) return;
+    if (!savedAddress || draft.address === savedAddress) return;
+    act.draftSet({ address: savedAddress });
+  }, [act, draft.address, savedAddress]);
+  useEffect(() => {
+    if (draft.deliveryDate && draft.deliveryDate >= earliest) return;
     act.draftSet({ deliveryDate: earliest });
   }, [act, draft.deliveryDate, earliest]);
   const price = p.grades.find((g) => g.grade === grade)!.pricePerKg;
@@ -979,37 +1168,45 @@ function Product() {
           </Host>
         </Host>
         <Field label="Delivery date">
-          <Host
-            tag="input"
-            type="date"
-            className="input"
-            min={earliest}
+          <OrderDatePicker
             value={draft.deliveryDate < earliest ? earliest : draft.deliveryDate}
-            onChange={(e) =>
-              act.draftSet({
-                deliveryDate: e.target.value,
-              })
-            }
+            min={earliest}
+            onChange={(deliveryDate) => act.draftSet({ deliveryDate })}
           />
           <Host tag="span" className="cap">
-            Earliest {fmtDay(earliest)}
+            Earliest {fmtDay(earliest)}. Days before that stay closed.
           </Host>
         </Field>
         <Field label="Deliver to">
-          <Host
-            tag="select"
-            className="input"
-            value={draft.address}
-            onChange={(e) =>
-              act.draftSet({
-                address: e.target.value,
-              })
-            }
-          >
-            <Host tag="option">Main kitchen, Gamel Abdul Nasser Ave</Host>
-            <Host tag="option">{org.address}</Host>
-            <Host tag="option">Staff canteen, service entrance</Host>
-          </Host>
+          {savedAddress ? (
+            <Host tag="div" className="input">
+              {savedAddress}
+            </Host>
+          ) : addingAddress ? (
+            <Host tag="div" className="col" style={{ gap: 8 }}>
+              <Host
+                tag="input"
+                className="input"
+                placeholder="Delivery address"
+                value={addressDraft}
+                onChange={(e) => setAddressDraft(e.target.value)}
+              />
+              <Btn
+                disabled={addressDraft.trim().length < 4}
+                onClick={() => {
+                  act.setOrgAddress(org.id, addressDraft);
+                  setAddingAddress(false);
+                  setAddressDraft('');
+                }}
+              >
+                Save address
+              </Btn>
+            </Host>
+          ) : (
+            <Btn kind="secondary" onClick={() => setAddingAddress(true)}>
+              Add address
+            </Btn>
+          )}
         </Field>
       </Host>
       <Host tag="div" className="footer">
@@ -1026,7 +1223,7 @@ function Product() {
           <Money v={round2(q * price)} />
         </Host>
         <Btn
-          disabled={q < p.minKg || org.status !== 'approved'}
+          disabled={q < p.minKg || org.status !== 'approved' || !draft.address.trim()}
           onClick={() => {
             act.draftAdd(p.id, grade, q);
             nav('/buyer/summary');
@@ -1054,14 +1251,14 @@ function Summary() {
   if (!d.lines.length)
     return (
       <Shell>
-        <TopBar back="/buyer/home" title="Order summary" />
+        <TopBar back="/buyer/new-order" title="Order summary" />
         <Host tag="div" className="body">
           <Empty
             title="No lines yet."
             sub="Add produce from a category to start an order."
             action={
               <Btn
-                to="/buyer/home"
+                to="/buyer/new-order"
                 style={{
                   width: 'auto',
                   display: 'inline-flex',
@@ -1076,7 +1273,7 @@ function Summary() {
     );
   return (
     <Shell>
-      <TopBar back="/buyer/home" title="Order summary" />
+      <TopBar back="/buyer/new-order" title="Order summary" />
       <Host
         tag="div"
         className="body"
@@ -1089,41 +1286,52 @@ function Summary() {
             <Host
               tag="div"
               key={l.id}
-              className="row"
               style={{
-                padding: '12px 14px',
-                borderBottom: i < d.lines.length - 1 ? '1px solid var(--line-soft)' : undefined,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: 14,
+                borderBottomWidth: i < d.lines.length - 1 ? 1 : 0,
+                borderBottomColor: colors.lineSoft,
               }}
             >
-              <Host tag="div">
-                <Host tag="div" className="h16">
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text
+                  style={{
+                    fontFamily: fontFamily('600'),
+                    fontSize: 16,
+                    lineHeight: 22,
+                    color: colors.ink,
+                  }}
+                >
                   {l.name}, {l.grade}
-                </Host>
-                <Host tag="div" className="cap">
-                  {l.qtyKg} kg × {l.unitPrice.toFixed(2)} ·{' '}
-                  <Host
-                    tag="button"
-                    onClick={() => act.draftRemove(l.id)}
-                    style={{
-                      color: 'var(--red)',
-                      fontWeight: 600,
-                    }}
-                  >
+                </Text>
+                <Text style={{ fontSize: 13, lineHeight: 18, color: colors.steelInk }}>
+                  {l.qtyKg} kg × {l.unitPrice.toFixed(2)}
+                </Text>
+                <Pressable
+                  onPress={() => act.draftRemove(l.id, i)}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ color: colors.red, fontFamily: fontFamily('600'), fontSize: 14 }}>
                     remove
-                  </Host>
-                </Host>
-              </Host>
-              <Host
-                tag="span"
-                className="tabular"
+                  </Text>
+                </Pressable>
+              </View>
+              <Text
                 style={{
-                  fontWeight: 600,
+                  fontFamily: fontFamily('600'),
+                  fontSize: 14,
+                  color: colors.ink,
+                  flexShrink: 0,
                 }}
               >
                 {l.total.toLocaleString('en-GH', {
                   minimumFractionDigits: 2,
                 })}
-              </Host>
+              </Text>
             </Host>
           ))}
         </Host>
@@ -1173,10 +1381,17 @@ function Summary() {
             <Money v={round2(linesTotal - cr)} />
           </Host>
         </Host>
-        <KV k="Delivery" v={`${fmtDay(d.deliveryDate)} · ${d.address.split(',')[0]}`} />
+        <KV
+          k="Delivery"
+          v={
+            d.address
+              ? `${fmtDay(d.deliveryDate)} · ${d.address.split(',')[0]}`
+              : fmtDay(d.deliveryDate)
+          }
+        />
         <KV k="Requester" v={user.name} />
         <Link
-          to="/buyer/home"
+          to="/buyer/new-order"
           style={{
             fontWeight: 600,
             textDecoration: 'none',
@@ -1212,14 +1427,302 @@ const ORDER_TRACK = [
   { label: 'Submitted', now: 'Waiting for an approver.' },
   { label: 'Approved', now: 'Approved. Payment is the next step.' },
   { label: 'Paid', now: 'Payment confirmed. CryoChain is allocating this order across farmers.' },
-  { label: 'Allocated', now: 'Allocated across farmers. Collection is scheduled for the delivery date.' },
+  {
+    label: 'Allocated',
+    now: 'Allocated across farmers. Collection is scheduled for the delivery date.',
+  },
   { label: 'In collection', now: 'The truck is collecting from the farms now.' },
-  { label: 'Delivered', now: 'At the door. Accept the delivery, or reject a line before the window closes.' },
+  {
+    label: 'Delivered',
+    now: 'At the door. Accept the delivery, or reject a line before the window closes.',
+  },
   { label: 'Closed', now: 'You accepted this delivery.' },
 ];
 
 function shownStatus(o: Order) {
   return o.acceptedAt && o.status === 'delivered' ? 'closed' : o.status;
+}
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'open', label: 'Open' },
+  ...(
+    [
+      'submitted',
+      'approved',
+      'awaiting_payment',
+      'paid',
+      'allocated',
+      'in_collection',
+      'delivered',
+      'closed',
+      'held',
+      'expired',
+      'cancelled',
+    ] as const
+  ).map((status) => ({ value: status, label: ORDER_LABEL[status] })),
+];
+
+function isOpenOrder(o: Order) {
+  return !['closed', 'cancelled', 'expired'].includes(shownStatus(o));
+}
+
+function matchesStatus(o: Order, status: string) {
+  if (status === 'all') return true;
+  if (status === 'open') return isOpenOrder(o);
+  return shownStatus(o) === status;
+}
+
+function matchesWhen(o: Order, when: string) {
+  if (!when) return true;
+  return o.deliveryDate.slice(0, 10) === when;
+}
+
+function matchesQuery(o: Order, q: string) {
+  if (!q) return true;
+  const lines = o.lines.map((l) => `${l.name} ${l.grade}`).join(' ');
+  return `${o.id} ${lines}`.toLowerCase().includes(q);
+}
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const chipStyle = {
+  height: 36,
+  paddingHorizontal: 12,
+  borderWidth: 1,
+  borderColor: colors.steel,
+  borderRadius: 6,
+  backgroundColor: '#fff',
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 8,
+};
+
+const popShadow =
+  Platform.OS === 'web'
+    ? ({ boxShadow: '0 8px 24px rgba(26,35,48,.16)' } as object)
+    : { elevation: 8 };
+
+function Anchored({
+  label,
+  panelWidth = 220,
+  children,
+}: {
+  label: string;
+  panelWidth?: number;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return (
+    <View style={{ position: 'relative', zIndex: open ? 30 : 1 }}>
+      <Pressable onPress={() => setOpen((v) => !v)} style={chipStyle}>
+        <Text
+          numberOfLines={1}
+          style={{ color: colors.ink, fontSize: 13, fontFamily: fontFamily('500') }}
+        >
+          {label}
+        </Text>
+        <Text style={{ color: colors.steelInk, fontSize: 12 }}>{open ? '▴' : '▾'}</Text>
+      </Pressable>
+      {open ? (
+        <View
+          style={[
+            {
+              position: 'absolute',
+              top: 40,
+              left: 0,
+              width: panelWidth,
+              zIndex: 2,
+              backgroundColor: '#fff',
+              borderWidth: 1,
+              borderColor: colors.line,
+              borderRadius: 8,
+              overflow: 'hidden',
+            },
+            popShadow,
+          ]}
+        >
+          {children(close)}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function StatusMenu({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const current = STATUS_OPTIONS.find((option) => option.value === value) ?? STATUS_OPTIONS[0];
+  return (
+    <Anchored label={`Status: ${current.label}`} panelWidth={220}>
+      {(close) => (
+        <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
+          {STATUS_OPTIONS.map((option) => {
+            const on = option.value === value;
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  onChange(option.value);
+                  close();
+                }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  backgroundColor: on ? colors.mist : '#fff',
+                }}
+              >
+                <Text
+                  style={{
+                    color: on ? colors.blueInk : colors.ink,
+                    fontSize: 14,
+                    fontFamily: fontFamily(on ? '600' : '400'),
+                  }}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+    </Anchored>
+  );
+}
+
+function DeliveryCalendar({
+  value,
+  onChange,
+  marked,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  marked: Set<string>;
+}) {
+  const selected = value ? new Date(`${value}T12:00:00`) : new Date();
+  const [cursor, setCursor] = useState({
+    y: selected.getFullYear(),
+    m: selected.getMonth(),
+  });
+  const first = new Date(cursor.y, cursor.m, 1);
+  const lead = (first.getDay() + 6) % 7;
+  const count = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: count }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7) cells.push(null);
+  const today = isoDay(Date.now());
+  return (
+    <Anchored label={value ? `Delivery: ${fmtDay(value)}` : 'Delivery date'} panelWidth={292}>
+      {(close) => (
+        <View style={{ padding: 12, gap: 8 }}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>‹</Text>
+            </Pressable>
+            <Text style={{ fontFamily: fontFamily('600'), fontSize: 14, color: colors.ink }}>
+              {MONTH_NAMES[cursor.m]} {cursor.y}
+            </Text>
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>›</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
+              <Text
+                key={day}
+                style={{
+                  width: 36,
+                  textAlign: 'center',
+                  fontSize: 11,
+                  color: colors.steelInk,
+                  fontFamily: fontFamily('600'),
+                }}
+              >
+                {day}
+              </Text>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: 252 }}>
+            {cells.map((day, i) => {
+              if (!day) return <View key={`e-${i}`} style={{ width: 36, height: 36 }} />;
+              const iso = isoDay(new Date(cursor.y, cursor.m, day, 12).getTime());
+              const has = marked.has(iso);
+              const on = iso === value;
+              return (
+                <Pressable
+                  key={iso}
+                  onPress={() => {
+                    onChange(iso);
+                    close();
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 18,
+                    backgroundColor: on ? colors.blue : has ? colors.greenTint : 'transparent',
+                    borderWidth: !on && iso === today ? 1 : 0,
+                    borderColor: colors.steel,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: on ? '#fff' : has ? colors.green : colors.ink,
+                      fontFamily: fontFamily(has || on ? '600' : '400'),
+                    }}
+                  >
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontSize: 12, color: colors.steelInk }}>
+            Green marks a day that already has a delivery.
+          </Text>
+          <Pressable
+            onPress={() => {
+              onChange('');
+              close();
+            }}
+            style={{ paddingVertical: 6 }}
+          >
+            <Text style={{ color: colors.blueInk, fontFamily: fontFamily('600'), fontSize: 13 }}>
+              All dates
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </Anchored>
+  );
 }
 
 function OrderTrack({ step }: { step: number }) {
@@ -1272,7 +1775,11 @@ function OrderTrack({ step }: { step: number }) {
               >
                 {stage.label}
               </Host>
-              {current ? <Host tag="div" className="cap">{stage.now}</Host> : null}
+              {current ? (
+                <Host tag="div" className="cap">
+                  {stage.now}
+                </Host>
+              ) : null}
             </Host>
           </Host>
         );
@@ -1283,46 +1790,30 @@ function OrderTrack({ step }: { step: number }) {
 
 function Orders() {
   const { orders, now } = useBuyer();
-  const [filter, setFilter] = useState<'Open' | 'All'>('Open');
-  const list =
-    filter === 'Open'
-      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(shownStatus(o)))
-      : orders;
+  const [status, setStatus] = useState('all');
+  const list = orders.filter((o) => matchesStatus(o, status));
   const desk = useMedia('(min-width: 1024px)');
   if (desk) return <OrdersDesk />;
   return (
     <Shell>
-      <TopBar
-        title="Orders"
-        right={
-          <Host
-            tag="button"
-            className="btn btn-secondary btn-sm"
-            style={{
-              height: 32,
-              fontSize: 12,
-            }}
-            onClick={() => setFilter((f) => (f === 'Open' ? 'All' : 'Open'))}
-          >
-            {filter} ▾
-          </Host>
-        }
-      />
+      <TopBar title="Orders" right={<StatusMenu value={status} onChange={setStatus} />} />
       <Host tag="div" className="body">
         {list.length === 0 && (
           <Empty
-            title="No orders yet."
-            sub="Your first order will appear here."
+            title={orders.length === 0 ? 'No orders yet.' : 'No orders match.'}
+            sub={orders.length === 0 ? 'Your first order will appear here.' : 'Try another status.'}
             action={
-              <Btn
-                to="/buyer/home"
-                style={{
-                  width: 'auto',
-                  display: 'inline-flex',
-                }}
-              >
-                Browse produce
-              </Btn>
+              orders.length === 0 ? (
+                <Btn
+                  to="/buyer/new-order"
+                  style={{
+                    width: 'auto',
+                    display: 'inline-flex',
+                  }}
+                >
+                  Browse produce
+                </Btn>
+              ) : undefined
             }
           />
         )}
@@ -1356,124 +1847,172 @@ function Orders() {
 function OrdersDesk() {
   const { orders } = useBuyer();
   const [sp, setSp] = useSearchParams();
-  const [filter, setFilter] = useState<'Open' | 'All'>('Open');
-  const list =
-    filter === 'Open'
-      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(shownStatus(o)))
-      : orders;
-  const sel = sp.get('sel') ?? list[0]?.id;
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('all');
+  const [when, setWhen] = useState('');
+  const q = query.trim().toLowerCase();
+  const list = orders.filter(
+    (o) => matchesStatus(o, status) && matchesWhen(o, when) && matchesQuery(o, q),
+  );
+  const requested = sp.get('sel');
+  const sel = list.some((o) => o.id === requested) ? requested : list[0]?.id;
+  const marked = new Set(orders.map((o) => o.deliveryDate.slice(0, 10)).filter(Boolean));
+  const exportRows = () =>
+    downloadCsv(
+      'orders.csv',
+      list.map((o) => ({
+        order: o.id,
+        lines: o.lines.map((l) => l.name).join('; '),
+        delivery: o.deliveryDate,
+        total: o.total,
+        status: ORDER_LABEL[shownStatus(o)],
+      })),
+    );
   return (
     <Shell>
-      <Host tag="div" className="row">
-        <Host tag="span" className="h20">
-          Orders
-        </Host>
-        <Btn to="/buyer/home" md>
-          New order
-        </Btn>
-      </Host>
-      <Host tag="div" className="toolbar">
-        <Host tag="div" className="f">
-          <Host tag="input" placeholder="Search order number" />
-        </Host>
-        <Host
-          tag="button"
-          className={`f${filter === 'Open' ? ' on' : ''}`}
-          onClick={() => setFilter((f) => (f === 'Open' ? 'All' : 'Open'))}
-        >
-          Status: {filter} {filter === 'Open' ? '×' : '▾'}
-        </Host>
-        <Host tag="div" className="f">
-          Delivery date ▾
-        </Host>
-        <Host
-          tag="button"
-          className="f"
-          style={{
-            marginLeft: 'auto',
-            fontWeight: 600,
-          }}
-          onClick={() =>
-            downloadCsv(
-              'orders.csv',
-              list.map((o) => ({
-                order: o.id,
-                lines: o.lines.map((l) => l.name).join('; '),
-                delivery: o.deliveryDate,
-                total: o.total,
-                status: ORDER_LABEL[shownStatus(o)],
-              })),
-            )
-          }
-        >
-          Export CSV
-        </Host>
-      </Host>
-      <Host tag="div" className="two">
+      <Host tag="div" style={{ gap: 16, width: '100%' }}>
         <Host
           tag="div"
-          className="tbl"
           style={{
-            border: 0,
-            borderRadius: 0,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
           }}
         >
-          <Host tag="table">
-            <Host tag="thead">
-              <Host tag="tr">
-                <Host tag="th">Order</Host>
-                <Host tag="th">Lines</Host>
-                <Host tag="th">Delivery ↓</Host>
-                <Host tag="th" className="num">
-                  Total GHS
-                </Host>
-                <Host tag="th">Status</Host>
-              </Host>
-            </Host>
-            <Host tag="tbody">
-              {list.map((o) => (
-                <Host
-                  tag="tr"
-                  key={o.id}
-                  className={o.id === sel ? 'sel' : ''}
-                  onClick={() =>
-                    setSp({
-                      sel: o.id,
-                    })
-                  }
-                  style={{
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Host tag="td">
-                    <Host tag="a">{o.id}</Host>
-                  </Host>
-                  <Host tag="td">{o.lines.map((l) => l.name.split(',')[0]).join(', ')}</Host>
-                  <Host tag="td">{fmtDay(o.deliveryDate)}</Host>
-                  <Host tag="td" className="num">
-                    {o.total.toLocaleString('en-GH', {
-                      minimumFractionDigits: 2,
-                    })}
-                  </Host>
-                  <Host tag="td">
-                    <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
-                  </Host>
-                </Host>
-              ))}
-            </Host>
+          <Host tag="span" className="h20">
+            Orders
           </Host>
           <Host
             tag="div"
-            className="cap"
             style={{
-              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              flexShrink: 0,
             }}
           >
-            {list.length} {filter === 'Open' ? 'open ' : ''}orders
+            <Btn to="/buyer/new-order" md style={{ flexShrink: 0 }}>
+              New order
+            </Btn>
+            <Host
+              tag="button"
+              className="btn btn-secondary btn-md"
+              style={{ flexShrink: 0 }}
+              onClick={exportRows}
+            >
+              Export CSV
+            </Host>
           </Host>
         </Host>
-        <Host tag="div" className="side">
-          {sel ? <OrderDetailBody id={sel} compact /> : <Empty title="Select an order." sub="" />}
+        <Host
+          tag="div"
+          className="toolbar"
+          style={{ zIndex: 20, position: 'relative', overflow: 'visible' }}
+        >
+          <Host
+            tag="div"
+            className="f"
+            style={{ flexGrow: 1, flexBasis: 220, maxWidth: 320, minWidth: 180 }}
+          >
+            <Host
+              tag="input"
+              value={query}
+              placeholder="Search order or line"
+              onChange={(e) => setQuery(String(e.target.value))}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: 34,
+                borderWidth: 0,
+                paddingHorizontal: 0,
+                backgroundColor: 'transparent',
+              }}
+            />
+          </Host>
+          <StatusMenu value={status} onChange={setStatus} />
+          <DeliveryCalendar value={when} onChange={setWhen} marked={marked} />
+        </Host>
+        <Host tag="div" className="two">
+          <Host
+            tag="div"
+            className="tbl"
+            style={{
+              border: 0,
+              borderRadius: 0,
+            }}
+          >
+            <Host tag="table">
+              <Host tag="thead">
+                <Host tag="tr">
+                  <Host tag="th">Order</Host>
+                  <Host tag="th">Lines</Host>
+                  <Host tag="th">Delivery ↓</Host>
+                  <Host tag="th" className="num">
+                    Total GHS
+                  </Host>
+                  <Host tag="th">Status</Host>
+                </Host>
+              </Host>
+              <Host tag="tbody">
+                {list.map((o) => (
+                  <Host
+                    tag="tr"
+                    key={o.id}
+                    className={o.id === sel ? 'sel' : ''}
+                    onClick={() =>
+                      setSp({
+                        sel: o.id,
+                      })
+                    }
+                    style={{
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Host tag="td">
+                      <Host tag="a">{o.id}</Host>
+                    </Host>
+                    <Host tag="td">{o.lines.map((l) => l.name.split(',')[0]).join(', ')}</Host>
+                    <Host tag="td">{fmtDay(o.deliveryDate)}</Host>
+                    <Host tag="td" className="num">
+                      {o.total.toLocaleString('en-GH', {
+                        minimumFractionDigits: 2,
+                      })}
+                    </Host>
+                    <Host tag="td">
+                      <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
+                    </Host>
+                  </Host>
+                ))}
+              </Host>
+            </Host>
+            {list.length === 0 ? (
+              <Empty
+                title={orders.length === 0 ? 'No orders yet.' : 'No orders'}
+                sub={
+                  orders.length === 0
+                    ? 'Your first order will appear here.'
+                    : when
+                      ? `No orders are booked for ${fmtDayLong(when)}.`
+                      : 'Nothing matches this search or status.'
+                }
+              />
+            ) : null}
+            <Host
+              tag="div"
+              className="cap"
+              style={{
+                padding: 12,
+              }}
+            >
+              {list.length} {status === 'open' ? 'open ' : ''}
+              {list.length === 1 ? 'order' : 'orders'}
+            </Host>
+          </Host>
+          <Host tag="div" className="side">
+            {sel ? <OrderDetailBody id={sel} compact /> : <Empty title="Select an order." sub="" />}
+          </Host>
         </Host>
       </Host>
     </Shell>
@@ -1662,9 +2201,19 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
     return wrap(
       <>
         {track}
-        <KV k="Requested by" v={`${req?.name} · ${o.submittedAt ? fmtStamp(o.submittedAt) : ''}`} />
+        <KV
+          k="Requested by"
+          v={[req?.name, o.submittedAt ? fmtStamp(o.submittedAt) : '']
+            .filter(Boolean)
+            .join(' · ')}
+        />
         {totals}
-        <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(',')[0]}`} />
+        <KV
+          k="Delivery"
+          v={[fmtDay(o.deliveryDate), o.address.split(',')[0]?.trim()]
+            .filter((part) => part && part !== '—')
+            .join(' · ')}
+        />
         <Lines o={o} />
         {isApprover &&
           (over ? (
@@ -1687,19 +2236,19 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
                     {(other.limit ?? 0).toLocaleString('en-GH', {
                       minimumFractionDigits: 2,
                     })}
-                    ) to approve, or send it back to reduce lines.
+                    ) to approve, or cancel it and reduce the lines.
                   </>
                 ) : (
-                  'Send it back to reduce lines.'
+                  'Cancel it and reduce the lines.'
                 )}
               </Host>
             </>
-          ) : (
+          ) : user.limit !== undefined ? (
             <Host tag="div" className="tint-blue row">
               <Host tag="span">Your approval limit</Host>
-              <Money v={user.limit ?? 0} color="var(--blue-ink)" />
+              <Money v={user.limit} color="var(--blue-ink)" />
             </Host>
-          ))}
+          ) : null)}
         {!isApprover && (
           <Host tag="div" className="tint-amber">
             <Host tag="strong">Waiting for approval.</Host>{' '}
@@ -1745,7 +2294,7 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
               nav('/buyer/summary');
             }}
           >
-            Send back
+            Cancel
           </Btn>
         </>
       ) : undefined,
@@ -1987,6 +2536,7 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
   const { state, act, org, now } = useBuyer();
   const [momo, setMomo] = useState('024 555 0192');
   const overseas = org.country !== 'Ghana';
+  const approverName = state.buyerUsers.find((u) => u.id === o.approvedBy)?.name;
   const va = org.virtualAccount;
   const [demoAmt, setDemoAmt] = useState(String(o.total));
   if (o.status === 'held')
@@ -2013,7 +2563,7 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
           </Host>
           <Host tag="div" className="cap">
             {remoteEnabled
-              ? 'Operations confirms the balance when the bank reports it. The order stays on hold until the amounts match.'
+              ? 'The node manager confirms the balance when the bank reports it. The order stays on hold until the amounts match.'
               : 'Demo control for a second bank message.'}
           </Host>
           {remoteEnabled ? null : (
@@ -2189,8 +2739,8 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
   return (
     <>
       <Host tag="div" className="tint-blue">
-        Approved by {state.buyerUsers.find((u) => u.id === o.approvedBy)?.name}. Choose how to pay{' '}
-        {ghs(o.total)}. Collection is scheduled only after payment is confirmed.
+        {approverName ? `Approved by ${approverName}. ` : ''}
+        Choose how to pay {ghs(o.total)}. Collection is scheduled only after payment is confirmed.
       </Host>
       <Host
         tag="div"
@@ -2247,6 +2797,8 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
               style={{
                 display: 'flex',
                 gap: 8,
+                width: '100%',
+                alignItems: 'center',
               }}
             >
               <Host
@@ -2256,13 +2808,17 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
                 onChange={(e) => setMomo(e.target.value)}
                 style={{
                   flex: 1,
+                  minWidth: 0,
+                  width: 'auto',
                 }}
               />
               <Host
                 tag="select"
                 className="input"
                 style={{
-                  width: 110,
+                  width: 108,
+                  flexShrink: 0,
+                  minHeight: 48,
                 }}
               >
                 <Host tag="option">MTN</Host>
@@ -2578,6 +3134,9 @@ function Payments() {
     </Shell>
   );
 }
+const NAME_LIMIT = 40;
+const GHANA_DIGITS = 9;
+
 function Users() {
   const { state, act, org, user, isAdmin } = useBuyer();
   const [phone, setPhone] = useState('');
@@ -2623,7 +3182,10 @@ function Users() {
                 className="input"
                 placeholder="Name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                maxLength={40}
+                onChange={(e) =>
+                  setName(e.target.value.replace(/[^\p{L}\s'-]/gu, '').slice(0, NAME_LIMIT))
+                }
               />
               <Host
                 tag="div"
@@ -2633,15 +3195,58 @@ function Users() {
                 }}
               >
                 <Host
-                  tag="input"
-                  className="input"
-                  placeholder="+233"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  tag="div"
                   style={{
+                    display: 'flex',
                     flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    minWidth: 0,
+                    height: 48,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    borderRadius: 8,
+                    backgroundColor: '#fff',
+                    overflow: 'hidden',
                   }}
-                />
+                >
+                  <Text
+                    style={{
+                      paddingLeft: 12,
+                      fontFamily: fontFamily('600'),
+                      fontSize: 16,
+                      lineHeight: 22,
+                      color: colors.ink,
+                    }}
+                  >
+                    +233
+                  </Text>
+                  <Host
+                    tag="input"
+                    type="tel"
+                    placeholder="24 000 0000"
+                    inputMode="numeric"
+                    value={phone}
+                    maxLength={GHANA_DIGITS}
+                    onChange={(e) => {
+                      let digits = e.target.value.replace(/\D/g, '');
+                      if (digits.startsWith('0')) digits = digits.slice(1);
+                      setPhone(digits.slice(0, GHANA_DIGITS));
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      height: 48,
+                      borderWidth: 0,
+                      borderRadius: 0,
+                      backgroundColor: 'transparent',
+                      paddingHorizontal: 8,
+                      fontSize: 16,
+                      lineHeight: 48,
+                      textAlignVertical: 'center',
+                    }}
+                  />
+                </Host>
                 <Host
                   tag="select"
                   className="input"
@@ -2676,12 +3281,12 @@ function Users() {
                 </Field>
               )}
               <Btn
-                disabled={!phone}
+                disabled={name.trim().length < 2 || phone.length !== GHANA_DIGITS}
                 onClick={() => {
                   act.inviteUser(
                     org.id,
-                    name,
-                    phone,
+                    name.trim(),
+                    `+233${phone}`,
                     role,
                     role === 'approver' ? Number(limit) : undefined,
                   );
@@ -2700,16 +3305,26 @@ function Users() {
             key={u.id}
             className="item"
             style={{
+              display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: 12,
               color: u.status === 'deactivated' ? 'var(--steel-ink)' : undefined,
             }}
           >
-            <Host tag="div">
-              <Host tag="div" className="h16">
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{
+                  fontFamily: fontFamily('600'),
+                  fontSize: 16,
+                  lineHeight: 22,
+                  color: u.status === 'deactivated' ? colors.steelInk : colors.ink,
+                  ...(Platform.OS === 'web' ? ({ overflowWrap: 'anywhere' } as object) : {}),
+                }}
+              >
                 {u.name}
-              </Host>
+              </Text>
               <Host tag="div" className="cap">
                 {u.roles.map((r) => r[0].toUpperCase() + r.slice(1)).join(' · ')}
                 {u.limit !== undefined ? ` · limit ${ghs(u.limit)}` : ''}
@@ -2719,7 +3334,8 @@ function Users() {
                     ? ' · deactivated'
                     : ''}
               </Host>
-            </Host>
+            </View>
+            <View style={{ flexShrink: 0 }}>
             {u.id === user.id ? (
               <Host tag="span" className="cap">
                 You
@@ -2756,6 +3372,7 @@ function Users() {
                 Edit
               </Host>
             ) : null}
+            </View>
           </Host>
         ))}
         <Host tag="div" className="cap">
@@ -2830,6 +3447,12 @@ function Deliveries() {
     <Shell>
       <TopBar title="Deliveries" />
       <Host tag="div" className="body">
+        {list.length === 0 ? (
+          <Empty
+            title="No deliveries yet."
+            sub="Orders show here once they have been delivered."
+          />
+        ) : null}
         {list.map((o) => (
           <Link key={o.id} to={`/buyer/o/${o.id}`} className="item">
             <Host tag="div" className="row">
@@ -2859,6 +3482,12 @@ function TempRecords() {
     <Shell>
       <TopBar title="Temperature records" />
       <Host tag="div" className="body">
+        {list.length === 0 ? (
+          <Empty
+            title="No temperature records yet."
+            sub="Readings show here once an order is on a truck."
+          />
+        ) : null}
         {list.map((o) => (
           <Link key={o.id} to={`/buyer/o/${o.id}/temperature`} className="item">
             <Host tag="div" className="row">
@@ -2884,7 +3513,7 @@ function BuyerEntry() {
   if (!user) return <Register />;
   const org = state.orgs.find((o) => o.id === user.orgId);
   if (!org || org.status === 'pending') return <Navigate to="/buyer/pending" />;
-  return <Navigate to="/buyer/home" />;
+  return <Navigate to="/buyer/new-order" />;
 }
 export function kgLabel(n: number) {
   return kg(n);
@@ -2896,7 +3525,8 @@ export default function BuyerApp() {
       <Route path="code" element={<Code />} />
       <Route path="register" element={<Register />} />
       <Route path="pending" element={<Pending />} />
-      <Route path="home" element={<Home />} />
+      <Route path="new-order" element={<Home />} />
+      <Route path="home" element={<Navigate to="/buyer/new-order" />} />
       <Route path="c/:id" element={<Category />} />
       <Route path="p/:id" element={<Product />} />
       <Route path="summary" element={<Summary />} />

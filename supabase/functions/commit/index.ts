@@ -1,7 +1,9 @@
 import {
+  appOrigin,
   applySession,
   blankSession,
   filterFor,
+  findFarmerId,
   mergeBuyer,
   replaceOperational,
   type Profile,
@@ -37,25 +39,6 @@ function staff(role: string) {
 
 const FARMER_NOT_ON_REGISTER =
   'That farmer number is not on the register. The field agent registers the farmer first.';
-
-/**
- * Resolves a typed farmer number to the internal farmer id on the register.
- * Accepts the visible code (FM-0101) or the internal id (F1, F-1042), trimmed and case-insensitive.
- */
-function findFarmerId(state: Record<string, unknown>, typed: unknown): string {
-  const wanted = String(typed ?? '')
-    .trim()
-    .toLowerCase();
-  if (!wanted) return '';
-  const farmers = Array.isArray(state.farmers)
-    ? (state.farmers as { id?: unknown; code?: unknown }[])
-    : [];
-  const match = farmers.find(
-    (f) =>
-      String(f.code ?? '').toLowerCase() === wanted || String(f.id ?? '').toLowerCase() === wanted,
-  );
-  return match ? String(match.id ?? '') : '';
-}
 
 async function load(admin: ReturnType<typeof Object>, profile: Profile) {
   const row = await readWorkspace(admin as never);
@@ -186,7 +169,7 @@ async function save(
 async function become(admin: ReturnType<typeof Object>, profile: Profile, role: string) {
   if (role !== 'buyer') return json({ error: 'Choose a buyer organisation registration.' }, 400);
   if (profile.role !== 'pending' && profile.role !== 'buyer')
-    return json({ error: 'Operations assigns staff access.' }, 403);
+    return json({ error: 'The node manager assigns staff access.' }, 403);
   await (
     admin as {
       from: (t: string) => {
@@ -201,7 +184,7 @@ async function become(admin: ReturnType<typeof Object>, profile: Profile, role: 
 }
 
 async function roster(admin: ReturnType<typeof Object>, profile: Profile) {
-  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const { data, error } = await (
     admin as {
       from: (t: string) => {
@@ -236,7 +219,7 @@ async function invite(
   profile: Profile,
   body: Record<string, unknown>,
 ) {
-  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const email = String(body.email ?? '')
     .trim()
     .toLowerCase();
@@ -339,18 +322,6 @@ async function invite(
   return json({ ok: true, version: written.version });
 }
 
-function appOrigin(value: unknown) {
-  const raw = String(value ?? '').trim();
-  if (!raw) return '';
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
-    return url.origin;
-  } catch {
-    return '';
-  }
-}
-
 const FIELD_ROLES = ['farmer', 'agent', 'driver'];
 
 async function requestRole(admin: ReturnType<typeof Object>, profile: Profile, role: string) {
@@ -368,7 +339,7 @@ async function approve(
   profile: Profile,
   body: Record<string, unknown>,
 ) {
-  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const userId = String(body.userId ?? '');
   const role = String(body.role ?? '');
   if (!userId) return json({ error: 'Choose a pending person.' }, 400);

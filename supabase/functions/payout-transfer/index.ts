@@ -21,7 +21,7 @@ import {
 } from '../_shared/payouts.ts';
 
 /**
- * Farmer payouts through Paystack. Operations only.
+ * Farmer payouts through Paystack. Node managers only.
  *
  *   { id }                         send one queued or failed transfer (default op)
  *   { op: 'verify', id }           ask Paystack for the current status of a sent transfer
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   const who = await caller(req);
   if (who.error) return who.error;
   // Financial disbursement is strictly restricted to operations roles.
-  if (who.profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (who.profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const secret = Deno.env.get('PAYSTACK_SECRET_KEY');
   if (!secret)
     return json(
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const op = String(body.op ?? 'send');
   const admin = who.admin;
-  const actor = who.profile.display_name || who.user.email || 'Operations';
+  const actor = who.profile.display_name || who.user.email || 'Node manager';
 
   if (op === 'preflight') return preflight(admin, secret, String(body.runId ?? ''));
   if (op === 'resolve') return resolve(admin, secret, String(body.farmerId ?? ''), actor);

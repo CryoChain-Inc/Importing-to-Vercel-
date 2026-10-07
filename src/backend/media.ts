@@ -5,7 +5,7 @@ import { remoteEnabled } from './config';
 import { supabase } from './client';
 
 export async function capturePhoto(label: string): Promise<string | null> {
-  // Offline prototype fallback allows full UI testing without Supabase storage.
+  // Offline fallback allows full UI testing without Supabase storage.
   if (!remoteEnabled) return label;
   const camera = await ImagePicker.requestCameraPermissionsAsync();
   // Native requires base64 extraction to construct binary payloads; web can fetch asset.uri directly.

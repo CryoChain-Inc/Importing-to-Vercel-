@@ -1,5 +1,5 @@
 import { Children, useEffect, useState, type ReactNode } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import { Host } from '../ui/host';
 import { Btn, Chip, Field } from '../ui/kit';
 import { colors } from '../ui/theme';
@@ -13,7 +13,7 @@ const FIELD_ROLES = [
 ] as const;
 
 const ROLE_LABEL: Record<string, string> = {
-  ops: 'Operations',
+  ops: 'Node manager',
   buyer: 'Buyer',
   farmer: 'Farmer',
   agent: 'Field agent',
@@ -34,7 +34,7 @@ function roleTone(role: string): 'neutral' | 'info' | 'ok' | 'warn' {
 
 function linkedRecord(person: Profile) {
   const bits = [
-    person.ops_user_id ? `Ops user ${person.ops_user_id}` : '',
+    person.ops_user_id ? `Node manager ${person.ops_user_id}` : '',
     person.org_id ? `Organisation ${person.org_id}` : '',
     person.farmer_id ? `Farmer ${person.farmer_id}` : '',
     person.device_id ? `Handset ${person.device_id}` : '',
@@ -64,7 +64,10 @@ export function TeamFields() {
 
   const send = async () => {
     setNote('');
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : '';
+    const redirectTo =
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.location
+        ? window.location.origin
+        : '';
     const res = await commit({
       op: 'invite',
       email,
@@ -146,7 +149,7 @@ export function TeamFields() {
             onChange={(e) => setRole(e.target.value)}
           >
             <Host tag="option" value="ops">
-              Operations
+              Node manager
             </Host>
             <Host tag="option" value="buyer">
               Buyer

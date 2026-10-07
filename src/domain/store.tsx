@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { View, Text, Linking } from 'react-native';
+import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   BuyerRole,
@@ -35,8 +35,10 @@ import {
   ghs,
   isIsoDay,
   isoDay,
+  allocationClosed,
   isShort,
   maskMomo,
+  stopCollection,
   payoutReady,
   payoutRequiresTwo,
   round2,
@@ -54,6 +56,7 @@ import {
   verifyTransfer,
 } from '../backend/remote';
 import { readPosition } from '../backend/media';
+import { LoadingScreen } from '../ui/loading';
 
 const KEY = 'cryochain-proto-v5';
 /** How long a sent payout may wait for its webhook before the app polls Paystack for it. */
@@ -80,6 +83,12 @@ function save(s: State) {
 
 // ---------- helpers (mutating, used inside mutate()) ----------
 const nid = (s: State, prefix: string) => `${prefix}-${++s.seq}`;
+function freshLineId(s: State) {
+  const used = new Set(s.session.draft.lines.map((line) => line.id));
+  let id = nid(s, 'LN');
+  while (used.has(id)) id = nid(s, 'LN');
+  return id;
+}
 const audit = (s: State, actor: string, action: string, entity: string, detail?: string) => {
   s.audit.unshift({ id: nid(s, 'AU'), at: Date.now(), actor, action, entity, detail });
 };
@@ -137,7 +146,8 @@ const farmer = (s: State, id: string) => s.farmers.find((f) => f.id === id);
 const order = (s: State, id: string) => s.orders.find((o) => o.id === id);
 const cons = (s: State, id: string) => s.consignments.find((c) => c.id === id);
 const device = (s: State, id: string) => s.devices.find((d) => d.id === id)!;
-const opsName = (s: State) => s.opsUsers.find((u) => u.id === s.session.opsUserId)?.name ?? 'Ops';
+const opsName = (s: State) =>
+  s.opsUsers.find((u) => u.id === s.session.opsUserId)?.name ?? 'Node manager';
 
 function createSettlement(s: State, c: Consignment) {
   if (s.settlements.some((x) => x.consignmentId === c.id && !x.correctionOf)) return;
@@ -159,13 +169,14 @@ function createSettlement(s: State, c: Consignment) {
   // do not silently discard either; hold payment and open a high-severity review exception.
   if (c.status === 'cancelled') {
     st.status = 'held';
-    st.heldReason = 'Sync conflict: ops cancelled this consignment while it was captured offline';
+    st.heldReason =
+      'Sync conflict: the node manager cancelled this consignment while it was captured offline';
     openException(
       s,
       'sync_conflict_pay_affecting',
       'high',
       `Conflict · ${c.productName} from ${farmer(s, c.farmerId)?.name}`,
-      'Ops re-cut this consignment while the agent captured it offline. Both versions are kept. The settlement is held until the node manager decides.',
+      'The node manager re-cut this consignment while the agent captured it offline. Both versions are kept. The settlement is held until the node manager decides.',
       { type: 'consignment', id: c.id },
       undefined,
       {
@@ -175,7 +186,7 @@ function createSettlement(s: State, c: Consignment) {
     );
   } else if (c.adHoc && !c.adHocConfirmed) {
     st.status = 'held';
-    st.heldReason = 'Ad hoc consignment awaiting ops confirmation';
+    st.heldReason = 'Ad hoc consignment awaiting node manager confirmation';
     openException(
       s,
       'ad_hoc_consignment',
@@ -407,6 +418,9 @@ function processTransfer(s: State, t: Transfer) {
     t.lastError = undefined;
     return;
   }
+  // A completed payout must not be simulated again. SMS dedupe would hide a second message,
+  // but the ledger would still gain a second payout row.
+  if (t.status === 'succeeded' || t.status === 'manual') return;
   const f = farmer(s, t.farmerId);
   t.attempts += 1;
   t.status = 'sent';
@@ -474,7 +488,7 @@ function settleRunStatus(s: State, runId: string) {
 }
 
 // ---------- actions ----------
-function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void) {
+export function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void) {
   const A = {
     reset() {
       const fresh = buildSeed();
@@ -511,7 +525,7 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           ex.total = round2(ex.qtyKg * unitPrice);
         } else
           s.session.draft.lines.push({
-            id: nid(s, 'LN'),
+            id: freshLineId(s),
             productId,
             name: p.name,
             grade,
@@ -521,14 +535,25 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
           });
       });
     },
-    draftRemove(lineId: string) {
+    draftRemove(lineId: string, at?: number) {
       mutate((s) => {
-        s.session.draft.lines = s.session.draft.lines.filter((l) => l.id !== lineId);
+        const index =
+          at != null && s.session.draft.lines[at]?.id === lineId
+            ? at
+            : s.session.draft.lines.findIndex((l) => l.id === lineId);
+        if (index >= 0) s.session.draft.lines.splice(index, 1);
       });
     },
     draftSet(patch: Partial<{ deliveryDate: string; address: string }>) {
       mutate((s) => {
         Object.assign(s.session.draft, patch);
+      });
+    },
+    setOrgAddress(orgId: string, address: string) {
+      mutate((s) => {
+        const org = s.orgs.find((item) => item.id === orgId);
+        if (org) org.address = address.trim();
+        s.session.draft.address = address.trim();
       });
     },
     draftReorder(orderId: string) {
@@ -559,11 +584,15 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         if (!d.lines.length) return;
         const linesTotal = round2(d.lines.reduce((a, l) => a + l.total, 0));
         const credit = Math.min(creditBalance(s, u.orgId), linesTotal);
-        const n =
-          2420 +
-          s.orders.filter((o) => o.id.startsWith('CC-24') && Number(o.id.slice(3)) > 2420).length +
-          1;
-        id = `CC-${n}`;
+        let n = 2420;
+        for (const existing of s.orders) {
+          const match = /^CC-(\d+)$/.exec(existing.id);
+          if (match) n = Math.max(n, Number(match[1]));
+        }
+        do {
+          n += 1;
+          id = `CC-${n}`;
+        } while (s.orders.some((existing) => existing.id === id));
         s.orders.unshift({
           id,
           orgId: u.orgId,
@@ -846,6 +875,8 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
     ) {
       mutate((s) => {
         const o = order(s, orderId)!;
+        const run = o.runId ? s.runs.find((r) => r.id === o.runId) : undefined;
+        if (allocationClosed(o.status, run?.status)) return;
         const line = o.lines.find((l) => l.id === lineId)!;
         o.allocationVersion += 1;
         items
@@ -1454,8 +1485,20 @@ function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void
         const st = r.stops.find((x) => x.seq === seq)!;
         const now = Date.now();
         if (kind === 'arrived') st.arrivedAt = now;
-        if (kind === 'collected') st.collectedAt = now;
-        if (kind === 'departed') st.departedAt = now;
+        if (st.kind === 'farm' && (kind === 'collected' || kind === 'departed')) {
+          const gate = stopCollection(
+            s.consignments.filter((c) => c.runId === runId && c.stopSeq === seq),
+          );
+          if (kind === 'collected') {
+            if (!st.arrivedAt || !gate.ready) return;
+            st.collectedAt = now;
+          } else {
+            if (!st.arrivedAt) return;
+            if (!st.collectedAt && !gate.nothingToCollect) return;
+            if (!gate.ready && !gate.nothingToCollect) return;
+            st.departedAt = now;
+          }
+        } else if (kind === 'departed') st.departedAt = now;
         if (d.online && r.status === 'planned') r.status = 'in_progress';
         deviceEvent(s, d.id, 'run.stamp', { runId, seq, kind }, 1);
       });
@@ -1827,11 +1870,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const getState = useCallback(() => ref.current as State, []);
   if (!state)
     return (
-      <View style={{ flex: 1, backgroundColor: '#FBFAF6', padding: 24, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 16, color: '#1A2330' }}>
-          {syncNote ?? 'Loading the operating record…'}
-        </Text>
-      </View>
+      <LoadingScreen
+        busy={!syncNote}
+        message={syncNote ? 'The operating record did not open' : 'Loading'}
+        detail={syncNote ?? undefined}
+      />
     );
   return (
     <StoreCtx.Provider value={{ state, act, now, getState, syncNote }}>

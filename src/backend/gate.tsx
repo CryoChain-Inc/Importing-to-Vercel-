@@ -1,5 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { Phone } from '../layouts/shells';
 import { Logo } from '../ui/kit';
@@ -42,15 +50,23 @@ let emailLinkAdopted = false;
  * and immediately purges the hash from the browser URL to prevent token leakage in history or referrers.
  */
 async function sessionFromEmailLink() {
-  if (emailLinkAdopted || typeof window === 'undefined') return;
-  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+  if (
+    emailLinkAdopted ||
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    !window.location
+  )
+    return;
+  const hash = window.location.hash?.startsWith('#') ? window.location.hash.slice(1) : '';
   if (!hash.includes('access_token')) return;
   const params = new URLSearchParams(hash);
   const access_token = params.get('access_token');
   const refresh_token = params.get('refresh_token');
   if (!access_token || !refresh_token) return;
   emailLinkAdopted = true;
-  window.history.replaceState({}, '', window.location.pathname);
+  if (typeof window.history?.replaceState === 'function') {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
   await supabase.auth.setSession({ access_token, refresh_token });
 }
 
@@ -219,7 +235,7 @@ function LandingPanel() {
           Cold from the farm gate to your door.
         </Text>
         <Text style={{ fontSize: 16, lineHeight: 26, color: colors.steel, maxWidth: 520 }}>
-          One operational system for buyers, farmers, field agents, drivers and operations. Buyers
+          One operational system for buyers, farmers, field agents, drivers and the node manager. Buyers
           pay before collection. Farmers are paid within 24 hours of delivery. Everything the field
           captures works with no signal.
         </Text>
@@ -250,7 +266,7 @@ function LandingPanel() {
           ))}
         </View>
       </View>
-      <Text style={{ fontSize: 12, color: colors.steel }}>Version one prototype · Nsawam node</Text>
+      <Text style={{ fontSize: 12, color: colors.steel }}>Nsawam node</Text>
     </View>
   );
 }
@@ -427,7 +443,10 @@ export function AuthScreen() {
       setError('Enter the email address, then use Forgot password.');
       return;
     }
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const redirectTo =
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.location
+        ? window.location.origin
+        : undefined;
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(address, {
       redirectTo,
     });
@@ -473,7 +492,7 @@ export function AuthScreen() {
       </Text>
       <Text style={{ fontSize: 14, lineHeight: 21, color: colors.steelInk, marginTop: -6 }}>
         {creating
-          ? 'The first account becomes the node manager. If operations already invited this email, the password is saved on that login.'
+          ? 'The first account becomes the node manager. If the node manager already invited this email, the password is saved on that login.'
           : 'Use the email and password for your CryoChain login.'}
       </Text>
       {mode === 'email' ? (
@@ -574,7 +593,7 @@ export function SetPasswordScreen() {
       <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
         {recovery
           ? `Choose a new password for ${email}. You will use it the next time you sign in.`
-          : `Choose a password for ${email}. This stays on the account operations invited. You will use this email and password each time you sign in.`}
+          : `Choose a password for ${email}. This stays on the account the node manager invited. You will use this email and password each time you sign in.`}
       </Text>
       <Field label="Password" value={password} onChange={setPassword} secure />
       <Field label="Confirm password" value={confirm} onChange={setConfirm} secure />

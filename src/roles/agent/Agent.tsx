@@ -758,8 +758,8 @@ function Stop() {
             {/* If weight falls below tolerance threshold, flag as short to trigger an ops allocation re-cut */}
             {w > 0 && w < c.plannedKg * (1 - state.config.tolerancePct / 100) && (
               <Host tag="div" className="tint-amber">
-                Short: {round2(c.plannedKg - w)} kg under the {c.plannedKg} kg planned. Ops will
-                re-cut.
+                Short: {round2(c.plannedKg - w)} kg under the {c.plannedKg} kg planned. The node
+                manager will re-cut.
               </Host>
             )}
             <Host tag="div" className="lbl">
@@ -992,8 +992,8 @@ function Done() {
       >
         {c.status === 'declined' ? (
           <Host tag="div" className="tint-red">
-            <Host tag="strong">Sale declined.</Host> {c.declineReason}. Nothing is owed. Ops will
-            re-cut the order.
+            <Host tag="strong">Sale declined.</Host> {c.declineReason}. Nothing is owed. The node
+            manager will re-cut the order.
           </Host>
         ) : c.status === 'captured' ? (
           <Host tag="div" className="tint-amber col gap8">
@@ -1031,7 +1031,7 @@ function Done() {
                   fontSize: 13,
                 }}
               >
-                Read only on this device. Changes go to ops as a correction request.
+                Read only on this device. Changes go to the node manager as a correction request.
               </Host>
             </Host>
           </Host>
@@ -1085,7 +1085,7 @@ function Done() {
                 setSent(true);
               }}
             >
-              {sent ? 'Sent to ops' : 'Send request'}
+              {sent ? 'Sent to the node manager' : 'Send request'}
             </Btn>
           </Host>
         )}
@@ -1125,8 +1125,8 @@ function AdHoc() {
         }}
       >
         <Host tag="div" className="tint-amber">
-          Ad hoc consignments are captured now and confirmed by ops before the settlement becomes
-          payable.
+          Ad hoc consignments are captured now and confirmed by the node manager before the settlement
+          becomes payable.
         </Host>
         <Field label="Find farmer">
           <Host

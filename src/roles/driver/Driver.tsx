@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../domain/store';
 import type { Checkpoint } from '../../domain/types';
-import { fmtStamp, fmtTime, runAssignedTo } from '../../domain/logic';
+import { CONS_LABEL, fmtStamp, fmtTime, runAssignedTo, stopCollection } from '../../domain/logic';
 import {
   Btn,
   Chip,
@@ -91,7 +91,7 @@ function TempSheet({
       {oor && (
         <Host tag="div" className="tint-red">
           <Host tag="strong">Out of range.</Host> Record it anyway, add what happened, and keep the
-          doors shut. Ops is alerted on the next sync.
+          doors shut. The node manager is alerted on the next sync.
         </Host>
       )}
       <Host
@@ -334,6 +334,7 @@ function Stop() {
   if (!s || s.kind !== 'farm') return <Navigate to="/driver" />;
   const f = state.farmers.find((x) => x.id === s.farmerId);
   const cons = state.consignments.filter((c) => c.runId === run.id && c.stopSeq === s.seq);
+  const gate = stopCollection(cons);
   const reading = temps.find((t) => t.checkpoint === 'farm_stop' && t.stopSeq === s.seq);
   const isLast =
     s.seq === Math.max(...run.stops.filter((x) => x.kind === 'farm').map((x) => x.seq));
@@ -366,18 +367,38 @@ function Stop() {
             k="Consignments"
             v={
               cons.length
-                ? cons.map((c) => `${c.productName} ${c.farmGateKg ?? c.plannedKg} kg`).join(', ')
+                ? cons
+                    .map(
+                      (c) =>
+                        `${c.productName} ${c.farmGateKg ?? c.plannedKg} kg · ${CONS_LABEL[c.status]}`,
+                    )
+                    .join(', ')
                 : 'Agent captures here'
             }
           />
         </Host>
+        {!s.collectedAt && !gate.ready && !gate.nothingToCollect && (
+          <Host tag="div" className="tint-amber">
+            Collected stays locked until the agent has weighed this stop and put it in the cold box.
+          </Host>
+        )}
+        {!s.departedAt && gate.nothingToCollect && (
+          <Host tag="div" className="muted">
+            Sale declined. Nothing to collect on this stop.
+          </Host>
+        )}
         <Host tag="div" className="lbl">
           Stamps
         </Host>
         {(['arrived', 'collected', 'departed'] as const).map((k, i) => {
           const t =
             k === 'arrived' ? s.arrivedAt : k === 'collected' ? s.collectedAt : s.departedAt;
-          const prev = i === 0 ? true : k === 'collected' ? !!s.arrivedAt : !!s.collectedAt;
+          const prev =
+            i === 0
+              ? true
+              : k === 'collected'
+                ? !!s.arrivedAt && gate.ready
+                : !!s.arrivedAt && (Boolean(s.collectedAt) || gate.nothingToCollect);
           const needReading = k === 'departed' && !reading;
           return t ? (
             <Host tag="div" key={k} className="card card-pad row">

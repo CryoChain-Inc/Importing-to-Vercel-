@@ -3,6 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "ignoreDeprecations": "6.0",
+    "types": ["jest"],
     "baseUrl": ".",
     "paths": {
       "react-router-dom": ["src/shims/react-router-dom.tsx"]
