@@ -220,7 +220,7 @@ export function DemoBar() {
     { value: 'farmer', label: 'Farmer' },
     { value: 'agent', label: 'Field agent' },
     { value: 'driver', label: 'Driver' },
-    { value: 'ops', label: 'Operations' },
+    { value: 'ops', label: 'Node manager' },
   ];
   const actor =
     role === 'buyer' ? (

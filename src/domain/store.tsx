@@ -139,7 +139,8 @@ const farmer = (s: State, id: string) => s.farmers.find((f) => f.id === id);
 const order = (s: State, id: string) => s.orders.find((o) => o.id === id);
 const cons = (s: State, id: string) => s.consignments.find((c) => c.id === id);
 const device = (s: State, id: string) => s.devices.find((d) => d.id === id)!;
-const opsName = (s: State) => s.opsUsers.find((u) => u.id === s.session.opsUserId)?.name ?? 'Ops';
+const opsName = (s: State) =>
+  s.opsUsers.find((u) => u.id === s.session.opsUserId)?.name ?? 'Node manager';
 
 function createSettlement(s: State, c: Consignment) {
   if (s.settlements.some((x) => x.consignmentId === c.id && !x.correctionOf)) return;
@@ -161,13 +162,14 @@ function createSettlement(s: State, c: Consignment) {
   // do not silently discard either; hold payment and open a high-severity review exception.
   if (c.status === 'cancelled') {
     st.status = 'held';
-    st.heldReason = 'Sync conflict: ops cancelled this consignment while it was captured offline';
+    st.heldReason =
+      'Sync conflict: the node manager cancelled this consignment while it was captured offline';
     openException(
       s,
       'sync_conflict_pay_affecting',
       'high',
       `Conflict · ${c.productName} from ${farmer(s, c.farmerId)?.name}`,
-      'Ops re-cut this consignment while the agent captured it offline. Both versions are kept. The settlement is held until the node manager decides.',
+      'The node manager re-cut this consignment while the agent captured it offline. Both versions are kept. The settlement is held until the node manager decides.',
       { type: 'consignment', id: c.id },
       undefined,
       {
@@ -177,7 +179,7 @@ function createSettlement(s: State, c: Consignment) {
     );
   } else if (c.adHoc && !c.adHocConfirmed) {
     st.status = 'held';
-    st.heldReason = 'Ad hoc consignment awaiting ops confirmation';
+    st.heldReason = 'Ad hoc consignment awaiting node manager confirmation';
     openException(
       s,
       'ad_hoc_consignment',

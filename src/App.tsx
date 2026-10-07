@@ -82,7 +82,7 @@ function RoleOnly({
   if (profile?.role !== role) return <Navigate to="/" replace />;
   if (role === 'farmer' && !state.farmers.some((farmer) => farmer.id === state.session.farmerId))
     return (
-      <Wait text="Operations has not linked this login to a farmer record. They do that from Team access, after a field agent registers the farmer." />
+      <Wait text="The node manager has not linked this login to a farmer record. They do that from Team access, after a field agent registers the farmer." />
     );
   if (
     role === 'agent' &&
@@ -91,7 +91,7 @@ function RoleOnly({
     )
   )
     return (
-      <Wait text="Operations has not attached a handset to this agent. They do that from Team access." />
+      <Wait text="The node manager has not attached a handset to this agent. They do that from Team access." />
     );
   if (
     role === 'driver' &&
@@ -100,10 +100,10 @@ function RoleOnly({
     )
   )
     return (
-      <Wait text="Operations has not attached a handset to this driver. They do that from Team access." />
+      <Wait text="The node manager has not attached a handset to this driver. They do that from Team access." />
     );
   if (role === 'ops' && !state.opsUsers.some((user) => user.id === state.session.opsUserId))
-    return <Wait text="This operations login is not on the node record yet." />;
+    return <Wait text="This node manager login is not on the node record yet." />;
   return children;
 }
 

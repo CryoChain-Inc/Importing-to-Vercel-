@@ -235,7 +235,7 @@ function LandingPanel() {
           Cold from the farm gate to your door.
         </Text>
         <Text style={{ fontSize: 16, lineHeight: 26, color: colors.steel, maxWidth: 520 }}>
-          One operational system for buyers, farmers, field agents, drivers and operations. Buyers
+          One operational system for buyers, farmers, field agents, drivers and the node manager. Buyers
           pay before collection. Farmers are paid within 24 hours of delivery. Everything the field
           captures works with no signal.
         </Text>
@@ -266,7 +266,7 @@ function LandingPanel() {
           ))}
         </View>
       </View>
-      <Text style={{ fontSize: 12, color: colors.steel }}>Version one prototype · Nsawam node</Text>
+      <Text style={{ fontSize: 12, color: colors.steel }}>Nsawam node</Text>
     </View>
   );
 }
@@ -492,7 +492,7 @@ export function AuthScreen() {
       </Text>
       <Text style={{ fontSize: 14, lineHeight: 21, color: colors.steelInk, marginTop: -6 }}>
         {creating
-          ? 'The first account becomes the node manager. If operations already invited this email, the password is saved on that login.'
+          ? 'The first account becomes the node manager. If the node manager already invited this email, the password is saved on that login.'
           : 'Use the email and password for your CryoChain login.'}
       </Text>
       {mode === 'email' ? (
@@ -593,7 +593,7 @@ export function SetPasswordScreen() {
       <Text style={{ color: colors.steelInk, lineHeight: 22 }}>
         {recovery
           ? `Choose a new password for ${email}. You will use it the next time you sign in.`
-          : `Choose a password for ${email}. This stays on the account operations invited. You will use this email and password each time you sign in.`}
+          : `Choose a password for ${email}. This stays on the account the node manager invited. You will use this email and password each time you sign in.`}
       </Text>
       <Field label="Password" value={password} onChange={setPassword} secure />
       <Field label="Confirm password" value={confirm} onChange={setConfirm} secure />

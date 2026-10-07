@@ -395,8 +395,8 @@ function Register() {
         }}
       >
         <Host tag="div" className="cap">
-          Signed in. Submit this form to open your organisation. Operations approves it before you
-          can order.
+          Signed in. Submit this form to open your organisation. The node manager approves it before
+          you can order.
         </Host>
         <Host
           tag="div"
@@ -568,7 +568,7 @@ function Pending() {
           }}
         >
           <Btn kind="secondary" to="/ops/buyers">
-            Open ops approval queue (demo)
+            Open node manager approval queue
           </Btn>
         </Host>
       </Host>
@@ -2013,7 +2013,7 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
           </Host>
           <Host tag="div" className="cap">
             {remoteEnabled
-              ? 'Operations confirms the balance when the bank reports it. The order stays on hold until the amounts match.'
+              ? 'The node manager confirms the balance when the bank reports it. The order stays on hold until the amounts match.'
               : 'Demo control for a second bank message.'}
           </Host>
           {remoteEnabled ? null : (

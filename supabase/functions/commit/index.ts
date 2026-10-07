@@ -169,7 +169,7 @@ async function save(
 async function become(admin: ReturnType<typeof Object>, profile: Profile, role: string) {
   if (role !== 'buyer') return json({ error: 'Choose a buyer organisation registration.' }, 400);
   if (profile.role !== 'pending' && profile.role !== 'buyer')
-    return json({ error: 'Operations assigns staff access.' }, 403);
+    return json({ error: 'The node manager assigns staff access.' }, 403);
   await (
     admin as {
       from: (t: string) => {
@@ -184,7 +184,7 @@ async function become(admin: ReturnType<typeof Object>, profile: Profile, role: 
 }
 
 async function roster(admin: ReturnType<typeof Object>, profile: Profile) {
-  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const { data, error } = await (
     admin as {
       from: (t: string) => {
@@ -219,7 +219,7 @@ async function invite(
   profile: Profile,
   body: Record<string, unknown>,
 ) {
-  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const email = String(body.email ?? '')
     .trim()
     .toLowerCase();
@@ -339,7 +339,7 @@ async function approve(
   profile: Profile,
   body: Record<string, unknown>,
 ) {
-  if (profile.role !== 'ops') return json({ error: 'Operations only.' }, 403);
+  if (profile.role !== 'ops') return json({ error: 'Node manager only.' }, 403);
   const userId = String(body.userId ?? '');
   const role = String(body.role ?? '');
   if (!userId) return json({ error: 'Choose a pending person.' }, 400);

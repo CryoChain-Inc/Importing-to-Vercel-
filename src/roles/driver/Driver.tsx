@@ -91,7 +91,7 @@ function TempSheet({
       {oor && (
         <Host tag="div" className="tint-red">
           <Host tag="strong">Out of range.</Host> Record it anyway, add what happened, and keep the
-          doors shut. Ops is alerted on the next sync.
+          doors shut. The node manager is alerted on the next sync.
         </Host>
       )}
       <Host

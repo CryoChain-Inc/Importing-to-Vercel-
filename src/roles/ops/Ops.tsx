@@ -1838,8 +1838,8 @@ function Payouts() {
             {remoteEnabled ? (
               <Host tag="div" className="cap">
                 Before money moves, each wallet is checked with Paystack and the name is stored on
-                the farmer. A name that does not match the farmer fails the transfer so Ops can
-                decide.
+                the farmer. A name that does not match the farmer fails the transfer so the node
+                manager can decide.
               </Host>
             ) : null}
             {walletNote ? (
@@ -1951,7 +1951,7 @@ function PayoutDetail() {
   const steps = [
     {
       title: `Created by ${r.createdByName}`,
-      sub: `Ops · ${fmtStamp(r.createdAt)}`,
+      sub: `Node manager · ${fmtStamp(r.createdAt)}`,
       done: true,
     },
     ...Array.from(
@@ -2437,7 +2437,7 @@ function Exceptions() {
               </Host>
               <Host tag="div" className="card card-pad">
                 <Host tag="div" className="lbl">
-                  Ops version (commercial)
+                  Node manager version (commercial)
                 </Host>
                 <pre
                   style={{
@@ -2661,7 +2661,7 @@ function Farmers() {
                 <Chip tone="warn">Ghana Card before first payout</Chip>
               ) : (
                 <Chip tone="ok">
-                  {f.kyc === 'verified_manual' ? 'Verified by ops' : 'Verified by provider'}
+                  {f.kyc === 'verified_manual' ? 'Verified by the node manager' : 'Verified by provider'}
                 </Chip>
               )}
             </Host>
@@ -2807,7 +2807,7 @@ function Config() {
           }}
         >
           <Host tag="div" className="h16">
-            Operations
+            Node settings
           </Host>
           <Host
             tag="div"
@@ -2897,7 +2897,7 @@ function Config() {
               })
             }
           >
-            Save operations config
+            Save node config
           </Btn>
         </Host>
       </Host>
