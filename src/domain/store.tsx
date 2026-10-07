@@ -409,6 +409,9 @@ function processTransfer(s: State, t: Transfer) {
     t.lastError = undefined;
     return;
   }
+  // A completed payout must not be simulated again. SMS dedupe would hide a second message,
+  // but the ledger would still gain a second payout row.
+  if (t.status === 'succeeded' || t.status === 'manual') return;
   const f = farmer(s, t.farmerId);
   t.attempts += 1;
   t.status = 'sent';
@@ -476,7 +479,7 @@ function settleRunStatus(s: State, runId: string) {
 }
 
 // ---------- actions ----------
-function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void) {
+export function buildActions(get: () => State, mutate: (fn: (s: State) => void) => void) {
   const A = {
     reset() {
       const fresh = buildSeed();

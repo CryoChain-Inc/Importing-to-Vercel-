@@ -259,3 +259,35 @@ export function replaceOperational(server: Rec, client: Rec): Rec {
   blankSession(next);
   return next;
 }
+
+/**
+ * Resolves a typed farmer number to the internal farmer id on the register.
+ * Accepts the visible code (FM-0101) or the internal id (F1, F-1042), trimmed and case-insensitive.
+ */
+export function findFarmerId(state: Rec, typed: unknown): string {
+  const wanted = String(typed ?? '')
+    .trim()
+    .toLowerCase();
+  if (!wanted) return '';
+  const farmers = Array.isArray(state.farmers)
+    ? (state.farmers as { id?: unknown; code?: unknown }[])
+    : [];
+  const match = farmers.find(
+    (f) =>
+      String(f.code ?? '').toLowerCase() === wanted || String(f.id ?? '').toLowerCase() === wanted,
+  );
+  return match ? String(match.id ?? '') : '';
+}
+
+/** Invite links may only redirect to an http(s) origin supplied by the caller. */
+export function appOrigin(value: unknown) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.origin;
+  } catch {
+    return '';
+  }
+}
