@@ -79,6 +79,17 @@ describe('buyer orders', () => {
     expect(w.state.audit[0]).toMatchObject({ action: 'Submitted order', entity: id });
   });
 
+  test('a new order number skips numbers already in use', () => {
+    const w = world();
+    const sample = w.state.orders[0];
+    w.state.orders = [...w.state.orders, { ...sample, id: 'CC-2422' }];
+    w.act.draftAdd('tomato', 'A', 10);
+    const id = w.act.submitDraft();
+    expect(id).toBe('CC-2423');
+    expect(w.state.orders.filter((order) => order.id === 'CC-2422')).toHaveLength(1);
+    expect(w.state.orders.filter((order) => order.id === id)).toHaveLength(1);
+  });
+
   test('an invalid delivery day is replaced with the lead time', () => {
     const w = world();
     w.act.draftSet({ deliveryDate: 'tomorrow', address: 'Dock 2' });

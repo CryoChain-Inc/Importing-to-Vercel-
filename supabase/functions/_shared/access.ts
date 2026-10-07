@@ -44,6 +44,19 @@ function arr(state: Rec, key: string): Rec[] {
   return Array.isArray(state[key]) ? (state[key] as Rec[]) : [];
 }
 
+/** Keeps the first row for an id. Later copies are leftovers from a reused order number. */
+function dedupeById(rows: Rec[]) {
+  const seen = new Set<string>();
+  const out: Rec[] = [];
+  for (const row of rows) {
+    const id = String(row.id ?? '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(row);
+  }
+  return out;
+}
+
 /**
  * Projects and redacts the global workspace document based on the authenticated user's role.
  * Acts as an in-memory Row-Level Security (RLS) enforcement layer.
@@ -181,7 +194,11 @@ export function mergeBuyer(
     const orders = arr(client, 'orders').filter((o) => o.orgId === org.id);
     next.orgs = [...arr(next, 'orgs'), org];
     next.buyerUsers = [...arr(next, 'buyerUsers'), ...users];
-    next.orders = [...orders, ...arr(next, 'orders')];
+    const taken = new Set(arr(next, 'orders').map((o) => String(o.id)));
+    next.orders = [
+      ...dedupeById(orders).filter((o) => !taken.has(String(o.id))),
+      ...arr(next, 'orders'),
+    ];
     const buyerUserId = String(
       (client.session as Rec | undefined)?.buyerUserId ?? users[0]?.id ?? '',
     );
@@ -216,7 +233,12 @@ export function mergeBuyer(
       }
       return o;
     });
-  next.orders = [...serverOrders.filter((o) => o.orgId !== orgId), ...kept];
+  const mine = dedupeById(kept);
+  const mineIds = new Set(mine.map((o) => String(o.id)));
+  next.orders = [
+    ...serverOrders.filter((o) => o.orgId !== orgId && !mineIds.has(String(o.id))),
+    ...mine,
+  ];
   next.buyerUsers = [
     ...arr(server, 'buyerUsers').filter((u) => u.orgId !== orgId),
     ...arr(client, 'buyerUsers').filter((u) => u.orgId === orgId),

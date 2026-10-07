@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { View, Text, Linking } from 'react-native';
+import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   BuyerRole,
@@ -56,6 +56,7 @@ import {
   verifyTransfer,
 } from '../backend/remote';
 import { readPosition } from '../backend/media';
+import { LoadingScreen } from '../ui/loading';
 
 const KEY = 'cryochain-proto-v5';
 /** How long a sent payout may wait for its webhook before the app polls Paystack for it. */
@@ -566,11 +567,15 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
         if (!d.lines.length) return;
         const linesTotal = round2(d.lines.reduce((a, l) => a + l.total, 0));
         const credit = Math.min(creditBalance(s, u.orgId), linesTotal);
-        const n =
-          2420 +
-          s.orders.filter((o) => o.id.startsWith('CC-24') && Number(o.id.slice(3)) > 2420).length +
-          1;
-        id = `CC-${n}`;
+        let n = 2420;
+        for (const existing of s.orders) {
+          const match = /^CC-(\d+)$/.exec(existing.id);
+          if (match) n = Math.max(n, Number(match[1]));
+        }
+        do {
+          n += 1;
+          id = `CC-${n}`;
+        } while (s.orders.some((existing) => existing.id === id));
         s.orders.unshift({
           id,
           orgId: u.orgId,
@@ -1848,11 +1853,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const getState = useCallback(() => ref.current as State, []);
   if (!state)
     return (
-      <View style={{ flex: 1, backgroundColor: '#FBFAF6', padding: 24, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 16, color: '#1A2330' }}>
-          {syncNote ?? 'Loading the operating record…'}
-        </Text>
-      </View>
+      <LoadingScreen
+        busy={!syncNote}
+        message={syncNote ? 'The operating record did not open' : 'Loading'}
+        detail={syncNote ?? undefined}
+      />
     );
   return (
     <StoreCtx.Provider value={{ state, act, now, getState, syncNote }}>

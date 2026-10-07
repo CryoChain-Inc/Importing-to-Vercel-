@@ -1,6 +1,6 @@
 import { Host } from '../../ui/host';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Share } from 'react-native';
+import { Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import {
   Link,
   Navigate,
@@ -28,7 +28,7 @@ import {
   orderStepIndex,
   round2,
 } from '../../domain/logic';
-import { colors } from '../../ui/theme';
+import { colors, fontFamily } from '../../ui/theme';
 import {
   Btn,
   BottomNav,
@@ -71,8 +71,14 @@ function useBuyer() {
   const { state, act, now } = useStore();
   const user = state.buyerUsers.find((u) => u.id === state.session.buyerUserId)!;
   const org = state.orgs.find((o) => o.id === user.orgId)!;
+  const seen = new Set<string>();
   const orders = state.orders
     .filter((o) => o.orgId === org.id)
+    .filter((o) => {
+      if (seen.has(o.id)) return false;
+      seen.add(o.id);
+      return true;
+    })
     .sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
   return {
     state,
@@ -96,6 +102,7 @@ function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean })
   if (desk && nav)
     return (
       <Desk
+        logoHeight={48}
         nav={[
           {
             to: '/buyer/orders',
@@ -1212,14 +1219,302 @@ const ORDER_TRACK = [
   { label: 'Submitted', now: 'Waiting for an approver.' },
   { label: 'Approved', now: 'Approved. Payment is the next step.' },
   { label: 'Paid', now: 'Payment confirmed. CryoChain is allocating this order across farmers.' },
-  { label: 'Allocated', now: 'Allocated across farmers. Collection is scheduled for the delivery date.' },
+  {
+    label: 'Allocated',
+    now: 'Allocated across farmers. Collection is scheduled for the delivery date.',
+  },
   { label: 'In collection', now: 'The truck is collecting from the farms now.' },
-  { label: 'Delivered', now: 'At the door. Accept the delivery, or reject a line before the window closes.' },
+  {
+    label: 'Delivered',
+    now: 'At the door. Accept the delivery, or reject a line before the window closes.',
+  },
   { label: 'Closed', now: 'You accepted this delivery.' },
 ];
 
 function shownStatus(o: Order) {
   return o.acceptedAt && o.status === 'delivered' ? 'closed' : o.status;
+}
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'open', label: 'Open' },
+  ...(
+    [
+      'submitted',
+      'approved',
+      'awaiting_payment',
+      'paid',
+      'allocated',
+      'in_collection',
+      'delivered',
+      'closed',
+      'held',
+      'expired',
+      'cancelled',
+    ] as const
+  ).map((status) => ({ value: status, label: ORDER_LABEL[status] })),
+];
+
+function isOpenOrder(o: Order) {
+  return !['closed', 'cancelled', 'expired'].includes(shownStatus(o));
+}
+
+function matchesStatus(o: Order, status: string) {
+  if (status === 'all') return true;
+  if (status === 'open') return isOpenOrder(o);
+  return shownStatus(o) === status;
+}
+
+function matchesWhen(o: Order, when: string) {
+  if (!when) return true;
+  return o.deliveryDate.slice(0, 10) === when;
+}
+
+function matchesQuery(o: Order, q: string) {
+  if (!q) return true;
+  const lines = o.lines.map((l) => `${l.name} ${l.grade}`).join(' ');
+  return `${o.id} ${lines}`.toLowerCase().includes(q);
+}
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const chipStyle = {
+  height: 36,
+  paddingHorizontal: 12,
+  borderWidth: 1,
+  borderColor: colors.steel,
+  borderRadius: 6,
+  backgroundColor: '#fff',
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 8,
+};
+
+const popShadow =
+  Platform.OS === 'web'
+    ? ({ boxShadow: '0 8px 24px rgba(26,35,48,.16)' } as object)
+    : { elevation: 8 };
+
+function Anchored({
+  label,
+  panelWidth = 220,
+  children,
+}: {
+  label: string;
+  panelWidth?: number;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return (
+    <View style={{ position: 'relative', zIndex: open ? 30 : 1 }}>
+      <Pressable onPress={() => setOpen((v) => !v)} style={chipStyle}>
+        <Text
+          numberOfLines={1}
+          style={{ color: colors.ink, fontSize: 13, fontFamily: fontFamily('500') }}
+        >
+          {label}
+        </Text>
+        <Text style={{ color: colors.steelInk, fontSize: 12 }}>{open ? '▴' : '▾'}</Text>
+      </Pressable>
+      {open ? (
+        <View
+          style={[
+            {
+              position: 'absolute',
+              top: 40,
+              left: 0,
+              width: panelWidth,
+              zIndex: 2,
+              backgroundColor: '#fff',
+              borderWidth: 1,
+              borderColor: colors.line,
+              borderRadius: 8,
+              overflow: 'hidden',
+            },
+            popShadow,
+          ]}
+        >
+          {children(close)}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function StatusMenu({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const current = STATUS_OPTIONS.find((option) => option.value === value) ?? STATUS_OPTIONS[0];
+  return (
+    <Anchored label={`Status: ${current.label}`} panelWidth={220}>
+      {(close) => (
+        <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
+          {STATUS_OPTIONS.map((option) => {
+            const on = option.value === value;
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  onChange(option.value);
+                  close();
+                }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  backgroundColor: on ? colors.mist : '#fff',
+                }}
+              >
+                <Text
+                  style={{
+                    color: on ? colors.blueInk : colors.ink,
+                    fontSize: 14,
+                    fontFamily: fontFamily(on ? '600' : '400'),
+                  }}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+    </Anchored>
+  );
+}
+
+function DeliveryCalendar({
+  value,
+  onChange,
+  marked,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  marked: Set<string>;
+}) {
+  const selected = value ? new Date(`${value}T12:00:00`) : new Date();
+  const [cursor, setCursor] = useState({
+    y: selected.getFullYear(),
+    m: selected.getMonth(),
+  });
+  const first = new Date(cursor.y, cursor.m, 1);
+  const lead = (first.getDay() + 6) % 7;
+  const count = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: count }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7) cells.push(null);
+  const today = isoDay(Date.now());
+  return (
+    <Anchored label={value ? `Delivery: ${fmtDay(value)}` : 'Delivery date'} panelWidth={292}>
+      {(close) => (
+        <View style={{ padding: 12, gap: 8 }}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>‹</Text>
+            </Pressable>
+            <Text style={{ fontFamily: fontFamily('600'), fontSize: 14, color: colors.ink }}>
+              {MONTH_NAMES[cursor.m]} {cursor.y}
+            </Text>
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>›</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
+              <Text
+                key={day}
+                style={{
+                  width: 36,
+                  textAlign: 'center',
+                  fontSize: 11,
+                  color: colors.steelInk,
+                  fontFamily: fontFamily('600'),
+                }}
+              >
+                {day}
+              </Text>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: 252 }}>
+            {cells.map((day, i) => {
+              if (!day) return <View key={`e-${i}`} style={{ width: 36, height: 36 }} />;
+              const iso = isoDay(new Date(cursor.y, cursor.m, day, 12).getTime());
+              const has = marked.has(iso);
+              const on = iso === value;
+              return (
+                <Pressable
+                  key={iso}
+                  onPress={() => {
+                    onChange(iso);
+                    close();
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 18,
+                    backgroundColor: on ? colors.blue : has ? colors.greenTint : 'transparent',
+                    borderWidth: !on && iso === today ? 1 : 0,
+                    borderColor: colors.steel,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: on ? '#fff' : has ? colors.green : colors.ink,
+                      fontFamily: fontFamily(has || on ? '600' : '400'),
+                    }}
+                  >
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontSize: 12, color: colors.steelInk }}>
+            Green marks a day that already has a delivery.
+          </Text>
+          <Pressable
+            onPress={() => {
+              onChange('');
+              close();
+            }}
+            style={{ paddingVertical: 6 }}
+          >
+            <Text style={{ color: colors.blueInk, fontFamily: fontFamily('600'), fontSize: 13 }}>
+              All dates
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </Anchored>
+  );
 }
 
 function OrderTrack({ step }: { step: number }) {
@@ -1272,7 +1567,11 @@ function OrderTrack({ step }: { step: number }) {
               >
                 {stage.label}
               </Host>
-              {current ? <Host tag="div" className="cap">{stage.now}</Host> : null}
+              {current ? (
+                <Host tag="div" className="cap">
+                  {stage.now}
+                </Host>
+              ) : null}
             </Host>
           </Host>
         );
@@ -1283,46 +1582,30 @@ function OrderTrack({ step }: { step: number }) {
 
 function Orders() {
   const { orders, now } = useBuyer();
-  const [filter, setFilter] = useState<'Open' | 'All'>('Open');
-  const list =
-    filter === 'Open'
-      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(shownStatus(o)))
-      : orders;
+  const [status, setStatus] = useState('all');
+  const list = orders.filter((o) => matchesStatus(o, status));
   const desk = useMedia('(min-width: 1024px)');
   if (desk) return <OrdersDesk />;
   return (
     <Shell>
-      <TopBar
-        title="Orders"
-        right={
-          <Host
-            tag="button"
-            className="btn btn-secondary btn-sm"
-            style={{
-              height: 32,
-              fontSize: 12,
-            }}
-            onClick={() => setFilter((f) => (f === 'Open' ? 'All' : 'Open'))}
-          >
-            {filter} ▾
-          </Host>
-        }
-      />
+      <TopBar title="Orders" right={<StatusMenu value={status} onChange={setStatus} />} />
       <Host tag="div" className="body">
         {list.length === 0 && (
           <Empty
-            title="No orders yet."
-            sub="Your first order will appear here."
+            title={orders.length === 0 ? 'No orders yet.' : 'No orders match.'}
+            sub={orders.length === 0 ? 'Your first order will appear here.' : 'Try another status.'}
             action={
-              <Btn
-                to="/buyer/home"
-                style={{
-                  width: 'auto',
-                  display: 'inline-flex',
-                }}
-              >
-                Browse produce
-              </Btn>
+              orders.length === 0 ? (
+                <Btn
+                  to="/buyer/home"
+                  style={{
+                    width: 'auto',
+                    display: 'inline-flex',
+                  }}
+                >
+                  Browse produce
+                </Btn>
+              ) : undefined
             }
           />
         )}
@@ -1356,124 +1639,172 @@ function Orders() {
 function OrdersDesk() {
   const { orders } = useBuyer();
   const [sp, setSp] = useSearchParams();
-  const [filter, setFilter] = useState<'Open' | 'All'>('Open');
-  const list =
-    filter === 'Open'
-      ? orders.filter((o) => !['closed', 'cancelled', 'expired'].includes(shownStatus(o)))
-      : orders;
-  const sel = sp.get('sel') ?? list[0]?.id;
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('all');
+  const [when, setWhen] = useState('');
+  const q = query.trim().toLowerCase();
+  const list = orders.filter(
+    (o) => matchesStatus(o, status) && matchesWhen(o, when) && matchesQuery(o, q),
+  );
+  const requested = sp.get('sel');
+  const sel = list.some((o) => o.id === requested) ? requested : list[0]?.id;
+  const marked = new Set(orders.map((o) => o.deliveryDate.slice(0, 10)).filter(Boolean));
+  const exportRows = () =>
+    downloadCsv(
+      'orders.csv',
+      list.map((o) => ({
+        order: o.id,
+        lines: o.lines.map((l) => l.name).join('; '),
+        delivery: o.deliveryDate,
+        total: o.total,
+        status: ORDER_LABEL[shownStatus(o)],
+      })),
+    );
   return (
     <Shell>
-      <Host tag="div" className="row">
-        <Host tag="span" className="h20">
-          Orders
-        </Host>
-        <Btn to="/buyer/home" md>
-          New order
-        </Btn>
-      </Host>
-      <Host tag="div" className="toolbar">
-        <Host tag="div" className="f">
-          <Host tag="input" placeholder="Search order number" />
-        </Host>
-        <Host
-          tag="button"
-          className={`f${filter === 'Open' ? ' on' : ''}`}
-          onClick={() => setFilter((f) => (f === 'Open' ? 'All' : 'Open'))}
-        >
-          Status: {filter} {filter === 'Open' ? '×' : '▾'}
-        </Host>
-        <Host tag="div" className="f">
-          Delivery date ▾
-        </Host>
-        <Host
-          tag="button"
-          className="f"
-          style={{
-            marginLeft: 'auto',
-            fontWeight: 600,
-          }}
-          onClick={() =>
-            downloadCsv(
-              'orders.csv',
-              list.map((o) => ({
-                order: o.id,
-                lines: o.lines.map((l) => l.name).join('; '),
-                delivery: o.deliveryDate,
-                total: o.total,
-                status: ORDER_LABEL[shownStatus(o)],
-              })),
-            )
-          }
-        >
-          Export CSV
-        </Host>
-      </Host>
-      <Host tag="div" className="two">
+      <Host tag="div" style={{ gap: 16, width: '100%' }}>
         <Host
           tag="div"
-          className="tbl"
           style={{
-            border: 0,
-            borderRadius: 0,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
           }}
         >
-          <Host tag="table">
-            <Host tag="thead">
-              <Host tag="tr">
-                <Host tag="th">Order</Host>
-                <Host tag="th">Lines</Host>
-                <Host tag="th">Delivery ↓</Host>
-                <Host tag="th" className="num">
-                  Total GHS
-                </Host>
-                <Host tag="th">Status</Host>
-              </Host>
-            </Host>
-            <Host tag="tbody">
-              {list.map((o) => (
-                <Host
-                  tag="tr"
-                  key={o.id}
-                  className={o.id === sel ? 'sel' : ''}
-                  onClick={() =>
-                    setSp({
-                      sel: o.id,
-                    })
-                  }
-                  style={{
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Host tag="td">
-                    <Host tag="a">{o.id}</Host>
-                  </Host>
-                  <Host tag="td">{o.lines.map((l) => l.name.split(',')[0]).join(', ')}</Host>
-                  <Host tag="td">{fmtDay(o.deliveryDate)}</Host>
-                  <Host tag="td" className="num">
-                    {o.total.toLocaleString('en-GH', {
-                      minimumFractionDigits: 2,
-                    })}
-                  </Host>
-                  <Host tag="td">
-                    <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
-                  </Host>
-                </Host>
-              ))}
-            </Host>
+          <Host tag="span" className="h20">
+            Orders
           </Host>
           <Host
             tag="div"
-            className="cap"
             style={{
-              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              flexShrink: 0,
             }}
           >
-            {list.length} {filter === 'Open' ? 'open ' : ''}orders
+            <Btn to="/buyer/home" md style={{ flexShrink: 0 }}>
+              New order
+            </Btn>
+            <Host
+              tag="button"
+              className="btn btn-secondary btn-md"
+              style={{ flexShrink: 0 }}
+              onClick={exportRows}
+            >
+              Export CSV
+            </Host>
           </Host>
         </Host>
-        <Host tag="div" className="side">
-          {sel ? <OrderDetailBody id={sel} compact /> : <Empty title="Select an order." sub="" />}
+        <Host
+          tag="div"
+          className="toolbar"
+          style={{ zIndex: 20, position: 'relative', overflow: 'visible' }}
+        >
+          <Host
+            tag="div"
+            className="f"
+            style={{ flexGrow: 1, flexBasis: 220, maxWidth: 320, minWidth: 180 }}
+          >
+            <Host
+              tag="input"
+              value={query}
+              placeholder="Search order or line"
+              onChange={(e) => setQuery(String(e.target.value))}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: 34,
+                borderWidth: 0,
+                paddingHorizontal: 0,
+                backgroundColor: 'transparent',
+              }}
+            />
+          </Host>
+          <StatusMenu value={status} onChange={setStatus} />
+          <DeliveryCalendar value={when} onChange={setWhen} marked={marked} />
+        </Host>
+        <Host tag="div" className="two">
+          <Host
+            tag="div"
+            className="tbl"
+            style={{
+              border: 0,
+              borderRadius: 0,
+            }}
+          >
+            <Host tag="table">
+              <Host tag="thead">
+                <Host tag="tr">
+                  <Host tag="th">Order</Host>
+                  <Host tag="th">Lines</Host>
+                  <Host tag="th">Delivery ↓</Host>
+                  <Host tag="th" className="num">
+                    Total GHS
+                  </Host>
+                  <Host tag="th">Status</Host>
+                </Host>
+              </Host>
+              <Host tag="tbody">
+                {list.map((o) => (
+                  <Host
+                    tag="tr"
+                    key={o.id}
+                    className={o.id === sel ? 'sel' : ''}
+                    onClick={() =>
+                      setSp({
+                        sel: o.id,
+                      })
+                    }
+                    style={{
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Host tag="td">
+                      <Host tag="a">{o.id}</Host>
+                    </Host>
+                    <Host tag="td">{o.lines.map((l) => l.name.split(',')[0]).join(', ')}</Host>
+                    <Host tag="td">{fmtDay(o.deliveryDate)}</Host>
+                    <Host tag="td" className="num">
+                      {o.total.toLocaleString('en-GH', {
+                        minimumFractionDigits: 2,
+                      })}
+                    </Host>
+                    <Host tag="td">
+                      <Chip tone={ORDER_TONE[shownStatus(o)]}>{ORDER_LABEL[shownStatus(o)]}</Chip>
+                    </Host>
+                  </Host>
+                ))}
+              </Host>
+            </Host>
+            {list.length === 0 ? (
+              <Empty
+                title={orders.length === 0 ? 'No orders yet.' : 'No orders'}
+                sub={
+                  orders.length === 0
+                    ? 'Your first order will appear here.'
+                    : when
+                      ? `No orders are booked for ${fmtDayLong(when)}.`
+                      : 'Nothing matches this search or status.'
+                }
+              />
+            ) : null}
+            <Host
+              tag="div"
+              className="cap"
+              style={{
+                padding: 12,
+              }}
+            >
+              {list.length} {status === 'open' ? 'open ' : ''}
+              {list.length === 1 ? 'order' : 'orders'}
+            </Host>
+          </Host>
+          <Host tag="div" className="side">
+            {sel ? <OrderDetailBody id={sel} compact /> : <Empty title="Select an order." sub="" />}
+          </Host>
         </Host>
       </Host>
     </Shell>
@@ -1662,9 +1993,19 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
     return wrap(
       <>
         {track}
-        <KV k="Requested by" v={`${req?.name} · ${o.submittedAt ? fmtStamp(o.submittedAt) : ''}`} />
+        <KV
+          k="Requested by"
+          v={[req?.name, o.submittedAt ? fmtStamp(o.submittedAt) : '']
+            .filter(Boolean)
+            .join(' · ')}
+        />
         {totals}
-        <KV k="Delivery" v={`${fmtDay(o.deliveryDate)} · ${o.address.split(',')[0]}`} />
+        <KV
+          k="Delivery"
+          v={[fmtDay(o.deliveryDate), o.address.split(',')[0]?.trim()]
+            .filter((part) => part && part !== '—')
+            .join(' · ')}
+        />
         <Lines o={o} />
         {isApprover &&
           (over ? (
@@ -1687,19 +2028,19 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
                     {(other.limit ?? 0).toLocaleString('en-GH', {
                       minimumFractionDigits: 2,
                     })}
-                    ) to approve, or send it back to reduce lines.
+                    ) to approve, or cancel it and reduce the lines.
                   </>
                 ) : (
-                  'Send it back to reduce lines.'
+                  'Cancel it and reduce the lines.'
                 )}
               </Host>
             </>
-          ) : (
+          ) : user.limit !== undefined ? (
             <Host tag="div" className="tint-blue row">
               <Host tag="span">Your approval limit</Host>
-              <Money v={user.limit ?? 0} color="var(--blue-ink)" />
+              <Money v={user.limit} color="var(--blue-ink)" />
             </Host>
-          ))}
+          ) : null)}
         {!isApprover && (
           <Host tag="div" className="tint-amber">
             <Host tag="strong">Waiting for approval.</Host>{' '}
@@ -1745,7 +2086,7 @@ function OrderDetailBody({ id, compact }: { id: string; compact?: boolean }) {
               nav('/buyer/summary');
             }}
           >
-            Send back
+            Cancel
           </Btn>
         </>
       ) : undefined,
@@ -1987,6 +2328,7 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
   const { state, act, org, now } = useBuyer();
   const [momo, setMomo] = useState('024 555 0192');
   const overseas = org.country !== 'Ghana';
+  const approverName = state.buyerUsers.find((u) => u.id === o.approvedBy)?.name;
   const va = org.virtualAccount;
   const [demoAmt, setDemoAmt] = useState(String(o.total));
   if (o.status === 'held')
@@ -2189,8 +2531,8 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
   return (
     <>
       <Host tag="div" className="tint-blue">
-        Approved by {state.buyerUsers.find((u) => u.id === o.approvedBy)?.name}. Choose how to pay{' '}
-        {ghs(o.total)}. Collection is scheduled only after payment is confirmed.
+        {approverName ? `Approved by ${approverName}. ` : ''}
+        Choose how to pay {ghs(o.total)}. Collection is scheduled only after payment is confirmed.
       </Host>
       <Host
         tag="div"
@@ -2247,6 +2589,8 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
               style={{
                 display: 'flex',
                 gap: 8,
+                width: '100%',
+                alignItems: 'center',
               }}
             >
               <Host
@@ -2256,13 +2600,17 @@ function PayBody({ o, compact }: { o: Order; compact?: boolean }) {
                 onChange={(e) => setMomo(e.target.value)}
                 style={{
                   flex: 1,
+                  minWidth: 0,
+                  width: 'auto',
                 }}
               />
               <Host
                 tag="select"
                 className="input"
                 style={{
-                  width: 110,
+                  width: 108,
+                  flexShrink: 0,
+                  minHeight: 48,
                 }}
               >
                 <Host tag="option">MTN</Host>

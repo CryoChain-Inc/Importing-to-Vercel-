@@ -206,6 +206,24 @@ Deno.test('a buyer cannot roll a confirmed payment back, but can close a deliver
   );
 });
 
+Deno.test('changing an order status replaces that order instead of copying it', () => {
+  const server = workspace();
+  const target = (server.orders as { id: string; status: string; payment?: unknown }[])[0];
+  target.status = 'submitted';
+  target.payment = undefined;
+  const client = structuredClone(server);
+  const orders = client.orders as { id: string; status: string }[];
+  orders[0].status = 'approved';
+  orders.push({ ...orders[0] });
+  const merged = mergeBuyer(server, client, profile({ role: 'buyer', org_id: 'O1' }));
+  const rows = (merged.state.orders as { id: string; status: string }[]).filter(
+    (order) => order.id === 'CC-1',
+  );
+  assertEquals(rows.length, 1);
+  assertEquals(rows[0].status, 'approved');
+  assertEquals((merged.state.orders as unknown[]).length, 2);
+});
+
 Deno.test('a buyer cannot un-approve their organisation or duplicate a ledger row', () => {
   const server = workspace();
   const client = structuredClone(server);

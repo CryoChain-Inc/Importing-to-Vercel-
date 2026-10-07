@@ -27,6 +27,7 @@ import FarmerApp from './roles/farmer/Farmer';
 import AgentApp from './roles/agent/Agent';
 import DriverApp from './roles/driver/Driver';
 import OpsApp from './roles/ops/Ops';
+import { LoadingScreen } from './ui/loading';
 import { colors } from './ui/theme';
 import type { ReactNode } from 'react';
 
@@ -185,7 +186,7 @@ function Workspace() {
 
 function SignedIn() {
   const { ready, session, profile, mustSetPassword } = useAuth();
-  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
+  if (!ready) return <LoadingScreen />;
   if (!session) return <AuthScreen />;
   if (mustSetPassword) return <SetPasswordScreen />;
   if (!profile) return <MissingProfile />;
@@ -202,7 +203,7 @@ export default function App() {
     Inter_700Bold,
     Fraunces_400Regular,
   });
-  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
+  if (!ready) return <LoadingScreen />;
   if (!remoteEnabled)
     return (
       <SafeAreaProvider>

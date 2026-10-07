@@ -67,10 +67,12 @@ export function Desk({
   nav,
   footer,
   children,
+  logoHeight = 24,
 }: {
   nav: { to: string; label: string; end?: boolean; group?: string }[];
   footer?: ReactNode;
   children: ReactNode;
+  logoHeight?: number;
 }) {
   const { width } = useWindowDimensions();
   const wide = width >= 1024;
@@ -139,7 +141,7 @@ export function Desk({
               paddingBottom: 12,
             }}
           >
-            <Logo h={24} style={{ alignSelf: 'flex-start' }} />
+            <Logo h={logoHeight} style={{ alignSelf: 'flex-start' }} />
             <ScrollView
               style={{ flex: 1, marginTop: 24 }}
               contentContainerStyle={{ gap: 2, paddingBottom: 12 }}
