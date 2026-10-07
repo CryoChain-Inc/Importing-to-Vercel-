@@ -83,6 +83,12 @@ function save(s: State) {
 
 // ---------- helpers (mutating, used inside mutate()) ----------
 const nid = (s: State, prefix: string) => `${prefix}-${++s.seq}`;
+function freshLineId(s: State) {
+  const used = new Set(s.session.draft.lines.map((line) => line.id));
+  let id = nid(s, 'LN');
+  while (used.has(id)) id = nid(s, 'LN');
+  return id;
+}
 const audit = (s: State, actor: string, action: string, entity: string, detail?: string) => {
   s.audit.unshift({ id: nid(s, 'AU'), at: Date.now(), actor, action, entity, detail });
 };
@@ -519,7 +525,7 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
           ex.total = round2(ex.qtyKg * unitPrice);
         } else
           s.session.draft.lines.push({
-            id: nid(s, 'LN'),
+            id: freshLineId(s),
             productId,
             name: p.name,
             grade,
@@ -529,14 +535,25 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
           });
       });
     },
-    draftRemove(lineId: string) {
+    draftRemove(lineId: string, at?: number) {
       mutate((s) => {
-        s.session.draft.lines = s.session.draft.lines.filter((l) => l.id !== lineId);
+        const index =
+          at != null && s.session.draft.lines[at]?.id === lineId
+            ? at
+            : s.session.draft.lines.findIndex((l) => l.id === lineId);
+        if (index >= 0) s.session.draft.lines.splice(index, 1);
       });
     },
     draftSet(patch: Partial<{ deliveryDate: string; address: string }>) {
       mutate((s) => {
         Object.assign(s.session.draft, patch);
+      });
+    },
+    setOrgAddress(orgId: string, address: string) {
+      mutate((s) => {
+        const org = s.orgs.find((item) => item.id === orgId);
+        if (org) org.address = address.trim();
+        s.session.draft.address = address.trim();
       });
     },
     draftReorder(orderId: string) {

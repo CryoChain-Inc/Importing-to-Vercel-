@@ -202,6 +202,7 @@ export function mergeBuyer(
     const buyerUserId = String(
       (client.session as Rec | undefined)?.buyerUserId ?? users[0]?.id ?? '',
     );
+    next.seq = Math.max(Number(client.seq ?? 0), Number(server.seq ?? 0));
     return { state: next, link: { org_id: String(org.id), buyer_user_id: buyerUserId } };
   }
   const serverOrders = arr(server, 'orders');
@@ -268,6 +269,7 @@ export function mergeBuyer(
     seen.add(id);
     return true;
   });
+  next.seq = Math.max(Number(client.seq ?? 0), Number(server.seq ?? 0));
   return { state: next };
 }
 

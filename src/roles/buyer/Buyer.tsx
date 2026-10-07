@@ -98,7 +98,7 @@ function useBuyer() {
 }
 function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean }) {
   const desk = useMedia('(min-width: 1024px)');
-  const { org, user, credit } = useBuyer();
+  const { org, user } = useBuyer();
   if (desk && nav)
     return (
       <Desk
@@ -134,16 +134,6 @@ function Shell({ children, nav = true }: { children: ReactNode; nav?: boolean })
             {org.name}
             <Host tag="br" />
             {user.name} · {user.roles.map((r) => r[0].toUpperCase() + r.slice(1)).join(', ')}
-            <Host tag="br" />
-            Credit{' '}
-            <Host
-              tag="strong"
-              style={{
-                color: 'var(--green)',
-              }}
-            >
-              {ghs(credit)}
-            </Host>
           </>
         }
       >
@@ -876,6 +866,136 @@ function Category() {
     </Shell>
   );
 }
+function OrderDatePicker({
+  value,
+  min,
+  onChange,
+}: {
+  value: string;
+  min: string;
+  onChange: (iso: string) => void;
+}) {
+  const selected = value ? new Date(`${value}T12:00:00`) : new Date(`${min}T12:00:00`);
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState({ y: selected.getFullYear(), m: selected.getMonth() });
+  const first = new Date(cursor.y, cursor.m, 1);
+  const lead = (first.getDay() + 6) % 7;
+  const count = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: count }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7) cells.push(null);
+  return (
+    <View style={{ position: 'relative', zIndex: open ? 20 : 1 }}>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={{
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: colors.steel,
+          borderRadius: 6,
+          backgroundColor: '#fff',
+          paddingHorizontal: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text style={{ fontSize: 16, color: colors.ink }}>{fmtDay(value)}</Text>
+        <Text style={{ color: colors.steelInk, fontSize: 12 }}>{open ? '▴' : '▾'}</Text>
+      </Pressable>
+      {open ? (
+        <View
+          style={{
+            marginTop: 8,
+            padding: 12,
+            backgroundColor: '#fff',
+            borderWidth: 1,
+            borderColor: colors.line,
+            borderRadius: 8,
+            gap: 8,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>‹</Text>
+            </Pressable>
+            <Text style={{ fontFamily: fontFamily('600'), fontSize: 14, color: colors.ink }}>
+              {MONTH_NAMES[cursor.m]} {cursor.y}
+            </Text>
+            <Pressable
+              onPress={() =>
+                setCursor((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 }))
+              }
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 18, color: colors.ink }}>›</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
+              <Text
+                key={day}
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  fontSize: 11,
+                  color: colors.steelInk,
+                  fontFamily: fontFamily('600'),
+                }}
+              >
+                {day}
+              </Text>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {cells.map((day, i) => {
+              if (!day) return <View key={`e-${i}`} style={{ width: '14.28%', height: 36 }} />;
+              const iso = isoDay(new Date(cursor.y, cursor.m, day, 12).getTime());
+              const blocked = iso < min;
+              const on = iso === value;
+              return (
+                <Pressable
+                  key={iso}
+                  disabled={blocked}
+                  onPress={() => {
+                    onChange(iso);
+                    setOpen(false);
+                  }}
+                  style={{
+                    width: '14.28%',
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 18,
+                    backgroundColor: on ? colors.blue : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: blocked ? colors.steel : on ? '#fff' : colors.ink,
+                      fontFamily: fontFamily(on ? '600' : '400'),
+                    }}
+                  >
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function Product() {
   const { state, act, org } = useBuyer();
   const { id } = useParams();
@@ -883,10 +1003,18 @@ function Product() {
   const p = state.products.find((x) => x.id === id)!;
   const [grade, setGrade] = useState(p.grades[0].grade);
   const [q, setQ] = useState(Math.max(p.minKg, 300));
+  const [addingAddress, setAddingAddress] = useState(false);
+  const [addressDraft, setAddressDraft] = useState('');
   const draft = state.session.draft;
-  const earliest = addDays(isoDay(Date.now()), state.config.leadDays);
+  const today = isoDay(Date.now());
+  const earliest = addDays(today, state.config.leadDays);
+  const savedAddress = org.address.trim();
   useEffect(() => {
-    if (draft.deliveryDate) return;
+    if (!savedAddress || draft.address === savedAddress) return;
+    act.draftSet({ address: savedAddress });
+  }, [act, draft.address, savedAddress]);
+  useEffect(() => {
+    if (draft.deliveryDate && draft.deliveryDate >= earliest) return;
     act.draftSet({ deliveryDate: earliest });
   }, [act, draft.deliveryDate, earliest]);
   const price = p.grades.find((g) => g.grade === grade)!.pricePerKg;
@@ -1040,37 +1168,45 @@ function Product() {
           </Host>
         </Host>
         <Field label="Delivery date">
-          <Host
-            tag="input"
-            type="date"
-            className="input"
-            min={earliest}
+          <OrderDatePicker
             value={draft.deliveryDate < earliest ? earliest : draft.deliveryDate}
-            onChange={(e) =>
-              act.draftSet({
-                deliveryDate: e.target.value,
-              })
-            }
+            min={earliest}
+            onChange={(deliveryDate) => act.draftSet({ deliveryDate })}
           />
           <Host tag="span" className="cap">
-            Earliest {fmtDay(earliest)}
+            Earliest {fmtDay(earliest)}. Days before that stay closed.
           </Host>
         </Field>
         <Field label="Deliver to">
-          <Host
-            tag="select"
-            className="input"
-            value={draft.address}
-            onChange={(e) =>
-              act.draftSet({
-                address: e.target.value,
-              })
-            }
-          >
-            <Host tag="option">Main kitchen, Gamel Abdul Nasser Ave</Host>
-            <Host tag="option">{org.address}</Host>
-            <Host tag="option">Staff canteen, service entrance</Host>
-          </Host>
+          {savedAddress ? (
+            <Host tag="div" className="input">
+              {savedAddress}
+            </Host>
+          ) : addingAddress ? (
+            <Host tag="div" className="col" style={{ gap: 8 }}>
+              <Host
+                tag="input"
+                className="input"
+                placeholder="Delivery address"
+                value={addressDraft}
+                onChange={(e) => setAddressDraft(e.target.value)}
+              />
+              <Btn
+                disabled={addressDraft.trim().length < 4}
+                onClick={() => {
+                  act.setOrgAddress(org.id, addressDraft);
+                  setAddingAddress(false);
+                  setAddressDraft('');
+                }}
+              >
+                Save address
+              </Btn>
+            </Host>
+          ) : (
+            <Btn kind="secondary" onClick={() => setAddingAddress(true)}>
+              Add address
+            </Btn>
+          )}
         </Field>
       </Host>
       <Host tag="div" className="footer">
@@ -1087,7 +1223,7 @@ function Product() {
           <Money v={round2(q * price)} />
         </Host>
         <Btn
-          disabled={q < p.minKg || org.status !== 'approved'}
+          disabled={q < p.minKg || org.status !== 'approved' || !draft.address.trim()}
           onClick={() => {
             act.draftAdd(p.id, grade, q);
             nav('/buyer/summary');
@@ -1150,41 +1286,52 @@ function Summary() {
             <Host
               tag="div"
               key={l.id}
-              className="row"
               style={{
-                padding: '12px 14px',
-                borderBottom: i < d.lines.length - 1 ? '1px solid var(--line-soft)' : undefined,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: 14,
+                borderBottomWidth: i < d.lines.length - 1 ? 1 : 0,
+                borderBottomColor: colors.lineSoft,
               }}
             >
-              <Host tag="div">
-                <Host tag="div" className="h16">
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text
+                  style={{
+                    fontFamily: fontFamily('600'),
+                    fontSize: 16,
+                    lineHeight: 22,
+                    color: colors.ink,
+                  }}
+                >
                   {l.name}, {l.grade}
-                </Host>
-                <Host tag="div" className="cap">
-                  {l.qtyKg} kg × {l.unitPrice.toFixed(2)} ·{' '}
-                  <Host
-                    tag="button"
-                    onClick={() => act.draftRemove(l.id)}
-                    style={{
-                      color: 'var(--red)',
-                      fontWeight: 600,
-                    }}
-                  >
+                </Text>
+                <Text style={{ fontSize: 13, lineHeight: 18, color: colors.steelInk }}>
+                  {l.qtyKg} kg × {l.unitPrice.toFixed(2)}
+                </Text>
+                <Pressable
+                  onPress={() => act.draftRemove(l.id, i)}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ color: colors.red, fontFamily: fontFamily('600'), fontSize: 14 }}>
                     remove
-                  </Host>
-                </Host>
-              </Host>
-              <Host
-                tag="span"
-                className="tabular"
+                  </Text>
+                </Pressable>
+              </View>
+              <Text
                 style={{
-                  fontWeight: 600,
+                  fontFamily: fontFamily('600'),
+                  fontSize: 14,
+                  color: colors.ink,
+                  flexShrink: 0,
                 }}
               >
                 {l.total.toLocaleString('en-GH', {
                   minimumFractionDigits: 2,
                 })}
-              </Host>
+              </Text>
             </Host>
           ))}
         </Host>
@@ -1234,7 +1381,14 @@ function Summary() {
             <Money v={round2(linesTotal - cr)} />
           </Host>
         </Host>
-        <KV k="Delivery" v={`${fmtDay(d.deliveryDate)} · ${d.address.split(',')[0]}`} />
+        <KV
+          k="Delivery"
+          v={
+            d.address
+              ? `${fmtDay(d.deliveryDate)} · ${d.address.split(',')[0]}`
+              : fmtDay(d.deliveryDate)
+          }
+        />
         <KV k="Requester" v={user.name} />
         <Link
           to="/buyer/new-order"
