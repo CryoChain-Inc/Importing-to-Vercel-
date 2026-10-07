@@ -2980,6 +2980,9 @@ function Payments() {
     </Shell>
   );
 }
+const NAME_LIMIT = 40;
+const GHANA_DIGITS = 9;
+
 function Users() {
   const { state, act, org, user, isAdmin } = useBuyer();
   const [phone, setPhone] = useState('');
@@ -3025,7 +3028,10 @@ function Users() {
                 className="input"
                 placeholder="Name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                maxLength={40}
+                onChange={(e) =>
+                  setName(e.target.value.replace(/[^\p{L}\s'-]/gu, '').slice(0, NAME_LIMIT))
+                }
               />
               <Host
                 tag="div"
@@ -3035,15 +3041,58 @@ function Users() {
                 }}
               >
                 <Host
-                  tag="input"
-                  className="input"
-                  placeholder="+233"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  tag="div"
                   style={{
+                    display: 'flex',
                     flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    minWidth: 0,
+                    height: 48,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    borderRadius: 8,
+                    backgroundColor: '#fff',
+                    overflow: 'hidden',
                   }}
-                />
+                >
+                  <Text
+                    style={{
+                      paddingLeft: 12,
+                      fontFamily: fontFamily('600'),
+                      fontSize: 16,
+                      lineHeight: 22,
+                      color: colors.ink,
+                    }}
+                  >
+                    +233
+                  </Text>
+                  <Host
+                    tag="input"
+                    type="tel"
+                    placeholder="24 000 0000"
+                    inputMode="numeric"
+                    value={phone}
+                    maxLength={GHANA_DIGITS}
+                    onChange={(e) => {
+                      let digits = e.target.value.replace(/\D/g, '');
+                      if (digits.startsWith('0')) digits = digits.slice(1);
+                      setPhone(digits.slice(0, GHANA_DIGITS));
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      height: 48,
+                      borderWidth: 0,
+                      borderRadius: 0,
+                      backgroundColor: 'transparent',
+                      paddingHorizontal: 8,
+                      fontSize: 16,
+                      lineHeight: 48,
+                      textAlignVertical: 'center',
+                    }}
+                  />
+                </Host>
                 <Host
                   tag="select"
                   className="input"
@@ -3078,12 +3127,12 @@ function Users() {
                 </Field>
               )}
               <Btn
-                disabled={!phone}
+                disabled={name.trim().length < 2 || phone.length !== GHANA_DIGITS}
                 onClick={() => {
                   act.inviteUser(
                     org.id,
-                    name,
-                    phone,
+                    name.trim(),
+                    `+233${phone}`,
                     role,
                     role === 'approver' ? Number(limit) : undefined,
                   );
@@ -3102,16 +3151,26 @@ function Users() {
             key={u.id}
             className="item"
             style={{
+              display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: 12,
               color: u.status === 'deactivated' ? 'var(--steel-ink)' : undefined,
             }}
           >
-            <Host tag="div">
-              <Host tag="div" className="h16">
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{
+                  fontFamily: fontFamily('600'),
+                  fontSize: 16,
+                  lineHeight: 22,
+                  color: u.status === 'deactivated' ? colors.steelInk : colors.ink,
+                  ...(Platform.OS === 'web' ? ({ overflowWrap: 'anywhere' } as object) : {}),
+                }}
+              >
                 {u.name}
-              </Host>
+              </Text>
               <Host tag="div" className="cap">
                 {u.roles.map((r) => r[0].toUpperCase() + r.slice(1)).join(' · ')}
                 {u.limit !== undefined ? ` · limit ${ghs(u.limit)}` : ''}
@@ -3121,7 +3180,8 @@ function Users() {
                     ? ' · deactivated'
                     : ''}
               </Host>
-            </Host>
+            </View>
+            <View style={{ flexShrink: 0 }}>
             {u.id === user.id ? (
               <Host tag="span" className="cap">
                 You
@@ -3158,6 +3218,7 @@ function Users() {
                 Edit
               </Host>
             ) : null}
+            </View>
           </Host>
         ))}
         <Host tag="div" className="cap">

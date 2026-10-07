@@ -286,6 +286,8 @@ export function Host(props: {
     disabled,
     type,
     readOnly,
+    maxLength,
+    inputMode,
   } = props;
   if (tag === 'br') return <Text>{'\n'}</Text>;
   if (tag === 'option') return null;
@@ -337,7 +339,14 @@ export function Host(props: {
         placeholderTextColor={colors.steelInk}
         editable={!disabled && !readOnly}
         multiline={tag === 'textarea'}
-        keyboardType={type === 'number' ? 'decimal-pad' : type === 'tel' ? 'phone-pad' : 'default'}
+        maxLength={typeof maxLength === 'number' ? maxLength : undefined}
+        keyboardType={
+          type === 'number'
+            ? 'decimal-pad'
+            : type === 'tel' || inputMode === 'numeric'
+              ? 'phone-pad'
+              : 'default'
+        }
         style={[
           looks.view,
           textStyle,
