@@ -1330,6 +1330,50 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
         e.assignee = opsName(s);
       });
     },
+    addCategory(input: { name: string; image: string }) {
+      let id = '';
+      mutate((s) => {
+        id = nid(s, 'CAT');
+        s.categories.push({
+          id,
+          name: input.name.trim(),
+          image: input.image,
+          listed: true,
+        });
+        audit(s, opsName(s), 'Added category', input.name.trim(), id);
+      });
+      return id;
+    },
+    addProduct(input: {
+      name: string;
+      categoryId: string;
+      grades: { grade: string; pricePerKg: number }[];
+      minKg: number;
+    }) {
+      let id = '';
+      mutate((s) => {
+        id = nid(s, 'PR');
+        const name = input.name.trim();
+        s.products.push({
+          id,
+          categoryId: input.categoryId,
+          name,
+          grades: input.grades,
+          minKg: input.minKg,
+          available: true,
+          photo: name,
+          listed: true,
+        });
+        audit(
+          s,
+          opsName(s),
+          'Added product',
+          name,
+          `${id} · min ${input.minKg} kg · ${input.grades.map((g) => `${g.grade} ${g.pricePerKg}`).join(', ')}`,
+        );
+      });
+      return id;
+    },
     updateConfig(patch: Partial<State['config']>, approvals?: string) {
       mutate((s) => {
         const before = JSON.stringify({

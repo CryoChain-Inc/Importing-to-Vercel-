@@ -634,7 +634,15 @@ function Home() {
             gap: 12,
           }}
         >
-          {state.categories.map((c, i) => (
+          {state.categories.filter((c) => c.listed).length === 0 && (
+            <Empty
+              title="No products listed yet."
+              sub="The node manager adds categories and products. They show up here."
+            />
+          )}
+          {state.categories
+            .filter((c) => c.listed)
+            .map((c, i) => (
             <Link
               key={c.id}
               to={`/buyer/c/${c.id}`}
@@ -670,6 +678,7 @@ function Home() {
                   <Text style={{ color: '#fff', fontSize: 18, lineHeight: 20 }}>›</Text>
                 </View>
               </View>
+              {c.image ? <Ph label={c.image.split(':')[0]} w={48} h={36} /> : null}
             </Link>
           ))}
         </Host>
@@ -726,8 +735,9 @@ function Home() {
 function Category() {
   const { state } = useBuyer();
   const { id } = useParams();
-  const cat = state.categories.find((c) => c.id === id)!;
-  const ps = state.products.filter((p) => p.categoryId === id);
+  const cat = state.categories.find((c) => c.id === id && c.listed);
+  const ps = state.products.filter((p) => p.categoryId === id && p.listed);
+  if (!cat) return <Navigate to="/buyer/new-order" />;
   return (
     <Shell>
       <TopBar
