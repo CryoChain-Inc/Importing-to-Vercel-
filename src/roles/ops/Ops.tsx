@@ -54,6 +54,7 @@ import { remoteEnabled } from '../../backend/config';
 import { payoutPreflight, resolveWallet, verifyTransfer } from '../../backend/remote';
 import { downloadCsv } from '../buyer/Buyer';
 import { capturePhoto } from '../../backend/media';
+import { StoredImage } from '../../ui/stored-image';
 const NAV = [
   {
     to: '/ops',
@@ -360,10 +361,6 @@ function OrderBook() {
     <Shell
       title="Order book"
       right={
-        <>
-          <Btn kind="secondary" md to="/ops/catalog">
-            Product listing
-          </Btn>
         <Host
           tag="button"
           className="f btn btn-secondary btn-md"
@@ -382,7 +379,6 @@ function OrderBook() {
         >
           Export CSV
         </Host>
-        </>
       }
     >
       <Host tag="div" className="toolbar">
@@ -3102,9 +3098,12 @@ function Catalog() {
   const { state, act } = useOps();
   const listed = state.categories.filter((c) => c.listed);
   const products = state.products.filter((p) => p.listed);
+  const [editingCat, setEditingCat] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<string | null>(null);
   const [catName, setCatName] = useState('');
   const [catImage, setCatImage] = useState('');
   const [name, setName] = useState('');
+  const [photo, setPhoto] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [minKg, setMinKg] = useState('50');
   const [grades, setGrades] = useState([{ grade: 'A', price: '' }]);
@@ -3112,6 +3111,19 @@ function Catalog() {
   const parsedGrades = grades
     .map((g) => ({ grade: g.grade.trim(), pricePerKg: Number(g.price) }))
     .filter((g) => g.grade && g.pricePerKg > 0);
+  const resetCategory = () => {
+    setEditingCat(null);
+    setCatName('');
+    setCatImage('');
+  };
+  const resetProduct = () => {
+    setEditingProduct(null);
+    setName('');
+    setPhoto('');
+    setCategoryId('');
+    setMinKg('50');
+    setGrades([{ grade: 'A', price: '' }]);
+  };
   return (
     <Shell title="Product listing">
       <Host
@@ -3134,7 +3146,7 @@ function Catalog() {
           }}
         >
           <Host tag="div" className="h16">
-            New category
+            {editingCat ? 'Edit category' : 'New category'}
           </Host>
           <Field label="Name">
             <Host
@@ -3155,19 +3167,24 @@ function Catalog() {
             >
               {catImage ? 'Replace image' : 'Upload image'}
             </Btn>
-            {catImage ? <Host tag="div" className="cap">{catImage}</Host> : null}
+            {catImage ? <StoredImage stored={catImage} w={160} h={96} /> : null}
           </Field>
           <Btn
             disabled={!catName.trim() || !catImage}
             onClick={() => {
-              act.addCategory({ name: catName, image: catImage });
-              setCatName('');
-              setCatImage('');
-              setNote('Category saved. It is on the buyer new-order screen.');
+              if (editingCat) act.updateCategory(editingCat, { name: catName, image: catImage });
+              else act.addCategory({ name: catName, image: catImage });
+              resetCategory();
+              setNote(editingCat ? 'Category updated.' : 'Category saved. It is on the buyer new-order screen.');
             }}
           >
-            Save category
+            {editingCat ? 'Update category' : 'Save category'}
           </Btn>
+          {editingCat ? (
+            <Btn kind="secondary" onClick={resetCategory}>
+              Cancel
+            </Btn>
+          ) : null}
         </Host>
         <Host
           tag="div"
@@ -3180,7 +3197,7 @@ function Catalog() {
           }}
         >
           <Host tag="div" className="h16">
-            New product
+            {editingProduct ? 'Edit product' : 'New product'}
           </Host>
           <Field label="Name">
             <Host
@@ -3206,6 +3223,19 @@ function Catalog() {
                 </Host>
               ))}
             </Host>
+          </Field>
+          <Field label="Image">
+            <Btn
+              kind="secondary"
+              onClick={() => {
+                void capturePhoto('product').then((shot) => {
+                  if (shot) setPhoto(shot);
+                });
+              }}
+            >
+              {photo ? 'Replace image' : 'Upload image'}
+            </Btn>
+            {photo ? <StoredImage stored={photo} w={160} h={96} /> : null}
           </Field>
           <Field label="Minimum purchase, kg">
             <Host
@@ -3251,22 +3281,35 @@ function Catalog() {
             Add grade
           </Btn>
           <Btn
-            disabled={!name.trim() || !categoryId || !(Number(minKg) > 0) || parsedGrades.length === 0}
+            disabled={
+              !name.trim() ||
+              !categoryId ||
+              !photo ||
+              !(Number(minKg) > 0) ||
+              parsedGrades.length === 0
+            }
             onClick={() => {
-              act.addProduct({
+              const input = {
                 name,
                 categoryId,
                 grades: parsedGrades,
                 minKg: Number(minKg),
-              });
-              setName('');
-              setMinKg('50');
-              setGrades([{ grade: 'A', price: '' }]);
-              setNote('Product saved. Buyers can order it from that category.');
+                photo,
+              };
+              if (editingProduct) act.updateProduct(editingProduct, input);
+              else act.addProduct(input);
+              const wasEdit = !!editingProduct;
+              resetProduct();
+              setNote(wasEdit ? 'Product updated.' : 'Product saved. Buyers can order it from that category.');
             }}
           >
-            Save product
+            {editingProduct ? 'Update product' : 'Save product'}
           </Btn>
+          {editingProduct ? (
+            <Btn kind="secondary" onClick={resetProduct}>
+              Cancel
+            </Btn>
+          ) : null}
         </Host>
       </Host>
       {note ? <Host tag="div" className="cap">{note}</Host> : null}
@@ -3276,14 +3319,27 @@ function Catalog() {
       {listed.length === 0 ? (
         <Empty title="No categories yet." sub="Add one to open the buyer catalog." />
       ) : (
-        <Tbl head={['Category', 'Image', 'Products']}>
+        <Tbl head={['Category', 'Image', 'Products', '']}>
           {listed.map((c) => (
             <Host tag="tr" key={c.id}>
               <Host tag="td">{c.name}</Host>
-              <Host tag="td" className="cap">
-                {c.image ?? '—'}
+              <Host tag="td">
+                <StoredImage stored={c.image} w={72} h={48} />
               </Host>
               <Host tag="td">{products.filter((p) => p.categoryId === c.id).length}</Host>
+              <Host tag="td">
+                <Btn
+                  kind="secondary"
+                  sm
+                  onClick={() => {
+                    setEditingCat(c.id);
+                    setCatName(c.name);
+                    setCatImage(c.image ?? '');
+                  }}
+                >
+                  Edit
+                </Btn>
+              </Host>
             </Host>
           ))}
         </Tbl>
@@ -3294,16 +3350,35 @@ function Catalog() {
       {products.length === 0 ? (
         <Empty title="No products yet." sub="Each product needs a category, grades, and a minimum kg." />
       ) : (
-        <Tbl head={['Product', 'Category', 'Grades', 'Min kg']}>
+        <Tbl head={['Product', 'Image', 'Category', 'Grades', 'Min kg', '']}>
           {products.map((p) => (
             <Host tag="tr" key={p.id}>
               <Host tag="td">{p.name}</Host>
+              <Host tag="td">
+                <StoredImage stored={p.photo} w={72} h={48} />
+              </Host>
               <Host tag="td">{listed.find((c) => c.id === p.categoryId)?.name ?? '—'}</Host>
               <Host tag="td">
                 {p.grades.map((g) => `${g.grade} ${ghs(g.pricePerKg)}`).join(' · ')}
               </Host>
               <Host tag="td" className="tabular">
                 {p.minKg}
+              </Host>
+              <Host tag="td">
+                <Btn
+                  kind="secondary"
+                  sm
+                  onClick={() => {
+                    setEditingProduct(p.id);
+                    setName(p.name);
+                    setPhoto(p.photo);
+                    setCategoryId(p.categoryId);
+                    setMinKg(String(p.minKg));
+                    setGrades(p.grades.map((g) => ({ grade: g.grade, price: String(g.pricePerKg) })));
+                  }}
+                >
+                  Edit
+                </Btn>
               </Host>
             </Host>
           ))}

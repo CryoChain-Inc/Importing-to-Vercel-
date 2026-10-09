@@ -37,6 +37,19 @@ export async function capturePhoto(label: string): Promise<string | null> {
   return `${label}:${path}`;
 }
 
+export function capturePath(stored?: string) {
+  if (!stored) return null;
+  const path = stored.includes(':') ? stored.slice(stored.indexOf(':') + 1) : stored;
+  return path.includes('/') ? path : null;
+}
+
+export async function captureSignedUrl(stored?: string) {
+  const path = capturePath(stored);
+  if (!path || !remoteEnabled) return null;
+  const { data } = await supabase.storage.from('captures').createSignedUrl(path, 60 * 60);
+  return data?.signedUrl ?? null;
+}
+
 function base64Bytes(value: string) {
   const bin = globalThis.atob(value);
   const bytes = new Uint8Array(bin.length);

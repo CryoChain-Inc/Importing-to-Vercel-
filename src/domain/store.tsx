@@ -1344,11 +1344,21 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
       });
       return id;
     },
+    updateCategory(id: string, input: { name: string; image: string }) {
+      mutate((s) => {
+        const cat = s.categories.find((c) => c.id === id);
+        if (!cat) return;
+        cat.name = input.name.trim();
+        cat.image = input.image;
+        audit(s, opsName(s), 'Updated category', cat.name, id);
+      });
+    },
     addProduct(input: {
       name: string;
       categoryId: string;
       grades: { grade: string; pricePerKg: number }[];
       minKg: number;
+      photo: string;
     }) {
       let id = '';
       mutate((s) => {
@@ -1361,7 +1371,7 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
           grades: input.grades,
           minKg: input.minKg,
           available: true,
-          photo: name,
+          photo: input.photo,
           listed: true,
         });
         audit(
@@ -1373,6 +1383,27 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
         );
       });
       return id;
+    },
+    updateProduct(
+      id: string,
+      input: {
+        name: string;
+        categoryId: string;
+        grades: { grade: string; pricePerKg: number }[];
+        minKg: number;
+        photo: string;
+      },
+    ) {
+      mutate((s) => {
+        const product = s.products.find((p) => p.id === id);
+        if (!product) return;
+        product.name = input.name.trim();
+        product.categoryId = input.categoryId;
+        product.grades = input.grades;
+        product.minKg = input.minKg;
+        product.photo = input.photo;
+        audit(s, opsName(s), 'Updated product', product.name, id);
+      });
     },
     updateConfig(patch: Partial<State['config']>, approvals?: string) {
       mutate((s) => {

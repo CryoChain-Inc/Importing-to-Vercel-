@@ -49,6 +49,7 @@ import {
   useMedia,
 } from '../../ui/kit';
 import { Desk, Phone } from '../../layouts/shells';
+import { StoredImage } from '../../ui/stored-image';
 const NAV = [
   {
     to: '/buyer/new-order',
@@ -678,7 +679,7 @@ function Home() {
                   <Text style={{ color: '#fff', fontSize: 18, lineHeight: 20 }}>›</Text>
                 </View>
               </View>
-              {c.image ? <Ph label={c.image.split(':')[0]} w={48} h={36} /> : null}
+              {c.image ? <StoredImage stored={c.image} w={120} h={64} /> : null}
             </Link>
           ))}
         </Host>
@@ -750,6 +751,9 @@ function Category() {
         }
       />
       <Host tag="div" className="body">
+        {ps.length === 0 ? (
+          <Empty title="No products added." sub="This category does not have any products yet." />
+        ) : null}
         {ps.map((p) =>
           p.available ? (
             <Link
@@ -762,7 +766,7 @@ function Category() {
                 padding: 12,
               }}
             >
-              <Ph label={p.photo} />
+              <StoredImage stored={p.photo} />
               <Host
                 tag="div"
                 className="col"
@@ -822,29 +826,7 @@ function Category() {
                 padding: 12,
               }}
             >
-              <Host
-                tag="div"
-                style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 6,
-                  background: 'var(--line-soft)',
-                  position: 'relative',
-                  flex: 'none',
-                }}
-              >
-                <Host
-                  tag="span"
-                  style={{
-                    position: 'absolute',
-                    left: 4,
-                    top: 4,
-                    font: '10px ui-monospace,monospace',
-                  }}
-                >
-                  {p.photo}
-                </Host>
-              </Host>
+              <StoredImage stored={p.photo} />
               <Host
                 tag="div"
                 className="col"
@@ -1038,16 +1020,7 @@ function Product() {
         }}
         className="ph"
       >
-        <Host
-          tag="span"
-          style={{
-            left: 12,
-            top: 12,
-            fontSize: 11,
-          }}
-        >
-          product photo: {p.photo}, crate, 3:2
-        </Host>
+        <StoredImage stored={p.photo} w={320} h={160} />
       </Host>
       <Host
         tag="div"
