@@ -390,22 +390,20 @@ export function Host(props: {
   }
   if (tag === 'tr') {
     const head = className?.split(/\s+/).includes('head');
+    const rowStyle = [
+      {
+        flexDirection: 'row' as const,
+        borderBottomWidth: 1,
+        borderBottomColor: head ? colors.line : colors.lineSoft,
+        backgroundColor: head ? colors.lineSoft : looks.view.backgroundColor,
+        minHeight: head ? 42 : undefined,
+        alignItems: head ? ('center' as const) : ('flex-start' as const),
+      },
+      className?.includes('sel') ? { backgroundColor: colors.mist } : null,
+    ];
+    if (!onClick) return <View style={rowStyle}>{children}</View>;
     return (
-      <Pressable
-        disabled={!onClick}
-        onPress={onClick}
-        style={[
-          {
-            flexDirection: 'row',
-            borderBottomWidth: 1,
-            borderBottomColor: head ? colors.line : colors.lineSoft,
-            backgroundColor: head ? colors.lineSoft : looks.view.backgroundColor,
-            minHeight: head ? 42 : undefined,
-            alignItems: head ? 'center' : 'flex-start',
-          },
-          className?.includes('sel') ? { backgroundColor: colors.mist } : null,
-        ]}
-      >
+      <Pressable onPress={onClick} style={rowStyle}>
         {children}
       </Pressable>
     );
@@ -427,25 +425,29 @@ export function Host(props: {
           justifyContent: 'center',
         }
       : { width: 132, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' };
-    return (
-      <View
-        style={[
-          cell,
-          looks.view,
-          looks.view.gap != null
-            ? { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }
-            : null,
-        ]}
-      >
-        {mode === 'text' ? (
-          <Text style={cellText} numberOfLines={tag === 'th' ? 1 : undefined}>
-            {children}
-          </Text>
-        ) : (
-          paint(children, cellText)
-        )}
-      </View>
-    );
+    const cellStyle = [
+      cell,
+      looks.view,
+      looks.view.gap != null
+        ? { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }
+        : null,
+    ];
+    const cellBody =
+      mode === 'text' ? (
+        <Text style={cellText} numberOfLines={tag === 'th' ? 1 : undefined}>
+          {children}
+        </Text>
+      ) : (
+        paint(children, cellText)
+      );
+    if (onClick) {
+      return (
+        <Pressable onPress={() => onClick()} style={cellStyle}>
+          {cellBody}
+        </Pressable>
+      );
+    }
+    return <View style={cellStyle}>{cellBody}</View>;
   }
 
   if (tag === 'button' || tag === 'a') {

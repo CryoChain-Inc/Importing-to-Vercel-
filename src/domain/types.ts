@@ -1,6 +1,6 @@
 export type ID = string;
 export type Role = 'buyer' | 'farmer' | 'agent' | 'driver' | 'ops';
-export type Category = { id: ID; name: string };
+export type Category = { id: ID; name: string; image?: string; listed?: boolean };
 export type Product = {
   id: ID;
   categoryId: ID;
@@ -9,6 +9,7 @@ export type Product = {
   minKg: number;
   available: boolean;
   photo: string;
+  listed?: boolean;
 };
 export type BuyerOrg = {
   id: ID;

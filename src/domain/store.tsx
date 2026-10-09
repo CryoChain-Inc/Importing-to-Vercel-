@@ -1330,6 +1330,81 @@ export function buildActions(get: () => State, mutate: (fn: (s: State) => void) 
         e.assignee = opsName(s);
       });
     },
+    addCategory(input: { name: string; image: string }) {
+      let id = '';
+      mutate((s) => {
+        id = nid(s, 'CAT');
+        s.categories.push({
+          id,
+          name: input.name.trim(),
+          image: input.image,
+          listed: true,
+        });
+        audit(s, opsName(s), 'Added category', input.name.trim(), id);
+      });
+      return id;
+    },
+    updateCategory(id: string, input: { name: string; image: string }) {
+      mutate((s) => {
+        const cat = s.categories.find((c) => c.id === id);
+        if (!cat) return;
+        cat.name = input.name.trim();
+        cat.image = input.image;
+        audit(s, opsName(s), 'Updated category', cat.name, id);
+      });
+    },
+    addProduct(input: {
+      name: string;
+      categoryId: string;
+      grades: { grade: string; pricePerKg: number }[];
+      minKg: number;
+      photo: string;
+    }) {
+      let id = '';
+      mutate((s) => {
+        id = nid(s, 'PR');
+        const name = input.name.trim();
+        s.products.push({
+          id,
+          categoryId: input.categoryId,
+          name,
+          grades: input.grades,
+          minKg: input.minKg,
+          available: true,
+          photo: input.photo,
+          listed: true,
+        });
+        audit(
+          s,
+          opsName(s),
+          'Added product',
+          name,
+          `${id} · min ${input.minKg} kg · ${input.grades.map((g) => `${g.grade} ${g.pricePerKg}`).join(', ')}`,
+        );
+      });
+      return id;
+    },
+    updateProduct(
+      id: string,
+      input: {
+        name: string;
+        categoryId: string;
+        grades: { grade: string; pricePerKg: number }[];
+        minKg: number;
+        photo: string;
+      },
+    ) {
+      mutate((s) => {
+        const product = s.products.find((p) => p.id === id);
+        if (!product) return;
+        product.name = input.name.trim();
+        product.categoryId = input.categoryId;
+        product.grades = input.grades;
+        product.minKg = input.minKg;
+        product.photo = input.photo;
+        audit(s, opsName(s), 'Updated product', product.name, id);
+      });
+    },
     updateConfig(patch: Partial<State['config']>, approvals?: string) {
       mutate((s) => {
         const before = JSON.stringify({

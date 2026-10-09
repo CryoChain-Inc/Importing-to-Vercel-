@@ -49,6 +49,7 @@ import {
   useMedia,
 } from '../../ui/kit';
 import { Desk, Phone } from '../../layouts/shells';
+import { StoredImage } from '../../ui/stored-image';
 const NAV = [
   {
     to: '/buyer/new-order',
@@ -634,7 +635,15 @@ function Home() {
             gap: 12,
           }}
         >
-          {state.categories.map((c, i) => (
+          {state.categories.filter((c) => c.listed).length === 0 && (
+            <Empty
+              title="No products listed yet."
+              sub="The node manager adds categories and products. They show up here."
+            />
+          )}
+          {state.categories
+            .filter((c) => c.listed)
+            .map((c, i) => (
             <Link
               key={c.id}
               to={`/buyer/c/${c.id}`}
@@ -670,6 +679,7 @@ function Home() {
                   <Text style={{ color: '#fff', fontSize: 18, lineHeight: 20 }}>›</Text>
                 </View>
               </View>
+              {c.image ? <StoredImage stored={c.image} w={120} h={64} /> : null}
             </Link>
           ))}
         </Host>
@@ -726,8 +736,9 @@ function Home() {
 function Category() {
   const { state } = useBuyer();
   const { id } = useParams();
-  const cat = state.categories.find((c) => c.id === id)!;
-  const ps = state.products.filter((p) => p.categoryId === id);
+  const cat = state.categories.find((c) => c.id === id && c.listed);
+  const ps = state.products.filter((p) => p.categoryId === id && p.listed);
+  if (!cat) return <Navigate to="/buyer/new-order" />;
   return (
     <Shell>
       <TopBar
@@ -740,6 +751,9 @@ function Category() {
         }
       />
       <Host tag="div" className="body">
+        {ps.length === 0 ? (
+          <Empty title="No products added." sub="This category does not have any products yet." />
+        ) : null}
         {ps.map((p) =>
           p.available ? (
             <Link
@@ -752,7 +766,7 @@ function Category() {
                 padding: 12,
               }}
             >
-              <Ph label={p.photo} />
+              <StoredImage stored={p.photo} />
               <Host
                 tag="div"
                 className="col"
@@ -812,29 +826,7 @@ function Category() {
                 padding: 12,
               }}
             >
-              <Host
-                tag="div"
-                style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 6,
-                  background: 'var(--line-soft)',
-                  position: 'relative',
-                  flex: 'none',
-                }}
-              >
-                <Host
-                  tag="span"
-                  style={{
-                    position: 'absolute',
-                    left: 4,
-                    top: 4,
-                    font: '10px ui-monospace,monospace',
-                  }}
-                >
-                  {p.photo}
-                </Host>
-              </Host>
+              <StoredImage stored={p.photo} />
               <Host
                 tag="div"
                 className="col"
@@ -1028,16 +1020,7 @@ function Product() {
         }}
         className="ph"
       >
-        <Host
-          tag="span"
-          style={{
-            left: 12,
-            top: 12,
-            fontSize: 11,
-          }}
-        >
-          product photo: {p.photo}, crate, 3:2
-        </Host>
+        <StoredImage stored={p.photo} w={320} h={160} />
       </Host>
       <Host
         tag="div"
@@ -1850,10 +1833,16 @@ function OrdersDesk() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [when, setWhen] = useState('');
+  const [deliveryDir, setDeliveryDir] = useState<'asc' | 'desc'>('desc');
   const q = query.trim().toLowerCase();
-  const list = orders.filter(
-    (o) => matchesStatus(o, status) && matchesWhen(o, when) && matchesQuery(o, q),
-  );
+  const list = orders
+    .filter((o) => matchesStatus(o, status) && matchesWhen(o, when) && matchesQuery(o, q))
+    .slice()
+    .sort((a, b) => {
+      const byDate = a.deliveryDate.localeCompare(b.deliveryDate);
+      if (byDate !== 0) return deliveryDir === 'asc' ? byDate : -byDate;
+      return (b.submittedAt ?? 0) - (a.submittedAt ?? 0);
+    });
   const requested = sp.get('sel');
   const sel = list.some((o) => o.id === requested) ? requested : list[0]?.id;
   const marked = new Set(orders.map((o) => o.deliveryDate.slice(0, 10)).filter(Boolean));
@@ -1948,7 +1937,13 @@ function OrdersDesk() {
                 <Host tag="tr">
                   <Host tag="th">Order</Host>
                   <Host tag="th">Lines</Host>
-                  <Host tag="th">Delivery ↓</Host>
+                  <Host
+                    tag="th"
+                    onClick={() => setDeliveryDir((dir) => (dir === 'desc' ? 'asc' : 'desc'))}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Delivery {deliveryDir === 'desc' ? '↓' : '↑'}
+                  </Host>
                   <Host tag="th" className="num">
                     Total GHS
                   </Host>

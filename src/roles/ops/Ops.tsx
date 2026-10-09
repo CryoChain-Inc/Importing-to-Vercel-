@@ -53,11 +53,18 @@ import { TeamFields } from '../../backend/Team';
 import { remoteEnabled } from '../../backend/config';
 import { payoutPreflight, resolveWallet, verifyTransfer } from '../../backend/remote';
 import { downloadCsv } from '../buyer/Buyer';
+import { capturePhoto } from '../../backend/media';
+import { StoredImage } from '../../ui/stored-image';
 const NAV = [
   {
     to: '/ops',
     label: 'Order book',
     end: true,
+    group: 'Trade',
+  },
+  {
+    to: '/ops/catalog',
+    label: 'Product listing',
     group: 'Trade',
   },
   {
@@ -3087,6 +3094,299 @@ function AccountCell({ orgId, bank, number }: { orgId: string; bank: string; num
     </Host>
   );
 }
+function Catalog() {
+  const { state, act } = useOps();
+  const listed = state.categories.filter((c) => c.listed);
+  const products = state.products.filter((p) => p.listed);
+  const [editingCat, setEditingCat] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<string | null>(null);
+  const [catName, setCatName] = useState('');
+  const [catImage, setCatImage] = useState('');
+  const [name, setName] = useState('');
+  const [photo, setPhoto] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [minKg, setMinKg] = useState('50');
+  const [grades, setGrades] = useState([{ grade: 'A', price: '' }]);
+  const [note, setNote] = useState('');
+  const parsedGrades = grades
+    .map((g) => ({ grade: g.grade.trim(), pricePerKg: Number(g.price) }))
+    .filter((g) => g.grade && g.pricePerKg > 0);
+  const resetCategory = () => {
+    setEditingCat(null);
+    setCatName('');
+    setCatImage('');
+  };
+  const resetProduct = () => {
+    setEditingProduct(null);
+    setName('');
+    setPhoto('');
+    setCategoryId('');
+    setMinKg('50');
+    setGrades([{ grade: 'A', price: '' }]);
+  };
+  return (
+    <Shell title="Product listing">
+      <Host
+        tag="div"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 16,
+          alignItems: 'start',
+        }}
+      >
+        <Host
+          tag="div"
+          className="col"
+          style={{
+            gap: 12,
+            padding: 16,
+            border: '1px solid var(--line)',
+            borderRadius: 8,
+          }}
+        >
+          <Host tag="div" className="h16">
+            {editingCat ? 'Edit category' : 'New category'}
+          </Host>
+          <Field label="Name">
+            <Host
+              tag="input"
+              className="input"
+              value={catName}
+              onChange={(e) => setCatName(e.target.value)}
+            />
+          </Field>
+          <Field label="Image">
+            <Btn
+              kind="secondary"
+              onClick={() => {
+                void capturePhoto('category').then((shot) => {
+                  if (shot) setCatImage(shot);
+                });
+              }}
+            >
+              {catImage ? 'Replace image' : 'Upload image'}
+            </Btn>
+            {catImage ? <StoredImage stored={catImage} w={160} h={96} /> : null}
+          </Field>
+          <Btn
+            disabled={!catName.trim() || !catImage}
+            onClick={() => {
+              if (editingCat) act.updateCategory(editingCat, { name: catName, image: catImage });
+              else act.addCategory({ name: catName, image: catImage });
+              resetCategory();
+              setNote(editingCat ? 'Category updated.' : 'Category saved. It is on the buyer new-order screen.');
+            }}
+          >
+            {editingCat ? 'Update category' : 'Save category'}
+          </Btn>
+          {editingCat ? (
+            <Btn kind="secondary" onClick={resetCategory}>
+              Cancel
+            </Btn>
+          ) : null}
+        </Host>
+        <Host
+          tag="div"
+          className="col"
+          style={{
+            gap: 12,
+            padding: 16,
+            border: '1px solid var(--line)',
+            borderRadius: 8,
+          }}
+        >
+          <Host tag="div" className="h16">
+            {editingProduct ? 'Edit product' : 'New product'}
+          </Host>
+          <Field label="Name">
+            <Host
+              tag="input"
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+          <Field label="Category">
+            <Host
+              tag="select"
+              className="input"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <Host tag="option" value="">
+                Select
+              </Host>
+              {listed.map((c) => (
+                <Host tag="option" key={c.id} value={c.id}>
+                  {c.name}
+                </Host>
+              ))}
+            </Host>
+          </Field>
+          <Field label="Image">
+            <Btn
+              kind="secondary"
+              onClick={() => {
+                void capturePhoto('product').then((shot) => {
+                  if (shot) setPhoto(shot);
+                });
+              }}
+            >
+              {photo ? 'Replace image' : 'Upload image'}
+            </Btn>
+            {photo ? <StoredImage stored={photo} w={160} h={96} /> : null}
+          </Field>
+          <Field label="Minimum purchase, kg">
+            <Host
+              tag="input"
+              className="input tabular"
+              value={minKg}
+              onChange={(e) => setMinKg(e.target.value)}
+            />
+          </Field>
+          <Host tag="div" className="lbl">
+            Grades
+          </Host>
+          {grades.map((g, i) => (
+            <Host tag="div" className="row" key={i} style={{ gap: 8 }}>
+              <Host
+                tag="input"
+                className="input"
+                value={g.grade}
+                placeholder="Grade"
+                onChange={(e) =>
+                  setGrades((rows) =>
+                    rows.map((row, idx) => (idx === i ? { ...row, grade: e.target.value } : row)),
+                  )
+                }
+              />
+              <Host
+                tag="input"
+                className="input tabular"
+                value={g.price}
+                placeholder="GHS / kg"
+                onChange={(e) =>
+                  setGrades((rows) =>
+                    rows.map((row, idx) => (idx === i ? { ...row, price: e.target.value } : row)),
+                  )
+                }
+              />
+            </Host>
+          ))}
+          <Btn
+            kind="secondary"
+            onClick={() => setGrades((rows) => [...rows, { grade: '', price: '' }])}
+          >
+            Add grade
+          </Btn>
+          <Btn
+            disabled={
+              !name.trim() ||
+              !categoryId ||
+              !photo ||
+              !(Number(minKg) > 0) ||
+              parsedGrades.length === 0
+            }
+            onClick={() => {
+              const input = {
+                name,
+                categoryId,
+                grades: parsedGrades,
+                minKg: Number(minKg),
+                photo,
+              };
+              if (editingProduct) act.updateProduct(editingProduct, input);
+              else act.addProduct(input);
+              const wasEdit = !!editingProduct;
+              resetProduct();
+              setNote(wasEdit ? 'Product updated.' : 'Product saved. Buyers can order it from that category.');
+            }}
+          >
+            {editingProduct ? 'Update product' : 'Save product'}
+          </Btn>
+          {editingProduct ? (
+            <Btn kind="secondary" onClick={resetProduct}>
+              Cancel
+            </Btn>
+          ) : null}
+        </Host>
+      </Host>
+      {note ? <Host tag="div" className="cap">{note}</Host> : null}
+      <Host tag="div" className="h16">
+        Listed categories
+      </Host>
+      {listed.length === 0 ? (
+        <Empty title="No categories yet." sub="Add one to open the buyer catalog." />
+      ) : (
+        <Tbl head={['Category', 'Image', 'Products', '']}>
+          {listed.map((c) => (
+            <Host tag="tr" key={c.id}>
+              <Host tag="td">{c.name}</Host>
+              <Host tag="td">
+                <StoredImage stored={c.image} w={72} h={48} />
+              </Host>
+              <Host tag="td">{products.filter((p) => p.categoryId === c.id).length}</Host>
+              <Host tag="td">
+                <Btn
+                  kind="secondary"
+                  sm
+                  onClick={() => {
+                    setEditingCat(c.id);
+                    setCatName(c.name);
+                    setCatImage(c.image ?? '');
+                  }}
+                >
+                  Edit
+                </Btn>
+              </Host>
+            </Host>
+          ))}
+        </Tbl>
+      )}
+      <Host tag="div" className="h16">
+        Listed products
+      </Host>
+      {products.length === 0 ? (
+        <Empty title="No products yet." sub="Each product needs a category, grades, and a minimum kg." />
+      ) : (
+        <Tbl head={['Product', 'Image', 'Category', 'Grades', 'Min kg', '']}>
+          {products.map((p) => (
+            <Host tag="tr" key={p.id}>
+              <Host tag="td">{p.name}</Host>
+              <Host tag="td">
+                <StoredImage stored={p.photo} w={72} h={48} />
+              </Host>
+              <Host tag="td">{listed.find((c) => c.id === p.categoryId)?.name ?? '—'}</Host>
+              <Host tag="td">
+                {p.grades.map((g) => `${g.grade} ${ghs(g.pricePerKg)}`).join(' · ')}
+              </Host>
+              <Host tag="td" className="tabular">
+                {p.minKg}
+              </Host>
+              <Host tag="td">
+                <Btn
+                  kind="secondary"
+                  sm
+                  onClick={() => {
+                    setEditingProduct(p.id);
+                    setName(p.name);
+                    setPhoto(p.photo);
+                    setCategoryId(p.categoryId);
+                    setMinKg(String(p.minKg));
+                    setGrades(p.grades.map((g) => ({ grade: g.grade, price: String(g.pricePerKg) })));
+                  }}
+                >
+                  Edit
+                </Btn>
+              </Host>
+            </Host>
+          ))}
+        </Tbl>
+      )}
+    </Shell>
+  );
+}
 function TeamPage() {
   return (
     <Shell title="Team access">
@@ -3119,6 +3419,7 @@ export default function OpsApp() {
       <Route path="sync" element={<SyncHealth />} />
       <Route path="messages" element={<Messages />} />
       <Route path="audit" element={<Audit />} />
+      <Route path="catalog" element={<Catalog />} />
       <Route path="team" element={<TeamPage />} />
       <Route path="*" element={<Navigate to="/ops" />} />
     </Routes>
