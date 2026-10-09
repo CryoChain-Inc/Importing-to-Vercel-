@@ -1833,10 +1833,16 @@ function OrdersDesk() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [when, setWhen] = useState('');
+  const [deliveryDir, setDeliveryDir] = useState<'asc' | 'desc'>('desc');
   const q = query.trim().toLowerCase();
-  const list = orders.filter(
-    (o) => matchesStatus(o, status) && matchesWhen(o, when) && matchesQuery(o, q),
-  );
+  const list = orders
+    .filter((o) => matchesStatus(o, status) && matchesWhen(o, when) && matchesQuery(o, q))
+    .slice()
+    .sort((a, b) => {
+      const byDate = a.deliveryDate.localeCompare(b.deliveryDate);
+      if (byDate !== 0) return deliveryDir === 'asc' ? byDate : -byDate;
+      return (b.submittedAt ?? 0) - (a.submittedAt ?? 0);
+    });
   const requested = sp.get('sel');
   const sel = list.some((o) => o.id === requested) ? requested : list[0]?.id;
   const marked = new Set(orders.map((o) => o.deliveryDate.slice(0, 10)).filter(Boolean));
@@ -1931,7 +1937,13 @@ function OrdersDesk() {
                 <Host tag="tr">
                   <Host tag="th">Order</Host>
                   <Host tag="th">Lines</Host>
-                  <Host tag="th">Delivery ↓</Host>
+                  <Host
+                    tag="th"
+                    onClick={() => setDeliveryDir((dir) => (dir === 'desc' ? 'asc' : 'desc'))}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Delivery {deliveryDir === 'desc' ? '↓' : '↑'}
+                  </Host>
                   <Host tag="th" className="num">
                     Total GHS
                   </Host>
