@@ -30,6 +30,15 @@ import OpsApp from './roles/ops/Ops';
 import { LoadingScreen } from './ui/loading';
 import { colors } from './ui/theme';
 import type { ReactNode } from 'react';
+import V1App from './v1/App';
+import { LoadingScreen as V1LoadingScreen } from './v1/components/feedback';
+
+/**
+ * FEATURE FLAG: Switch between Legacy App and V1 App.
+ * - Set EXPO_PUBLIC_USE_V1=true in .env to run V1.
+ * - Change the default value below to true/false to switch directly during dev.
+ */
+const USE_V1 = process.env.EXPO_PUBLIC_USE_V1 === 'true';
 
 // Workaround: React Native Web defaults can prevent automatic word breaking inside flex containers.
 function useWebTextWrap() {
@@ -203,7 +212,11 @@ export default function App() {
     Inter_700Bold,
     Fraunces_400Regular,
   });
+  if (USE_V1 && !ready) return <V1LoadingScreen message="Loading CryoChain..." />;
   if (!ready) return <LoadingScreen />;
+  // If V1 is enabled via EXPO_PUBLIC_USE_V1=true or the toggle above, render V1App
+  if (USE_V1) return <V1App />;
+
   if (!remoteEnabled)
     return (
       <SafeAreaProvider>
