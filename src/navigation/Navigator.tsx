@@ -4,7 +4,7 @@ import type { Account, Role } from '../types/auth';
 
 export type Route =
   | { name: 'landing' }
-  | { name: 'verify'; identifier: string; kind: 'otp' | 'magic-link' | 'staff' | 'invite-expired' }
+  | { name: 'verify'; identifier: string; kind: 'otp' }
   | { name: 'role'; identifier: string }
   | { name: 'onboarding'; identifier: string; role: 'farmer' | 'buyer' }
   | { name: 'workspace'; account: Account }
