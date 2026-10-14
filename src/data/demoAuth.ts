@@ -1,5 +1,5 @@
 import { authService, type UserProfile, type UserRole } from '../services/auth.service';
-import type { Account, BuyerForm, FarmerForm, Role } from '../types/auth';
+import type { Account, BuyerForm, Role } from '../types/auth';
 import { normalizePhone } from '../utils/format';
 
 // Auth runs on Supabase (services/auth.service.ts). Payout and review are still demo stand-ins.
@@ -13,8 +13,6 @@ export type VerifyResult =
 
 const STAFF: UserRole[] = ['agent', 'driver', 'ops'];
 
-const accounts: Account[] = [];
-
 export const toAccount = (p: UserProfile): Account => ({
   id: p.id,
   name: p.display_name ?? '',
@@ -23,7 +21,6 @@ export const toAccount = (p: UserProfile): Account => ({
   roles: [p.role as Role],
   status: 'active',
   staff: STAFF.includes(p.role),
-  payoutReady: false,
   businessVerified: false,
 });
 
@@ -49,23 +46,13 @@ export const verifySignIn = (identifier: string, code: string) =>
 
 type Registered = { account: Account } | { duplicate: true };
 
-async function onboard(role: 'farmer' | 'buyer', name: string): Promise<Registered> {
-  await authService.completeOnboarding(role, name);
+async function onboard(name: string): Promise<Registered> {
+  await authService.completeOnboarding('buyer', name);
   const profile = (await authService.getProfile())!;
   const account = toAccount(profile);
-  accounts.push(account);
   return { account };
 }
 
-export const registerFarmer = (f: FarmerForm, _email?: string) => net(() => onboard('farmer', f.name.trim()));
-
-export const registerBuyer = (f: BuyerForm) => net(() => onboard('buyer', f.business.trim()));
+export const registerBuyer = (f: BuyerForm) => net(() => onboard(f.business.trim()));
 
 export const requestReview = () => net(() => `RV-${Math.floor(1000 + Math.random() * 9000)}`);
-
-export const savePayout = (accountId: string) =>
-  net(() => {
-    const a = accounts.find((x) => x.id === accountId);
-    if (a) a.payoutReady = true;
-    return a;
-  });

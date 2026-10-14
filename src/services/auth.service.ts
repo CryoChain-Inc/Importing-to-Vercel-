@@ -32,6 +32,12 @@ export const authService = {
     return !error;
   },
 
+  /** Optional alternative to a code, for accounts that have a password. */
+  async signInWithPassword(identifier: string, password: string) {
+    const { error } = await supabase.auth.signInWithPassword({ ...target(identifier), password });
+    if (error) throw error;
+  },
+
   async getProfile(): Promise<UserProfile | null> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;

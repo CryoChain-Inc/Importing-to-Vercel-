@@ -18,6 +18,10 @@ const PATHS = {
     'M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73zM12 22V12M3.29 7 12 12l8.71-5',
   shield:
     'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1zM9 12l2 2 4-4',
+  message: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2',
+  lock: 'M7 11V7a5 5 0 0 1 10 0v4',
+  logOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -26,6 +30,8 @@ export function Icon({ name, size = 20, color = '#000', strokeWidth = 2 }: { nam
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       {name === 'sun' ? <Circle cx={12} cy={12} r={4} /> : null}
+      {name === 'user' ? <Circle cx={12} cy={7} r={4} /> : null}
+      {name === 'lock' ? <Rect x={3} y={11} width={18} height={11} rx={2} /> : null}
       {name === 'mail' ? <Rect x={2} y={4} width={20} height={16} rx={2} /> : null}
       <Path d={PATHS[name]} />
     </Svg>

@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, ChoiceChips, Input } from '../../../components/common';
+import { Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { CROPS } from '../../../data/prices';
 import { createListing, deleteListing, type ProduceListing } from '../../../services/farmer.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
+/** Listing form is locked until a wallet is saved (the database enforces this too). */
 export function ProduceListings({
   listings,
+  walletReady,
+  onAddWallet,
   onChange,
 }: {
   listings: ProduceListing[];
+  walletReady: boolean;
+  onAddWallet: () => void;
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
+  const { colors } = useTheme();
   const [product, setProduct] = useState(CROPS[0] ?? '');
   const [weight, setWeight] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,50 +27,54 @@ export function ProduceListings({
   const weightKg = Number(weight);
   const ready = product.trim().length > 1 && Number.isFinite(weightKg) && weightKg > 0;
 
-  const add = async () => {
+  const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
-      await createListing(product, weightKg);
-      setWeight('');
+      await fn();
       await onChange();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save that listing.');
+      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
   };
 
-  const remove = async (id: string) => {
-    setError(null);
-    try {
-      await deleteListing(id);
-      await onChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove that listing.');
-    }
-  };
-
   return (
     <View style={s.wrap}>
-      <Card>
-        <Text style={s.title}>List produce</Text>
-        <Text style={s.copy}>Add the product and the weight you have ready for collection.</Text>
-        {error ? <Banner text={error} /> : null}
-        <View style={s.form}>
-          <ChoiceChips label="Product" options={CROPS} value={product} onChange={setProduct} />
-          <Input
-            label="Other product"
-            value={CROPS.includes(product) ? '' : product}
-            onChangeText={(text) => setProduct(text.trim() ? text : (CROPS[0] ?? ''))}
-            hint="Leave blank to use the crop selected above."
-          />
-          <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
-          <Button label="Add listing" onPress={add} loading={busy} disabled={!ready} />
-        </View>
-      </Card>
-      {listings.length === 0 ? (
+      {walletReady ? (
         <Card>
+          <Text style={s.title}>List produce</Text>
+          <Text style={s.copy}>Add the product and the weight you have ready for collection.</Text>
+          {error ? <Banner text={error} /> : null}
+          <View style={s.form}>
+            <ChoiceChips label="Product" options={CROPS} value={product} onChange={setProduct} />
+            <Input
+              label="Other product"
+              value={CROPS.includes(product) ? '' : product}
+              onChangeText={(text) => setProduct(text.trim() ? text : (CROPS[0] ?? ''))}
+              hint="Leave blank to use the crop selected above."
+            />
+            <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
+            <Button
+              label="Add listing"
+              onPress={() => run(async () => { await createListing(product, weightKg); setWeight(''); })}
+              loading={busy}
+              disabled={!ready}
+            />
+          </View>
+        </Card>
+      ) : (
+        <Card tone="tint" style={s.locked}>
+          <View style={s.lockIcon}><Icon name="lock" size={22} color={colors.brandInk} /></View>
+          <Text style={s.title}>Add your MoMo wallet to start listing</Text>
+          <Text style={s.copy}>We need somewhere to send your payment before we can collect your produce.</Text>
+          <Button label="Add wallet" icon="wallet" onPress={onAddWallet} />
+        </Card>
+      )}
+      {listings.length === 0 ? (
+        <Card style={s.emptyCard}>
+          <Icon name="package" size={28} color={colors.inkMuted} />
           <Text style={s.empty}>No produce listed yet.</Text>
         </Card>
       ) : (
@@ -73,11 +83,9 @@ export function ProduceListings({
             <View style={s.item}>
               <View style={s.itemText}>
                 <Text style={s.product}>{listing.product}</Text>
-                <Text style={s.meta}>
-                  {listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg
-                </Text>
+                <Text style={s.meta}>{listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg</Text>
               </View>
-              <Button label="Remove" variant="ghost" size="sm" onPress={() => remove(listing.id)} />
+              <Button label="Remove" variant="ghost" size="sm" onPress={() => run(() => deleteListing(listing.id))} />
             </View>
           </Card>
         ))
@@ -91,6 +99,9 @@ const styles = (c: Record<ColorToken, string>) => ({
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   copy: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted, marginTop: 4, marginBottom: 14 },
   form: { gap: 14 },
+  locked: { gap: 4, alignItems: 'flex-start' as const },
+  lockIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.surfaceCard, marginBottom: 8 },
+  emptyCard: { alignItems: 'center' as const, gap: 8, paddingVertical: 28 },
   empty: { fontFamily: fonts.sansRegular, fontSize: 14, color: c.inkMuted },
   item: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
   itemText: { flex: 1, gap: 2 },

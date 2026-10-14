@@ -2,7 +2,6 @@ import React from 'react';
 import { AuthLayout } from '../../../components/layout';
 import { sendCode, verifySignIn } from '../../../data/demoAuth';
 import { useNav, type Route } from '../../../navigation';
-import { signInFarmerWithCode } from '../../../services/farmer.service';
 import type { Account } from '../../../types/auth';
 import { isEmail, maskPhone } from '../../../utils/format';
 import { VerifyCode } from '../components/VerifyCode';
@@ -25,16 +24,6 @@ export function VerifyScreen({ route }: { route: VerifyRoute }) {
     if (r.status === 'ok') {
       reset(afterSignIn(r.account));
       return null;
-    }
-    try {
-      const farmer = await signInFarmerWithCode(identifier, code);
-      if (farmer) {
-        reset(afterSignIn(farmer));
-        return null;
-      }
-    } catch (e) {
-      if (r.status === 'unknown') return e instanceof Error ? e.message : NEUTRAL;
-      return NEUTRAL;
     }
     if (r.status === 'unknown') {
       push({ name: 'role', identifier });

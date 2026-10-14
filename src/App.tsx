@@ -12,6 +12,7 @@ import { HomeScreen } from './features/home/HomeScreen';
 import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
 import { authService } from './services/auth.service';
+import { fetchFarmer } from './services/farmer.service';
 import { isSupabaseConfigured } from './services/supabase';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
 
@@ -44,13 +45,15 @@ function Shell() {
     if (!isSupabaseConfigured) return;
     authService
       .getProfile()
-      .then((p) => {
+      .then(async (p) => {
         if (!p) return;
-        if (p.role === 'farmer' || (p.role === 'pending' && p.display_name)) {
-          reset({ name: 'home', account: toAccount({ ...p, role: 'farmer' }), role: 'farmer' });
+        if (p.role === 'pending') return;
+        // A farmer who left onboarding early resumes at the wizard.
+        if (p.role === 'farmer' && !(await fetchFarmer())?.address) {
+          reset({ name: 'onboarding', identifier: p.email ?? p.phone ?? '', role: 'farmer' });
           return;
         }
-        if (p.role !== 'pending') reset(afterSignIn(toAccount(p)));
+        reset(afterSignIn(toAccount(p)));
       })
       .catch(() => undefined)
       .finally(() => setRestoring(false));

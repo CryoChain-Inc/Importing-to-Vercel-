@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Icon, type IconName } from '../../../components/common';
 import { AuthLayout } from '../../../components/layout';
+import { Banner } from '../../../components/feedback';
 import { useNav } from '../../../navigation';
+import { createFarmer } from '../../../services/farmer.service';
+import { errorMessage } from '../errors';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
 const ROLES: { role: 'farmer' | 'buyer'; icon: IconName; title: string; copy: string }[] = [
@@ -12,13 +15,31 @@ const ROLES: { role: 'farmer' | 'buyer'; icon: IconName; title: string; copy: st
 
 /** New accounts only. Agents, drivers and ops are invited by an administrator, so they aren't offered. */
 export function RoleScreen({ identifier }: { identifier: string }) {
-  const { push } = useNav();
+  const { push, reset } = useNav();
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const [role, setRole] = useState<'farmer' | 'buyer' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const next = async () => {
+    if (role === 'buyer') return push({ name: 'onboarding', identifier, role });
+    if (role !== 'farmer') return;
+    setBusy(true);
+    setError(null);
+    try {
+      await createFarmer();
+      reset({ name: 'onboarding', identifier, role: 'farmer' });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <AuthLayout title="Welcome! Who are you?" subtitle="You're verified. Choose how you'll use CryoChain to set up your account.">
+      {error ? <Banner text={error} /> : null}
       <View style={s.list}>
         {ROLES.map((r) => {
           const on = role === r.role;
@@ -36,7 +57,7 @@ export function RoleScreen({ identifier }: { identifier: string }) {
           );
         })}
       </View>
-      <Button label="Continue" size="lg" icon="arrowRight" disabled={!role} onPress={() => role && push({ name: 'onboarding', identifier, role })} />
+      <Button label="Continue" size="lg" icon="arrowRight" loading={busy} disabled={!role} onPress={next} />
       <Text style={s.note}>Agents, drivers and operations staff join by invitation from an administrator.</Text>
     </AuthLayout>
   );

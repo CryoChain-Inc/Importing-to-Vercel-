@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Button, ChoiceChips, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { AuthLayout } from '../../../components/layout';
 import { registerBuyer } from '../../../data/demoAuth';
 import { DELIVERY_LOCATIONS } from '../../../data/options';
-import { FarmerReturningSignIn } from '../../farmer/components/FarmerReturningSignIn';
-import { FarmerSignupForm } from '../../farmer/components/FarmerSignupForm';
+import { FarmerOnboarding } from '../../farmer/onboarding/FarmerOnboarding';
 import { useNav } from '../../../navigation';
 import { useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account, BuyerForm } from '../../../types/auth';
@@ -19,7 +18,6 @@ import { afterSignIn } from './VerifyScreen';
 export function OnboardingScreen({ identifier, role }: { identifier: string; role: 'farmer' | 'buyer' }) {
   const { reset } = useNav();
   const [duplicate, setDuplicate] = useState(false);
-  const [farmerMode, setFarmerMode] = useState<'signin' | 'signup'>('signup');
   const done = (a: Account) => reset(afterSignIn(a));
 
   if (duplicate)
@@ -29,17 +27,9 @@ export function OnboardingScreen({ identifier, role }: { identifier: string; rol
       </AuthLayout>
     );
 
-  if (role === 'farmer' && farmerMode === 'signin')
-    return (
-      <AuthLayout title="Sign in" subtitle="Use the password for this farm account. You do not need to enter your details again.">
-        <FarmerReturningSignIn identifier={identifier} onDone={done} onCreate={() => setFarmerMode('signup')} />
-      </AuthLayout>
-    );
-
   return role === 'farmer' ? (
-    <AuthLayout title="Set up your farm" subtitle="Add your details and the bank account where payment is sent when an agent collects your produce.">
-      <FarmerSignupForm identifier={identifier} onDone={done} onDuplicate={() => setFarmerMode('signin')} />
-      <Button label="I already have an account" variant="ghost" onPress={() => setFarmerMode('signin')} />
+    <AuthLayout title="Set up your farm" subtitle="Two quick steps so an agent can collect your produce and pay you.">
+      <FarmerOnboarding onDone={done} />
     </AuthLayout>
   ) : (
     <AuthLayout title="Set up your business" subtitle="Business verification may still be pending after this. You can start right away.">

@@ -1,87 +1,107 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Input } from '../../../components/common';
+import { Badge, Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { saveFarmerProfile, type FarmerDetails, type FarmerProfile } from '../../../services/farmer.service';
+import { hasWallet, saveDetails, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { formatPhone, isPhone } from '../../../utils/format';
+import { formatPhone } from '../../../utils/format';
+import { detailsReady, walletReady } from '../validation';
+import { DetailsForm } from './DetailsForm';
+import { WalletForm } from './WalletForm';
 
-const ACCOUNT_NUMBER = /^\d{6,20}$/;
+type Section = 'details' | 'wallet';
 
+/** Profile tab: farm details and payout wallet, each editable on its own. */
 export function FarmerProfileCard({
-  profile,
+  name,
+  farmer,
+  editing,
+  onEdit,
   onSaved,
 }: {
-  profile: FarmerProfile;
-  onSaved: (profile: FarmerProfile) => void;
+  name: string;
+  farmer: Farmer;
+  editing: Section | null;
+  onEdit: (s: Section | null) => void;
+  onSaved: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
-  const [editing, setEditing] = useState(!profile.address || !profile.accountNumber);
-  const [draft, setDraft] = useState<FarmerDetails>({
-    name: profile.displayName,
-    phone: profile.phone ?? '',
-    address: profile.address ?? '',
-    bankName: profile.bankName ?? '',
-    accountHolder: profile.accountHolder ?? '',
-    accountNumber: profile.accountNumber ?? '',
+  const [details, setDetails] = useState<FarmerDetails>({
+    name,
+    address: farmer.address ?? '',
+    locality: farmer.locality ?? '',
+    language: farmer.language ?? '',
+  });
+  const [wallet, setWallet] = useState<Wallet>({
+    network: farmer.momoNetwork ?? '',
+    number: farmer.momoNumber ?? '',
+    name: farmer.momoName ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const accountNumber = draft.accountNumber.replace(/\s/g, '');
-  const ready =
-    draft.name.trim().length > 1 &&
-    isPhone(draft.phone) &&
-    draft.address.trim().length > 2 &&
-    draft.bankName.trim().length > 1 &&
-    draft.accountHolder.trim().length > 1 &&
-    ACCOUNT_NUMBER.test(accountNumber);
 
-  const save = async () => {
+  const save = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
-      const next = await saveFarmerProfile({ ...draft, accountNumber });
-      onSaved(next);
-      setEditing(false);
+      await fn();
+      await onSaved();
+      onEdit(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save your details.');
+      setError(e instanceof Error ? e.message : 'Could not save.');
     } finally {
       setBusy(false);
     }
   };
 
+  const saved = hasWallet(farmer);
   return (
-    <Card>
-      <View style={s.head}>
-        <Text style={s.title}>Your profile</Text>
-        <Button label={editing ? 'Cancel' : 'Edit'} variant="ghost" size="sm" onPress={() => setEditing((v) => !v)} />
-      </View>
+    <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
-      {editing ? (
-        <View style={s.form}>
-          <Input label="Full name" value={draft.name} onChangeText={(name) => setDraft({ ...draft, name })} />
-          <Input label="Mobile number" prefix="+233" value={draft.phone} onChangeText={(phone) => setDraft({ ...draft, phone })} keyboardType="phone-pad" />
-          <Input label="Address" value={draft.address} onChangeText={(address) => setDraft({ ...draft, address })} />
-          <Input label="Bank name" value={draft.bankName} onChangeText={(bankName) => setDraft({ ...draft, bankName })} />
-          <Input label="Account name" value={draft.accountHolder} onChangeText={(accountHolder) => setDraft({ ...draft, accountHolder })} />
-          <Input label="Account number" value={draft.accountNumber} onChangeText={(accountNumber) => setDraft({ ...draft, accountNumber })} keyboardType="number-pad" />
-          <Button label="Save profile" onPress={save} loading={busy} disabled={!ready} />
+      <Card>
+        <View style={s.head}>
+          <Text style={s.title}>Farm details</Text>
+          <Button label={editing === 'details' ? 'Cancel' : 'Edit'} variant="ghost" size="sm" onPress={() => onEdit(editing === 'details' ? null : 'details')} />
         </View>
-      ) : (
-        <View style={s.rows}>
-          <Row label="Name" value={profile.displayName} />
-          <Row label="Phone" value={formatPhone(profile.phone)} />
-          <Row label="Address" value={profile.address ?? ''} />
-          <Row label="Bank" value={profile.bankName ?? ''} />
-          <Row label="Account name" value={profile.accountHolder ?? ''} />
-          <Row label="Account number" value={profile.accountNumber ?? ''} />
+        {editing === 'details' ? (
+          <View style={s.form}>
+            <DetailsForm value={details} onChange={(p) => setDetails({ ...details, ...p })} />
+            <Button label="Save details" onPress={() => save(() => saveDetails(details))} loading={busy} disabled={!detailsReady(details)} />
+          </View>
+        ) : (
+          <View style={s.rows}>
+            <Row label="Name" value={name} />
+            <Row label="Address" value={farmer.address} />
+            <Row label="Nearest town" value={farmer.locality} />
+            <Row label="Language" value={farmer.language} />
+          </View>
+        )}
+      </Card>
+      <Card>
+        <View style={s.head}>
+          <Text style={s.title}>MoMo wallet</Text>
+          <Badge label={farmer.walletVerified ? 'Verified' : saved ? 'Saved' : 'Needed'} tone={farmer.walletVerified ? 'success' : saved ? 'info' : 'warning'} />
         </View>
-      )}
-    </Card>
+        {editing === 'wallet' ? (
+          <View style={s.form}>
+            <WalletForm value={wallet} onChange={(p) => setWallet({ ...wallet, ...p })} />
+            <Button label="Save wallet" onPress={() => save(() => saveWallet(wallet))} loading={busy} disabled={!walletReady(wallet)} />
+            <Button label="Cancel" variant="ghost" onPress={() => onEdit(null)} />
+          </View>
+        ) : (
+          <View style={s.rows}>
+            <Row label="Network" value={farmer.momoNetwork} />
+            <Row label="Number" value={farmer.momoNumber ? formatPhone(farmer.momoNumber) : null} />
+            <Row label="Name on wallet" value={farmer.momoName} />
+            <Button label={saved ? 'Change wallet' : 'Add wallet'} variant={saved ? 'outline' : 'primary'} icon="wallet" onPress={() => onEdit('wallet')} />
+          </View>
+        )}
+      </Card>
+    </View>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: string | null }) {
   const s = useThemedStyles(styles);
   return (
     <View style={s.row}>
@@ -92,6 +112,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
+  wrap: { gap: 12 },
   head: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 8 },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   form: { gap: 14 },
