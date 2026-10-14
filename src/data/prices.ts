@@ -11,3 +11,5 @@ export const DEMO_PRICES: CropPrice[] = [
 ];
 
 export const PRICES_EFFECTIVE = 'Updated today, 06:00';
+
+export const CROPS = [...new Set(DEMO_PRICES.map((price) => price.crop))];

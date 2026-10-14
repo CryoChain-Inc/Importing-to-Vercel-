@@ -4,6 +4,7 @@ import { Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { AuthLayout } from '../../../components/layout';
 import { sendCode, verifySignIn } from '../../../data/demoAuth';
+import { signInFarmerWithCode } from '../../../services/farmer.service';
 import { DEMO_OTP } from '../../../data/accounts';
 import { useNav, type Route } from '../../../navigation';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
@@ -32,8 +33,15 @@ export function VerifyScreen({ route }: { route: VerifyRoute }) {
   const submit = async (code: string) => {
     const r = await verifySignIn(identifier, code, mfa ? 'mfa' : 'primary');
     if (r.status === 'ok') reset(afterSignIn(r.account));
-    else if (r.status === 'unknown') push({ name: 'role', identifier });
-    else if (r.status === 'mfa') setMfa(true);
+    else if (r.status === 'unknown') {
+      try {
+        const farmer = await signInFarmerWithCode(identifier, code);
+        if (farmer) reset(afterSignIn(farmer));
+        else push({ name: 'role', identifier });
+      } catch (e) {
+        return e instanceof Error ? e.message : NEUTRAL;
+      }
+    } else if (r.status === 'mfa') setMfa(true);
     else return NEUTRAL;
     return null;
   };

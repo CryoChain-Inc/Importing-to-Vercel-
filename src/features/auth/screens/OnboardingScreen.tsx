@@ -3,23 +3,23 @@ import { Text, View } from 'react-native';
 import { Button, ChoiceChips, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { AuthLayout } from '../../../components/layout';
-import { registerBuyer, registerFarmer, savePayout } from '../../../data/demoAuth';
-import { DELIVERY_LOCATIONS, LANGUAGES, LOCALITIES, PAYOUT_NETWORKS } from '../../../data/options';
-import { Switch } from 'react-native';
+import { registerBuyer } from '../../../data/demoAuth';
+import { DELIVERY_LOCATIONS } from '../../../data/options';
+import { FarmerReturningSignIn } from '../../farmer/components/FarmerReturningSignIn';
+import { FarmerSignupForm } from '../../farmer/components/FarmerSignupForm';
 import { useNav } from '../../../navigation';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import type { Account, BuyerForm, FarmerForm, PayoutForm } from '../../../types/auth';
+import { useThemedStyles, type ColorToken } from '../../../theme';
+import type { Account, BuyerForm } from '../../../types/auth';
 import { isEmail, isPhone } from '../../../utils/format';
 import { DuplicateNotice } from '../components/DuplicateNotice';
 import { errorMessage } from '../errors';
 import { useDraft } from '../hooks/useDraft';
 import { afterSignIn } from './VerifyScreen';
 
-type FarmerDraft = FarmerForm & Pick<PayoutForm, 'network' | 'number' | 'consent'>;
-
 export function OnboardingScreen({ identifier, role }: { identifier: string; role: 'farmer' | 'buyer' }) {
   const { reset } = useNav();
   const [duplicate, setDuplicate] = useState(false);
+  const [farmerMode, setFarmerMode] = useState<'signin' | 'signup'>('signup');
   const done = (a: Account) => reset(afterSignIn(a));
 
   if (duplicate)
@@ -29,9 +29,17 @@ export function OnboardingScreen({ identifier, role }: { identifier: string; rol
       </AuthLayout>
     );
 
+  if (role === 'farmer' && farmerMode === 'signin')
+    return (
+      <AuthLayout title="Sign in" subtitle="Use the password for this farm account. You do not need to enter your details again.">
+        <FarmerReturningSignIn identifier={identifier} onDone={done} onCreate={() => setFarmerMode('signup')} />
+      </AuthLayout>
+    );
+
   return role === 'farmer' ? (
-    <AuthLayout title="Set up your farm" subtitle="Add your details and the mobile wallet where we'll send your payments.">
-      <FarmerForm identifier={identifier} onDone={done} onDuplicate={() => setDuplicate(true)} />
+    <AuthLayout title="Set up your farm" subtitle="Add your details and the bank account where payment is sent when an agent collects your produce.">
+      <FarmerSignupForm identifier={identifier} onDone={done} onDuplicate={() => setFarmerMode('signin')} />
+      <Button label="I already have an account" variant="ghost" onPress={() => setFarmerMode('signin')} />
     </AuthLayout>
   ) : (
     <AuthLayout title="Set up your business" subtitle="Business verification may still be pending after this. You can start right away.">
@@ -66,41 +74,6 @@ function useSubmit(onDone: FormProps['onDone'], onDuplicate: FormProps['onDuplic
   return { busy, error, run };
 }
 
-function FarmerForm({ identifier, onDone, onDuplicate }: FormProps) {
-  const s = useThemedStyles(styles);
-  const viaEmail = isEmail(identifier);
-  const { value: f, update, clear } = useDraft<FarmerDraft>('farmer', {
-    name: '', phone: viaEmail ? '' : identifier, language: 'English', locality: '', network: '', number: '', consent: false,
-  });
-  const { busy, error, run } = useSubmit(onDone, onDuplicate, clear);
-  const ready = f.name.trim().length > 1 && isPhone(f.phone) && f.locality !== '' && f.network !== '' && isPhone(f.number) && f.consent;
-
-  const submit = () =>
-    run(async () => {
-      const r = await registerFarmer(f, viaEmail ? identifier.trim().toLowerCase() : undefined);
-      if ('account' in r) r.account = (await savePayout(r.account.id)) ?? r.account;
-      return r;
-    });
-
-  return (
-    <View style={s.form}>
-      {error ? <Banner text={error} /> : null}
-      <Input label="Full name" value={f.name} onChangeText={(name) => update({ name })} autoComplete="name" hint="Used on your payment records." />
-      {viaEmail ? <Input label="Mobile number" prefix="+233" value={f.phone} onChangeText={(phone) => update({ phone })} keyboardType="phone-pad" /> : null}
-      <ChoiceChips label="Preferred language" options={LANGUAGES} value={f.language} onChange={(language) => update({ language })} />
-      <ChoiceChips label="Collection locality" options={LOCALITIES} value={f.locality} onChange={(locality) => update({ locality })} />
-      <Text style={s.section}>Payout wallet</Text>
-      <ChoiceChips label="Mobile-money network" options={PAYOUT_NETWORKS} value={f.network} onChange={(network) => update({ network })} />
-      <Input label="Wallet number" prefix="+233" value={f.number} onChangeText={(number) => update({ number })} keyboardType="phone-pad" hint="Must be registered in your name." />
-      <View style={s.consent}>
-        <Switch value={f.consent} onValueChange={(consent) => update({ consent })} accessibilityLabel="Consent to payouts" />
-        <Text style={s.consentText}>I agree that CryoChain may send my payments to this wallet.</Text>
-      </View>
-      <Button label="Create account" size="lg" onPress={submit} loading={busy} disabled={!ready} />
-    </View>
-  );
-}
-
 function BuyerFormView({ identifier, onDone, onDuplicate }: FormProps) {
   const s = useThemedStyles(styles);
   const viaEmail = isEmail(identifier);
@@ -128,7 +101,4 @@ function BuyerFormView({ identifier, onDone, onDuplicate }: FormProps) {
 
 const styles = (c: Record<ColorToken, string>) => ({
   form: { gap: 16 },
-  section: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, marginTop: 8 },
-  consent: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  consentText: { flex: 1, fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

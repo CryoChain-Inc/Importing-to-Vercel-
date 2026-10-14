@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -10,9 +10,10 @@ import { VerifyScreen } from './features/auth/screens/VerifyScreen';
 import { WorkspaceScreen } from './features/auth/screens/WorkspaceScreen';
 import { HomeScreen } from './features/home/HomeScreen';
 import { NavigatorProvider, useNav } from './navigation';
+import { fetchMyProfile, toAccount } from './services/farmer.service';
+import { isSupabaseConfigured, supabase } from './services/supabase';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
 
-// Demo-data build: no backend. Auth lives in data/demoAuth.ts and swaps for Supabase later.
 function Routes() {
   const { route } = useNav();
   switch (route.name) {
@@ -31,12 +32,42 @@ function Routes() {
   }
 }
 
+function SessionGate() {
+  const { reset } = useNav();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        if (!isSupabaseConfigured) return;
+        const { data } = await supabase.auth.getUser();
+        if (!data.user) return;
+        const profile = await fetchMyProfile();
+        if (profile?.displayName && (profile.role === 'farmer' || profile.role === 'pending')) {
+          reset({ name: 'home', account: toAccount(profile), role: 'farmer' });
+        }
+      } catch {
+        // A failed session check leaves the farmer on the landing page.
+      } finally {
+        if (live) setReady(true);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [reset]);
+
+  if (!ready) return <LoadingScreen message="Loading CryoChain..." />;
+  return <Routes />;
+}
+
 function Shell() {
   const { colors, isDark } = useTheme();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bgApp }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Routes />
+      <SessionGate />
     </SafeAreaView>
   );
 }

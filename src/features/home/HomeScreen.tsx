@@ -5,7 +5,7 @@ import { Screen, useIsWide } from '../../components/layout';
 import { useNav } from '../../navigation';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 import type { Account, Role } from '../../types/auth';
-import { PriceBoard } from '../farmer/components/PriceBoard';
+import { FarmerHome } from '../farmer/screens/FarmerHome';
 
 /** Placeholder landing after sign-in; the real role workspaces replace this. */
 export function HomeScreen({ account, role }: { account: Account; role: Role }) {
@@ -13,10 +13,10 @@ export function HomeScreen({ account, role }: { account: Account; role: Role }) 
   const wide = useIsWide();
   const s = useThemedStyles(styles);
 
+  if (role === 'farmer') return <FarmerHome account={account} />;
+
   const status =
-    role === 'farmer' ? (
-      <Badge label={account.payoutReady ? 'Payout wallet ready' : 'Payout wallet needed'} tone={account.payoutReady ? 'success' : 'warning'} />
-    ) : role === 'buyer' ? (
+    role === 'buyer' ? (
       <Badge label={account.businessVerified ? 'Business verified' : 'Business verification pending'} tone={account.businessVerified ? 'success' : 'warning'} />
     ) : (
       <Badge label="Staff" tone="info" />
@@ -31,19 +31,12 @@ export function HomeScreen({ account, role }: { account: Account; role: Role }) 
       </Gradient>
 
       <View style={[s.body, wide && s.bodyWide]}>
-        {role === 'farmer' ? (
-          <View style={s.main}><PriceBoard /></View>
-        ) : null}
         <Card style={s.main}>
-          <Text style={s.cardTitle}>
-            {role === 'farmer' ? 'Next: list your produce' : role === 'buyer' ? 'Lots and prices' : 'Workspace'}
-          </Text>
+          <Text style={s.cardTitle}>{role === 'buyer' ? 'Lots and prices' : 'Workspace'}</Text>
           <Text style={s.copy}>
-            {role === 'farmer'
-              ? 'Listing is coming in the next phase. Prices above update every morning.'
-              : role === 'buyer'
-                ? "Available lots and prices will appear here. We'll let you know when verification is complete."
-                : `The ${role} workspace is coming in a later phase.`}
+            {role === 'buyer'
+              ? "Available lots and prices will appear here. We'll let you know when verification is complete."
+              : `The ${role} workspace is coming in a later phase.`}
           </Text>
         </Card>
       </View>

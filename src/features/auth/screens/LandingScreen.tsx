@@ -10,7 +10,7 @@ import { EntryCard } from '../components/EntryCard';
 const STEPS: { icon: IconName; title: string; copy: string }[] = [
   { icon: 'leaf', title: 'List what you will harvest', copy: 'Tell us the crop and rough quantity. It takes under a minute.' },
   { icon: 'package', title: 'We weigh, grade and collect', copy: 'An agent measures every consignment at your collection point.' },
-  { icon: 'wallet', title: 'Get paid per consignment', copy: 'Payment goes straight to your mobile wallet.' },
+  { icon: 'wallet', title: 'Get paid per consignment', copy: 'Payment goes to the bank account saved on your profile.' },
 ];
 
 export function LandingScreen() {

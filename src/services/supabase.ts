@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -33,6 +33,9 @@ export enum EdgeFunction {
   V1Orders = 'v1-orders',
   V1Payments = 'v1-payments',
   V1Telemetry = 'v1-telemetry',
+
+  /** Exchanges a verified farmer code for a one-time sign-in token. */
+  FarmerOtpSignIn = 'farmer-otp-signin',
 }
 
 /**

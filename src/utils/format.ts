@@ -9,6 +9,13 @@ export function normalizePhone(raw: string): string {
 export const isPhone = (raw: string) => /^233\d{9}$/.test(normalizePhone(raw));
 export const isEmail = (raw: string) => /^\S+@\S+\.\S+$/.test(raw.trim());
 
+export function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const d = normalizePhone(raw);
+  if (d.startsWith('233') && d.length === 12) return `+233 ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
+  return d ? `+${d}` : '';
+}
+
 export const maskPhone = (raw: string) => {
   const d = normalizePhone(raw);
   return d.length < 4 ? d : `••• ••• ${d.slice(-3)}`;
