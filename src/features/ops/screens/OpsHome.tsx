@@ -12,8 +12,9 @@ import { FarmersPanel } from '../components/FarmersPanel';
 import { PointsPanel } from '../components/PointsPanel';
 import { PricesPanel } from '../components/PricesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
+import { TeamPanel } from '../components/TeamPanel';
 
-const TABS = ['Farmers', 'Supply', 'Prices', 'Collection points', 'Settings'];
+const TABS = ['Farmers', 'Supply', 'Prices', 'Collection points', 'Team', 'Settings'];
 
 interface Data {
   farmers: ops.FarmerRow[];
@@ -21,6 +22,7 @@ interface Data {
   products: ops.Product[];
   prices: ops.PriceRow[];
   points: ops.PointRow[];
+  team: ops.TeamMember[];
   config: ops.OpsConfig;
 }
 
@@ -33,10 +35,10 @@ export function OpsHome({ account }: { account: Account }) {
 
   const load = useCallback(async () => {
     try {
-      const [farmers, supply, cat, points, config] = await Promise.all([
-        ops.fetchFarmers(), ops.fetchSupply(), ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchConfig(),
+      const [farmers, supply, cat, points, team, config] = await Promise.all([
+        ops.fetchFarmers(), ops.fetchSupply(), ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchTeam(), ops.fetchConfig(),
       ]);
-      setData({ farmers, supply, products: cat.products, prices: cat.prices, points, config });
+      setData({ farmers, supply, products: cat.products, prices: cat.prices, points, team, config });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
@@ -62,6 +64,7 @@ export function OpsHome({ account }: { account: Account }) {
             {tab === 'Supply' ? <SupplyPanel supply={data.supply} /> : null}
             {tab === 'Prices' ? <PricesPanel products={data.products} prices={data.prices} onChange={load} /> : null}
             {tab === 'Collection points' ? <PointsPanel points={data.points} products={data.products} onChange={load} /> : null}
+            {tab === 'Team' ? <TeamPanel team={data.team} onChange={load} /> : null}
             {tab === 'Settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
           </>
         ) : null}

@@ -216,3 +216,42 @@ export async function saveConfig(c: OpsConfig): Promise<void> {
     .eq('id', true);
   fail('Could not save settings (min temp must be below max; account number is digits only).')(error);
 }
+
+export type StaffRole = 'agent' | 'driver' | 'ops';
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: StaffRole;
+  phone: string;
+  email: string;
+  detail: string;
+  joinedAt: string;
+}
+
+export async function fetchTeam(): Promise<TeamMember[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, role, display_name, phone, email, created_at, agents(coverage_area), drivers(vehicle_type, plate_number)')
+    .in('role', ['agent', 'driver', 'ops'])
+    .order('created_at', { ascending: false });
+  fail('Could not load the team.')(error);
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    name: r.display_name ?? 'Unnamed',
+    role: r.role,
+    phone: r.phone ?? '',
+    email: r.email ?? '',
+    detail: r.agents?.coverage_area ?? [r.drivers?.vehicle_type, r.drivers?.plate_number].filter(Boolean).join(' · '),
+    joinedAt: r.created_at,
+  }));
+}
+
+/** The edge function creates the auth user + profile with the service role and re-checks that the caller is ops. */
+export async function inviteStaff(i: { name: string; phone: string; email: string; role: StaffRole }): Promise<void> {
+  const { error } = await supabase.functions.invoke('invite-staff', { body: i });
+  if (!error) return;
+  const res = (error as { context?: Response }).context;
+  const msg = res ? (await res.json().catch(() => null))?.error : null;
+  throw new Error(msg ?? 'Could not send the invite.');
+}
