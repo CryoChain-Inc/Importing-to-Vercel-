@@ -75,13 +75,13 @@ export function LandingScreen() {
         <View style={s.hero}>
           <View style={s.heroLeft}>{intro}</View>
           <View style={s.heroRight}>
-            <PriceBoard />
+            <PriceBoard gradeAOnly />
           </View>
         </View>
       ) : (
         <>
           {intro}
-          <PriceBoard />
+          <PriceBoard gradeAOnly />
         </>
       )}
 

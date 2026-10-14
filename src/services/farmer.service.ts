@@ -1,4 +1,4 @@
-import { normalizePhone } from '../utils/format';
+import { normalizePhone, windowLabel } from '../utils/format';
 import { supabase } from './supabase';
 
 export interface Farmer {
@@ -29,6 +29,14 @@ export interface ProduceListing {
   product: string;
   weightKg: number;
   createdAt: string;
+  point: string;
+}
+
+export interface CollectionPoint {
+  id: string;
+  name: string;
+  window: string;
+  products: string[];
 }
 
 const FARMER_COLUMNS = 'address, locality, language, momo_network, momo_number, momo_name, wallet_verified_at';
@@ -86,23 +94,38 @@ export async function saveWallet(w: Wallet): Promise<void> {
 export async function fetchListings(): Promise<ProduceListing[]> {
   const { data, error } = await supabase
     .from('produce_listings')
-    .select('id, product, weight_kg, created_at')
+    .select('id, product, weight_kg, created_at, collection_points(name)')
     .order('created_at', { ascending: false });
   if (error) throw new Error('Could not load your listings.');
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map((row: any) => ({
     id: row.id,
     product: row.product,
     weightKg: Number(row.weight_kg),
     createdAt: row.created_at,
+    point: row.collection_points?.name ?? '',
   }));
 }
 
-export async function createListing(product: string, weightKg: number): Promise<void> {
+export async function fetchCollectionPoints(): Promise<CollectionPoint[]> {
+  const { data, error } = await supabase
+    .from('collection_points')
+    .select('id, name, days, window_start, window_end, collection_point_products(products(name))')
+    .order('name');
+  if (error) throw new Error('Could not load collection points.');
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    window: windowLabel(r.days, r.window_start, r.window_end),
+    products: r.collection_point_products.map((x: any) => x.products.name),
+  }));
+}
+
+export async function createListing(pointId: string, product: string, weightKg: number): Promise<void> {
   const farmerId = await userId();
   const { error } = await supabase
     .from('produce_listings')
-    .insert({ farmer_id: farmerId, product: product.trim(), weight_kg: weightKg });
-  if (error) throw new Error('Add your MoMo wallet before listing produce.');
+    .insert({ farmer_id: farmerId, collection_point_id: pointId, product: product.trim(), weight_kg: weightKg });
+  if (error) throw new Error('Could not add the listing. Check your MoMo wallet and that the collection point takes this product.');
 }
 
 export async function deleteListing(id: string): Promise<void> {

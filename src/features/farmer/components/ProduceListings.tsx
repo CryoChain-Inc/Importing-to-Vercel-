@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { CROPS } from '../../../data/prices';
-import { createListing, deleteListing, type ProduceListing } from '../../../services/farmer.service';
+import { createListing, deleteListing, fetchCollectionPoints, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
 /** Listing form is locked until a wallet is saved (the database enforces this too). */
@@ -20,12 +19,20 @@ export function ProduceListings({
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const [product, setProduct] = useState(CROPS[0] ?? '');
+  const [points, setPoints] = useState<CollectionPoint[]>([]);
+  const [pointName, setPointName] = useState('');
+  const [product, setProduct] = useState('');
   const [weight, setWeight] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const weightKg = Number(weight);
-  const ready = product.trim().length > 1 && Number.isFinite(weightKg) && weightKg > 0;
+  const point = points.find((p) => p.name === pointName) ?? points[0];
+  const chosen = point?.products.includes(product) ? product : (point?.products[0] ?? '');
+  const ready = Boolean(point) && chosen.length > 1 && Number.isFinite(weightKg) && weightKg > 0;
+
+  useEffect(() => {
+    fetchCollectionPoints().then(setPoints, (e) => setError(e.message));
+  }, []);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -48,17 +55,19 @@ export function ProduceListings({
           <Text style={s.copy}>Add the product and the weight you have ready for collection.</Text>
           {error ? <Banner text={error} /> : null}
           <View style={s.form}>
-            <ChoiceChips label="Product" options={CROPS} value={product} onChange={setProduct} />
-            <Input
-              label="Other product"
-              value={CROPS.includes(product) ? '' : product}
-              onChangeText={(text) => setProduct(text.trim() ? text : (CROPS[0] ?? ''))}
-              hint="Leave blank to use the crop selected above."
-            />
+            {point ? (
+              <>
+                <ChoiceChips label="Collection point" options={points.map((p) => p.name)} value={point.name} onChange={setPointName} />
+                <Text style={s.meta}>{point.window}</Text>
+                <ChoiceChips label="Product" options={point.products} value={chosen} onChange={setProduct} />
+              </>
+            ) : (
+              <Text style={s.meta}>No collection points are open yet. Check back soon.</Text>
+            )}
             <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
             <Button
               label="Add listing"
-              onPress={() => run(async () => { await createListing(product, weightKg); setWeight(''); })}
+              onPress={() => run(async () => { await createListing(point!.id, chosen, weightKg); setWeight(''); })}
               loading={busy}
               disabled={!ready}
             />
@@ -83,7 +92,7 @@ export function ProduceListings({
             <View style={s.item}>
               <View style={s.itemText}>
                 <Text style={s.product}>{listing.product}</Text>
-                <Text style={s.meta}>{listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg</Text>
+                <Text style={s.meta}>{listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg{listing.point ? ` · ${listing.point}` : ''}</Text>
               </View>
               <Button label="Remove" variant="ghost" size="sm" onPress={() => run(() => deleteListing(listing.id))} />
             </View>

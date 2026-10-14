@@ -6,6 +6,7 @@ import { useNav } from '../../navigation';
 import { authService } from '../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 import type { Account, Role } from '../../types/auth';
+import { OpsHome } from '../ops/screens/OpsHome';
 import { FarmerHome } from '../farmer/screens/FarmerHome';
 
 /** Placeholder landing after sign-in; the real role workspaces replace this. */
@@ -15,6 +16,7 @@ export function HomeScreen({ account, role }: { account: Account; role: Role }) 
   const s = useThemedStyles(styles);
 
   if (role === 'farmer') return <FarmerHome account={account} />;
+  if (role === 'ops') return <OpsHome account={account} />;
 
   const status =
     role === 'buyer' ? (
