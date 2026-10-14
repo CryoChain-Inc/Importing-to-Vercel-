@@ -19,8 +19,24 @@ export interface SupplyRow {
   farmer: string;
   locality: string;
   point: string;
+  pointId: string | null;
+  lotId: string | null;
   createdAt: string;
 }
+
+export interface LotRow {
+  id: string;
+  code: string;
+  product: string;
+  totalKg: number;
+  state: string;
+  listings: number;
+  createdAt: string;
+}
+
+export const LOT_MAX_KG = 3000;
+export const LOT_MIN_KG = 2700;
+export const STOP_MIN_VALUE_GHS = 6200;
 
 export interface Product {
   id: string;
@@ -84,7 +100,7 @@ export async function fetchFarmers(): Promise<FarmerRow[]> {
 export async function fetchSupply(): Promise<SupplyRow[]> {
   const { data, error } = await supabase
     .from('produce_listings')
-    .select('id, product, weight_kg, created_at, farmers(locality, profiles(display_name)), collection_points(name)')
+    .select('id, product, weight_kg, created_at, lot_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)')
     .order('created_at', { ascending: false });
   fail('Could not load supply.')(error);
   return (data ?? []).map((r: any) => ({
@@ -94,6 +110,8 @@ export async function fetchSupply(): Promise<SupplyRow[]> {
     farmer: r.farmers?.profiles?.display_name ?? 'Unnamed farmer',
     locality: r.farmers?.locality ?? '',
     point: r.collection_points?.name ?? '—',
+    pointId: r.collection_point_id,
+    lotId: r.lot_id,
     createdAt: r.created_at,
   }));
 }
@@ -254,4 +272,34 @@ export async function inviteStaff(i: { name: string; phone: string; email: strin
   const res = (error as { context?: Response }).context;
   const msg = res ? (await res.json().catch(() => null))?.error : null;
   throw new Error(msg ?? 'Could not send the invite.');
+}
+
+export async function fetchLots(): Promise<LotRow[]> {
+  const { data, error } = await supabase
+    .from('lots')
+    .select('id, code, product, total_kg, state, created_at, produce_listings(count)')
+    .order('created_at', { ascending: false });
+  fail('Could not load lots.')(error);
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    code: r.code,
+    product: r.product,
+    totalKg: Number(r.total_kg),
+    state: r.state,
+    listings: r.produce_listings?.[0]?.count ?? 0,
+    createdAt: r.created_at,
+  }));
+}
+
+/** Atomic: the database locks the listings and re-checks one product, unallocated, and the 3,000 kg cap. */
+export async function createLot(listingIds: string[]): Promise<void> {
+  const { error } = await supabase.rpc('create_lot', { p_listing_ids: listingIds });
+  if (error) {
+    throw new Error(/already in a lot/.test(error.message) ? 'Some of those listings were just allocated. Refresh and try again.' : 'Could not create the lot.');
+  }
+}
+
+export async function cancelLot(id: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_lot', { p_lot_id: id });
+  fail('Could not cancel that lot.')(error);
 }

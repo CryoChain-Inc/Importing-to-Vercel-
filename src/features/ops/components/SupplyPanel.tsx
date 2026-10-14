@@ -29,7 +29,7 @@ export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
             <Text style={s.name}>{r.product}</Text>
             <Text style={s.value}>{kg(r.weightKg)}</Text>
           </View>
-          <Text style={s.meta}>{[r.farmer, r.locality, r.point].filter(Boolean).join(' · ')}</Text>
+          <Text style={s.meta}>{[r.farmer, r.locality, r.point, r.lotId ? 'In a lot' : 'Unallocated'].filter(Boolean).join(' · ')}</Text>
           <Text style={s.meta}>Listed {new Date(r.createdAt).toLocaleDateString('en-GH')}</Text>
         </Card>
       ))}

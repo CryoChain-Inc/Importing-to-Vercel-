@@ -9,16 +9,18 @@ import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { ConfigPanel } from '../components/ConfigPanel';
 import { FarmersPanel } from '../components/FarmersPanel';
+import { LotsPanel } from '../components/LotsPanel';
 import { PointsPanel } from '../components/PointsPanel';
 import { PricesPanel } from '../components/PricesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
 
-const TABS = ['Farmers', 'Supply', 'Prices', 'Collection points', 'Team', 'Settings'];
+const TABS = ['Farmers', 'Supply', 'Lots', 'Prices', 'Collection points', 'Team', 'Settings'];
 
 interface Data {
   farmers: ops.FarmerRow[];
   supply: ops.SupplyRow[];
+  lots: ops.LotRow[];
   products: ops.Product[];
   prices: ops.PriceRow[];
   points: ops.PointRow[];
@@ -35,10 +37,10 @@ export function OpsHome({ account }: { account: Account }) {
 
   const load = useCallback(async () => {
     try {
-      const [farmers, supply, cat, points, team, config] = await Promise.all([
-        ops.fetchFarmers(), ops.fetchSupply(), ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchTeam(), ops.fetchConfig(),
+      const [farmers, supply, lots, cat, points, team, config] = await Promise.all([
+        ops.fetchFarmers(), ops.fetchSupply(), ops.fetchLots(), ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchTeam(), ops.fetchConfig(),
       ]);
-      setData({ farmers, supply, products: cat.products, prices: cat.prices, points, team, config });
+      setData({ farmers, supply, lots, products: cat.products, prices: cat.prices, points, team, config });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
@@ -62,6 +64,7 @@ export function OpsHome({ account }: { account: Account }) {
           <>
             {tab === 'Farmers' ? <FarmersPanel farmers={data.farmers} /> : null}
             {tab === 'Supply' ? <SupplyPanel supply={data.supply} /> : null}
+            {tab === 'Lots' ? <LotsPanel supply={data.supply} lots={data.lots} products={data.products} prices={data.prices} onChange={load} /> : null}
             {tab === 'Prices' ? <PricesPanel products={data.products} prices={data.prices} onChange={load} /> : null}
             {tab === 'Collection points' ? <PointsPanel points={data.points} products={data.products} onChange={load} /> : null}
             {tab === 'Team' ? <TeamPanel team={data.team} onChange={load} /> : null}
