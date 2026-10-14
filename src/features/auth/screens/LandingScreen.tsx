@@ -2,7 +2,6 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { Icon, type IconName } from '../../../components/common';
 import { Screen, useIsWide } from '../../../components/layout';
-import { DEMO_HINT } from '../../../data/accounts';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { PriceBoard } from '../../farmer/components/PriceBoard';
 import { EntryCard } from '../components/EntryCard';
@@ -62,7 +61,6 @@ export function LandingScreen() {
 
       <View style={s.footer}>
         <Text style={s.footText}>Buying produce? Sign in or create a business account to see available lots and prices.</Text>
-        <Text style={s.footText}>{DEMO_HINT}</Text>
       </View>
     </Screen>
   );

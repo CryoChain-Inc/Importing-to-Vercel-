@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Badge, Button, Card, Gradient } from '../../components/common';
 import { Screen, useIsWide } from '../../components/layout';
 import { useNav } from '../../navigation';
+import { authService } from '../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 import type { Account, Role } from '../../types/auth';
 import { PriceBoard } from '../farmer/components/PriceBoard';
@@ -23,7 +24,7 @@ export function HomeScreen({ account, role }: { account: Account; role: Role }) 
     );
 
   return (
-    <Screen topRight={<Button label="Sign out" variant="outline" size="sm" onPress={() => reset({ name: 'landing' })} />}>
+    <Screen topRight={<Button label="Sign out" variant="outline" size="sm" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} />}>
       <Gradient kind="card" style={s.welcome}>
         <Text style={s.overline}>{role.toUpperCase()}</Text>
         <Text style={s.welcomeTitle}>Welcome, {account.name}</Text>

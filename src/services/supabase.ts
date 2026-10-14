@@ -3,18 +3,25 @@ import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const supabaseAnonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  process.env.EXPO_PUBLIC_SUPABASE_KEY ??
+  '';
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web',
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      storage: AsyncStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: Platform.OS === 'web',
+    },
   },
-});
+);
 
 /**
  * Standard enum for all Supabase Edge Function names.
@@ -22,17 +29,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  * provides autocomplete, and allows easy renaming across the codebase.
  */
 export enum EdgeFunction {
-  // Legacy edge functions (kept for backward compatibility during refactoring)
   Commit = 'commit',
   ClaimInvite = 'claim-invite',
   SendSms = 'send-sms',
   ChargePayment = 'charge-payment',
   PayoutTransfer = 'payout-transfer',
 
-  // V1 edge functions
-  V1Orders = 'v1-orders',
-  V1Payments = 'v1-payments',
-  V1Telemetry = 'v1-telemetry',
 }
 
 /**
