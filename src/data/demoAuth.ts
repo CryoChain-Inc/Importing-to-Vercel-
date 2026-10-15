@@ -46,13 +46,10 @@ export const verifySignIn = (identifier: string, code: string) =>
 
 type Registered = { account: Account } | { duplicate: true };
 
-async function onboard(name: string): Promise<Registered> {
-  await authService.completeOnboarding('buyer', name);
-  const profile = (await authService.getProfile())!;
-  const account = toAccount(profile);
-  return { account };
-}
-
-export const registerBuyer = (f: BuyerForm) => net(() => onboard(f.business.trim()));
+export const registerBuyer = (f: BuyerForm) =>
+  net(async (): Promise<Registered> => {
+    await authService.completeBuyerOnboarding(f);
+    return { account: toAccount((await authService.getProfile())!) };
+  });
 
 export const requestReview = () => net(() => `RV-${Math.floor(1000 + Math.random() * 9000)}`);

@@ -1,4 +1,4 @@
-import { isEmail, normalizePhone } from '../utils/format';
+import { isEmail, isPhone, normalizePhone } from '../utils/format';
 import { supabase } from './supabase';
 
 export type UserRole = 'pending' | 'farmer' | 'buyer' | 'agent' | 'driver' | 'ops';
@@ -46,8 +46,15 @@ export const authService = {
     return data as UserProfile | null;
   },
 
-  async completeOnboarding(role: 'farmer' | 'buyer', displayName: string) {
-    const { error } = await supabase.rpc('complete_onboarding', { new_role: role, new_name: displayName });
+  /** Sets the buyer role on profiles and creates the buyers row in one step. */
+  async completeBuyerOnboarding(b: { business: string; contact: string; phone: string; email: string; location: string }) {
+    const { error } = await supabase.rpc('complete_buyer_onboarding', {
+      p_business: b.business,
+      p_contact: b.contact,
+      p_phone: isPhone(b.phone) ? normalizePhone(b.phone) : '',
+      p_email: b.email,
+      p_location: b.location,
+    });
     if (error) throw error;
   },
 

@@ -6,6 +6,8 @@ import { useNav } from '../../navigation';
 import { authService } from '../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 import type { Account, Role } from '../../types/auth';
+import { OpsHome } from '../ops/screens/OpsHome';
+import { BuyerHome } from '../buyer/screens/BuyerHome';
 import { FarmerHome } from '../farmer/screens/FarmerHome';
 
 /** Placeholder landing after sign-in; the real role workspaces replace this. */
@@ -15,30 +17,21 @@ export function HomeScreen({ account, role }: { account: Account; role: Role }) 
   const s = useThemedStyles(styles);
 
   if (role === 'farmer') return <FarmerHome account={account} />;
-
-  const status =
-    role === 'buyer' ? (
-      <Badge label={account.businessVerified ? 'Business verified' : 'Business verification pending'} tone={account.businessVerified ? 'success' : 'warning'} />
-    ) : (
-      <Badge label="Staff" tone="info" />
-    );
+  if (role === 'buyer') return <BuyerHome account={account} />;
+  if (role === 'ops') return <OpsHome account={account} />;
 
   return (
     <Screen topRight={<Button label="Sign out" variant="outline" size="sm" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} />}>
       <Gradient kind="card" style={s.welcome}>
         <Text style={s.overline}>{role.toUpperCase()}</Text>
         <Text style={s.welcomeTitle}>Welcome, {account.name}</Text>
-        {status}
+        <Badge label="Staff" tone="info" />
       </Gradient>
 
       <View style={[s.body, wide && s.bodyWide]}>
         <Card style={s.main}>
-          <Text style={s.cardTitle}>{role === 'buyer' ? 'Lots and prices' : 'Workspace'}</Text>
-          <Text style={s.copy}>
-            {role === 'buyer'
-              ? "Available lots and prices will appear here. We'll let you know when verification is complete."
-              : `The ${role} workspace is coming in a later phase.`}
-          </Text>
+          <Text style={s.cardTitle}>Workspace</Text>
+          <Text style={s.copy}>The {role} workspace is coming in a later phase.</Text>
         </Card>
       </View>
     </Screen>

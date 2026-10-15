@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Icon } from '../../../components/common';
-import { DEMO_PRICES, PRICES_EFFECTIVE } from '../../../data/prices';
+import { fetchPrices, type PriceBoardData } from '../../../services/prices.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import type { CropPrice } from '../../../types/auth';
 import { ghs } from '../../../utils/format';
@@ -46,18 +46,23 @@ function Row({ p, first }: { p: CropPrice; first: boolean }) {
 }
 
 /** Public daily farmer prices, safe to show before sign-in. Buyer prices live elsewhere. */
-export function PriceBoard() {
+export function PriceBoard({ gradeAOnly = false }: { gradeAOnly?: boolean }) {
   const s = useThemedStyles(styles);
+  const [data, setData] = useState<PriceBoardData | null>(null);
+  useEffect(() => {
+    fetchPrices(gradeAOnly).then(setData, () => setData({ prices: [], updatedAt: null }));
+  }, [gradeAOnly]);
+  if (!data) return null;
   return (
     <View style={s.board} accessibilityLabel="Today's crop prices for farmers">
       <View style={s.head}>
         <View>
           <Text style={s.title}>Today's prices</Text>
-          <Text style={s.window}>{PRICES_EFFECTIVE}</Text>
+          <Text style={s.window}>{data.updatedAt ? `Updated ${new Date(data.updatedAt).toLocaleDateString('en-GH', { day: 'numeric', month: 'short' })}` : 'Prices coming soon'}</Text>
         </View>
         <Badge label="Farmers" tone="info" />
       </View>
-      {DEMO_PRICES.map((p, i) => (
+      {data.prices.map((p, i) => (
         <Row key={p.id} p={p} first={i === 0} />
       ))}
     </View>
