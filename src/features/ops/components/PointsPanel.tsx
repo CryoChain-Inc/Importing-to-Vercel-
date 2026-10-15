@@ -4,12 +4,7 @@ import { Badge, Button, Card, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { createPoint, setPointActive, updatePoint, type PointRow } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { DAY_NAMES, windowLabel } from '../../../utils/format';
-import { MultiChips } from './MultiChips';
 import { useAction } from './useAction';
-
-const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-const DAYS = DAY_NAMES.map((label, key) => ({ key, label }));
 
 export function PointsPanel({ points, onChange }: { points: PointRow[]; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
@@ -17,19 +12,15 @@ export function PointsPanel({ points, onChange }: { points: PointRow[]; onChange
   const [name, setName] = useState('');
   const [locality, setLocality] = useState('');
   const [address, setAddress] = useState('');
-  const [days, setDays] = useState<number[]>([1, 2, 3]);
-  const [start, setStart] = useState('06:00');
-  const [end, setEnd] = useState('10:00');
 
   const [editId, setEditId] = useState<string | null>(null);
 
   const reset = () => { setEditId(null); setName(''); setLocality(''); setAddress(''); };
   const edit = (p: PointRow) => {
     setEditId(p.id); setName(p.name); setLocality(p.locality); setAddress(p.address);
-    setDays(p.days); setStart(p.start.slice(0, 5)); setEnd(p.end.slice(0, 5));
   };
 
-  const valid = name.trim().length >= 2 && days.length > 0 && TIME.test(start) && TIME.test(end) && end > start;
+  const valid = name.trim().length >= 2;
 
   return (
     <View style={s.list}>
@@ -39,12 +30,9 @@ export function PointsPanel({ points, onChange }: { points: PointRow[]; onChange
         <Input label="Name" value={name} onChangeText={setName} placeholder="Techiman Market Hub" />
         <Input label="Locality" value={locality} onChangeText={setLocality} />
         <Input label="Address" value={address} onChangeText={setAddress} />
-        <MultiChips label="Collection days" options={DAYS} value={days} onChange={setDays} />
-        <Input label="Opens (24h)" value={start} onChangeText={setStart} placeholder="06:00" />
-        <Input label="Closes (24h)" value={end} onChangeText={setEnd} placeholder="10:00" error={TIME.test(start) && TIME.test(end) && end <= start ? 'Must be after opening time' : undefined} />
         <Button label={editId ? 'Save changes' : 'Create collection point'} loading={busy} disabled={!valid}
           onPress={() => run(async () => {
-            const p = { name, locality, address, days, start, end };
+            const p = { name, locality, address };
             if (editId) await updatePoint(editId, p); else await createPoint(p);
             reset();
           })} />
@@ -58,7 +46,6 @@ export function PointsPanel({ points, onChange }: { points: PointRow[]; onChange
             <Badge label={p.active ? 'Active' : 'Inactive'} tone={p.active ? 'success' : 'neutral'} />
           </View>
           <Text style={s.meta}>{[p.locality, p.address].filter(Boolean).join(' · ')}</Text>
-          <Text style={s.meta}>{windowLabel(p.days, p.start, p.end)}</Text>
           <View style={s.actions}>
             <Button size="sm" variant="outline" label="Edit" onPress={() => edit(p)} />
             <Button size="sm" variant="outline" label={p.active ? 'Deactivate' : 'Activate'} onPress={() => run(() => setPointActive(p.id, !p.active))} />

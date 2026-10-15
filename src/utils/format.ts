@@ -20,9 +20,3 @@ export const maskPhone = (raw: string) => {
   const d = normalizePhone(raw);
   return d.length < 4 ? d : `••• ••• ${d.slice(-3)}`;
 };
-
-export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-/** "Mon, Wed · 06:00–10:00" from Postgres `days` and `time` values ("06:00:00"). */
-export const windowLabel = (days: number[], start: string, end: string) =>
-  `${[...days].sort().map((d) => DAY_NAMES[d]).join(', ')} · ${start.slice(0, 5)}–${end.slice(0, 5)}`;
