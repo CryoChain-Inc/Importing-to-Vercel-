@@ -27,6 +27,7 @@ interface Data {
   lots: ops.LotRow[];
   orders: buyers.OrderRow[];
   requirements: buyers.RequirementRow[];
+  categories: ops.Category[];
   products: ops.Product[];
   prices: ops.PriceRow[];
   points: ops.PointRow[];
@@ -48,7 +49,7 @@ export function OpsHome({ account }: { account: Account }) {
         ops.fetchFarmers(), ops.fetchSupply(), ops.fetchLots(), buyers.fetchOrders(), buyers.fetchRequirements(),
         ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchTeam(), ops.fetchConfig(),
       ]);
-      setData({ farmers, supply, lots, orders, requirements, products: cat.products, prices: cat.prices, points, team, config });
+      setData({ farmers, supply, lots, orders, requirements, categories: cat.categories, products: cat.products, prices: cat.prices, points, team, config });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
@@ -87,7 +88,7 @@ export function OpsHome({ account }: { account: Account }) {
             {tab === 'Lots' ? <LotsPanel key={draft?.requirementId ?? 'new'} supply={data.supply} lots={data.lots} products={data.products} prices={data.prices} draft={draft} onChange={load} /> : null}
             {tab === 'Requirements' ? <RequirementsPanel requirements={data.requirements} onCreateLot={startLot} onChange={load} /> : null}
             {tab === 'Payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
-            {tab === 'Prices' ? <PricesPanel products={data.products} prices={data.prices} onChange={load} /> : null}
+            {tab === 'Prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
             {tab === 'Collection points' ? <PointsPanel points={data.points} products={data.products} onChange={load} /> : null}
             {tab === 'Team' ? <TeamPanel team={data.team} onChange={load} /> : null}
             {tab === 'Settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}

@@ -19,7 +19,8 @@ export interface CropPrice {
   unit: string;
   price: number;
   changePct: number;
-  window: string;
+  category: string;
+  imageUrl: string | null;
 }
 
 export interface BuyerForm {

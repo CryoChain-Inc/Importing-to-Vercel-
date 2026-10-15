@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { Badge, Icon } from '../../../components/common';
 import { fetchPrices, type PriceBoardData } from '../../../services/prices.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
@@ -25,14 +25,14 @@ function Row({ p, first }: { p: CropPrice; first: boolean }) {
   return (
     <View style={[s.row, !first && s.rowBorder]}>
       <View style={s.leaf}>
-        <Icon name="leaf" size={18} color={colors.brandInk} />
+        {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={s.photo} accessibilityLabel={p.crop} /> : <Icon name="leaf" size={18} color={colors.brandInk} />}
       </View>
       <View style={s.name}>
         <View style={s.cropRow}>
           <Text style={s.crop}>{p.crop}</Text>
           <Badge label={`Grade ${p.grade}`} tone={p.grade === 'A' ? 'success' : p.grade === 'B' ? 'warning' : 'neutral'} />
         </View>
-        <Text style={s.window}>{p.window}</Text>
+        <Text style={s.window}>{p.category}</Text>
       </View>
       <View style={s.price}>
         <Text style={s.amount}>
@@ -88,7 +88,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   title: { fontFamily: fonts.sansBold, fontSize: 20, color: c.ink },
   row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 12 },
   rowBorder: { borderTopWidth: 1, borderTopColor: c.borderSubtle },
-  leaf: { width: 36, height: 36, borderRadius: 18, backgroundColor: c.brandTint, alignItems: 'center' as const, justifyContent: 'center' as const },
+  leaf: { width: 36, height: 36, borderRadius: 18, backgroundColor: c.brandTint, alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const },
+  photo: { width: 36, height: 36 },
   name: { flex: 1, gap: 2 },
   cropRow: { flexDirection: 'row' as const, alignItems: 'center' as const, flexWrap: 'wrap' as const, gap: 6 },
   crop: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },

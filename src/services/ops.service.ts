@@ -1,4 +1,5 @@
 import { normalizePhone } from '../utils/format';
+import { replaceImage, type PickedImage } from './catalogueImage';
 import { supabase } from './supabase';
 
 export interface FarmerRow {
@@ -39,10 +40,19 @@ export const LOT_MAX_KG = 3000;
 export const LOT_MIN_KG = 2700;
 export const STOP_MIN_VALUE_GHS = 6200;
 
+export interface Category {
+  id: string;
+  name: string;
+  imagePath: string | null;
+  active: boolean;
+}
+
 export interface Product {
   id: string;
   name: string;
+  categoryId: string;
   category: string;
+  imagePath: string | null;
   active: boolean;
 }
 
@@ -51,7 +61,6 @@ export interface PriceRow {
   grade: 'A' | 'B' | 'C';
   price: number;
   prevPrice: number | null;
-  window: string;
 }
 
 export interface PointRow {
@@ -117,35 +126,77 @@ export async function fetchSupply(): Promise<SupplyRow[]> {
   }));
 }
 
-export async function fetchCatalogue(): Promise<{ products: Product[]; prices: PriceRow[] }> {
-  const [p, c] = await Promise.all([
-    supabase.from('products').select('id, name, category, active').order('name'),
-    supabase.from('crop_prices').select('product_id, grade, price, prev_price, window_label'),
+export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
+  const [k, p, c] = await Promise.all([
+    supabase.from('categories').select('id, name, image_path, active').order('name'),
+    supabase.from('products').select('id, name, category_id, image_path, active, categories(name)').order('name'),
+    supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
   ]);
-  fail('Could not load prices.')(p.error ?? c.error);
+  fail('Could not load prices.')(k.error ?? p.error ?? c.error);
   return {
-    products: p.data ?? [],
+    categories: (k.data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active })),
+    products: (p.data ?? []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      categoryId: r.category_id,
+      category: r.categories?.name ?? '',
+      imagePath: r.image_path,
+      active: r.active,
+    })),
     prices: (c.data ?? []).map((r) => ({
       productId: r.product_id,
       grade: r.grade,
       price: Number(r.price),
       prevPrice: r.prev_price == null ? null : Number(r.prev_price),
-      window: r.window_label ?? '',
     })),
   };
 }
 
-export async function addProduct(name: string, category: string): Promise<void> {
-  const { error } = await supabase.from('products').insert({ name: name.trim(), category: category.trim() });
-  fail('Could not add that product (is the name already used?).')(error);
+/** Insert or update a category/product, then swap its image if a new one was picked. */
+async function saveWithImage(
+  table: 'categories' | 'products',
+  id: string | undefined,
+  fields: Record<string, unknown>,
+  image: PickedImage | undefined,
+  oldPath: string | null | undefined,
+  failMsg: string,
+) {
+  let rowId = id;
+  if (rowId) {
+    fail(failMsg)((await supabase.from(table).update(fields).eq('id', rowId)).error);
+  } else {
+    const { data, error } = await supabase.from(table).insert(fields).select('id').single();
+    fail(failMsg)(error);
+    rowId = data!.id as string;
+  }
+  if (image) {
+    const path = await replaceImage(table, rowId, image, oldPath);
+    fail('Saved, but could not attach the image.')((await supabase.from(table).update({ image_path: path }).eq('id', rowId)).error);
+  }
 }
 
+export interface CategoryInput { id?: string; name: string; active: boolean; image?: PickedImage; oldImagePath?: string | null }
+export interface ProductInput extends CategoryInput { categoryId: string }
+
+export const saveCategory = (c: CategoryInput) =>
+  saveWithImage('categories', c.id, { name: c.name.trim(), active: c.active }, c.image, c.oldImagePath,
+    'Could not save that category (is the name already used?).');
+
+export const saveProduct = (p: ProductInput) =>
+  saveWithImage('products', p.id, { name: p.name.trim(), category_id: p.categoryId, active: p.active }, p.image, p.oldImagePath,
+    'Could not save that product (is the name already used?).');
+
 /** prev_price is set by a database trigger when the price changes. */
-export async function setPrice(productId: string, grade: string, price: number, window: string): Promise<void> {
+export async function setPrice(productId: string, grade: string, price: number): Promise<void> {
   const { error } = await supabase
     .from('crop_prices')
-    .upsert({ product_id: productId, grade, price, window_label: window.trim() || null }, { onConflict: 'product_id,grade' });
+    .upsert({ product_id: productId, grade, price }, { onConflict: 'product_id,grade' });
   fail('Could not save the price.')(error);
+}
+
+export async function deletePrice(productId: string, grade: string): Promise<void> {
+  const { error } = await supabase.from('crop_prices').delete().eq('product_id', productId).eq('grade', grade);
+  fail('Could not remove the price.')(error);
 }
 
 export async function fetchPoints(): Promise<PointRow[]> {
