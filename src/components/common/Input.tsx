@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Icon } from './Icon';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 
 export interface InputProps extends TextInputProps {
@@ -10,10 +11,11 @@ export interface InputProps extends TextInputProps {
   prefix?: string;
 }
 
-export function Input({ label, error, hint, prefix, style, onFocus, onBlur, ...rest }: InputProps) {
+export function Input({ label, error, hint, prefix, style, onFocus, onBlur, secureTextEntry, ...rest }: InputProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const [focused, setFocused] = useState(false);
+  const [shown, setShown] = useState(false);
 
   return (
     <View style={s.container}>
@@ -31,8 +33,14 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, ...r
             setFocused(false);
             onBlur?.(e);
           }}
+          secureTextEntry={secureTextEntry && !shown}
           {...rest}
         />
+        {secureTextEntry ? (
+          <Pressable onPress={() => setShown((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel={shown ? 'Hide password' : 'Show password'}>
+            <Icon name={shown ? 'eyeOff' : 'eye'} size={20} color={colors.inkMuted} />
+          </Pressable>
+        ) : null}
       </View>
       {error ? <Text style={s.error}>{error}</Text> : null}
       {!error && hint ? <Text style={s.hint}>{hint}</Text> : null}
