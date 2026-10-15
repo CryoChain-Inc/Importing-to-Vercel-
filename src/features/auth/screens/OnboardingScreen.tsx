@@ -3,13 +3,15 @@ import { View } from 'react-native';
 import { Button, ChoiceChips, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { AuthLayout } from '../../../components/layout';
-import { registerBuyer } from '../../../data/demoAuth';
+import { registerBuyer, toAccount } from '../../../data/demoAuth';
 import { DELIVERY_LOCATIONS } from '../../../data/options';
 import { FarmerOnboarding } from '../../farmer/onboarding/FarmerOnboarding';
 import { useNav } from '../../../navigation';
 import { useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account, BuyerForm } from '../../../types/auth';
 import { isEmail, isPhone } from '../../../utils/format';
+import { authService } from '../../../services/auth.service';
+import { ChangeContact } from '../components/ChangeContact';
 import { DuplicateNotice } from '../components/DuplicateNotice';
 import { errorMessage } from '../errors';
 import { useDraft } from '../hooks/useDraft';
@@ -67,21 +69,31 @@ function useSubmit(onDone: FormProps['onDone'], onDuplicate: FormProps['onDuplic
 function BuyerFormView({ identifier, onDone, onDuplicate }: FormProps) {
   const s = useThemedStyles(styles);
   const viaEmail = isEmail(identifier);
-  const { value: f, update, clear } = useDraft<BuyerForm>('buyer', {
-    business: '', contact: '', phone: viaEmail ? '' : identifier, email: viaEmail ? identifier.trim() : '', location: '',
-  });
-  const { busy, error, run } = useSubmit(onDone, onDuplicate, clear);
-  const ready = f.business.trim().length > 1 && f.contact.trim().length > 1 && (isPhone(f.phone) || isEmail(f.email)) && f.location !== '';
+  const { value: f, update, clear } = useDraft<BuyerForm>('buyer', { organization: '', name: '', otherContact: '', location: '' });
+  const [account, setAccount] = useState<Account | null>(null);
+  const { busy, error, run } = useSubmit((a) => {
+    // The other contact is verified right after sign-up; skipping leaves the account without it.
+    if (f.otherContact.trim()) setAccount(a);
+    else onDone(a);
+  }, onDuplicate, clear);
+  const otherOk = f.otherContact.trim() === '' || (viaEmail ? isPhone(f.otherContact) : isEmail(f.otherContact));
+  const ready = f.organization.trim().length > 1 && f.name.trim().length > 1 && f.location !== '' && otherOk;
+
+  if (account)
+    return (
+      <ChangeContact kind={viaEmail ? 'phone' : 'email'} current="" onCancel={() => onDone(account)}
+        onDone={async () => onDone(toAccount((await authService.getProfile())!))} />
+    );
 
   return (
     <View style={s.form}>
       {error ? <Banner text={error} /> : null}
-      <Input label="Business name" value={f.business} onChangeText={(business) => update({ business })} autoComplete="organization" />
-      <Input label="Contact person" value={f.contact} onChangeText={(contact) => update({ contact })} autoComplete="name" />
+      <Input label="Organization name" value={f.organization} onChangeText={(organization) => update({ organization })} autoComplete="organization" />
+      <Input label="Your name" value={f.name} onChangeText={(name) => update({ name })} autoComplete="name" />
       {viaEmail ? (
-        <Input label="Phone number" prefix="+233" value={f.phone} onChangeText={(phone) => update({ phone })} keyboardType="phone-pad" hint="For delivery updates." />
+        <Input label="Phone number (optional)" prefix="+233" value={f.otherContact} onChangeText={(otherContact) => update({ otherContact })} keyboardType="phone-pad" hint="For delivery updates. We'll send a code to confirm it." />
       ) : (
-        <Input label="Email (optional)" value={f.email} onChangeText={(email) => update({ email })} keyboardType="email-address" autoCapitalize="none" hint="For sign-in links and order updates." />
+        <Input label="Email (optional)" value={f.otherContact} onChangeText={(otherContact) => update({ otherContact })} keyboardType="email-address" autoCapitalize="none" hint="For sign-in links and order updates. We'll send a code to confirm it." />
       )}
       <ChoiceChips label="Delivery location" options={DELIVERY_LOCATIONS} value={f.location} onChange={(location) => update({ location })} />
       <Button label="Create account" size="lg" onPress={() => run(() => registerBuyer(f))} loading={busy} disabled={!ready} />

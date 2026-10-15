@@ -35,7 +35,7 @@ const fail = (msg: string) => (error: unknown) => {
 export async function fetchOrders(): Promise<OrderRow[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, paid_at, buyers(business_name, phone), lots(code, product, total_kg)')
+    .select('id, code, amount, state, created_at, paid_at, buyers(organization_name, profiles(phone)), lots(code, product, total_kg)')
     .order('created_at', { ascending: false });
   fail('Could not load orders.')(error);
   return (data ?? []).map((r: any) => ({
@@ -45,8 +45,8 @@ export async function fetchOrders(): Promise<OrderRow[]> {
     state: r.state,
     createdAt: r.created_at,
     paidAt: r.paid_at,
-    buyer: r.buyers?.business_name ?? 'Unknown buyer',
-    buyerPhone: r.buyers?.phone ?? '',
+    buyer: r.buyers?.organization_name ?? 'Unknown buyer',
+    buyerPhone: r.buyers?.profiles?.phone ?? '',
     lotCode: r.lots?.code ?? '',
     product: r.lots?.product ?? '',
     totalKg: Number(r.lots?.total_kg ?? 0),
@@ -68,13 +68,13 @@ export async function cancelOrder(orderId: string): Promise<void> {
 export async function fetchRequirements(): Promise<RequirementRow[]> {
   const { data, error } = await supabase
     .from('requirements')
-    .select('id, product, grade, quantity_kg, period, max_price_per_kg, destination, state, created_at, buyers(business_name, phone)')
+    .select('id, product, grade, quantity_kg, period, max_price_per_kg, destination, state, created_at, buyers(organization_name, profiles(phone))')
     .order('created_at', { ascending: false });
   fail('Could not load requirements.')(error);
   return (data ?? []).map((r: any) => ({
     id: r.id,
-    buyer: r.buyers?.business_name ?? 'Unknown buyer',
-    buyerPhone: r.buyers?.phone ?? '',
+    buyer: r.buyers?.organization_name ?? 'Unknown buyer',
+    buyerPhone: r.buyers?.profiles?.phone ?? '',
     product: r.product,
     grade: r.grade,
     quantityKg: Number(r.quantity_kg),

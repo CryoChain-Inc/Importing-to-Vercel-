@@ -1,4 +1,3 @@
-import { isPhone, normalizePhone } from '../utils/format';
 import { supabase } from './supabase';
 
 export interface TodayLot {
@@ -47,9 +46,10 @@ export interface Requirement {
 
 export type NewRequirement = Omit<Requirement, 'id' | 'state' | 'createdAt'>;
 
+/** phone and email are read-only here: they change only through the verified flow in authService. */
 export interface BuyerDetails {
-  business: string;
-  contact: string;
+  organization: string;
+  name: string;
   phone: string;
   email: string;
   location: string;
@@ -174,19 +174,24 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
   if (!user) throw new Error('Sign in again to continue.');
   const { data, error } = await supabase
     .from('buyers')
-    .select('business_name, contact_name, phone, email, delivery_location')
+    .select('organization_name, delivery_location, profiles(display_name, phone, email)')
     .eq('id', user.id)
     .single();
   fail('Could not load your account.')(error);
-  return { business: data!.business_name, contact: data!.contact_name, phone: data!.phone ?? '', email: data!.email ?? '', location: data!.delivery_location };
+  const p = (data as any).profiles;
+  return {
+    organization: data!.organization_name,
+    name: p?.display_name ?? '',
+    phone: p?.phone ?? '',
+    email: p?.email ?? '',
+    location: data!.delivery_location,
+  };
 }
 
-export async function saveBuyerDetails(b: BuyerDetails): Promise<void> {
+export async function saveBuyerDetails(b: Pick<BuyerDetails, 'organization' | 'name' | 'location'>): Promise<void> {
   const { error } = await supabase.rpc('update_buyer_details', {
-    p_business: b.business,
-    p_contact: b.contact,
-    p_phone: isPhone(b.phone) ? normalizePhone(b.phone) : '',
-    p_email: b.email,
+    p_organization: b.organization,
+    p_name: b.name,
     p_location: b.location,
   });
   fail('Could not save your details.')(error);
