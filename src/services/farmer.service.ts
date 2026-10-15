@@ -4,7 +4,8 @@ import { supabase } from './supabase';
 export interface Farmer {
   address: string | null;
   locality: string | null;
-  language: string | null;
+  latitude: number | null;
+  longitude: number | null;
   momoNetwork: string | null;
   momoNumber: string | null;
   momoName: string | null;
@@ -15,7 +16,8 @@ export interface FarmerDetails {
   name: string;
   address: string;
   locality: string;
-  language: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface Wallet {
@@ -35,9 +37,10 @@ export interface ProduceListing {
 export interface CollectionPoint {
   id: string;
   name: string;
+  address: string | null;
 }
 
-const FARMER_COLUMNS = 'address, locality, language, momo_network, momo_number, momo_name, wallet_verified_at';
+const FARMER_COLUMNS = 'address, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at';
 
 export const hasWallet = (f: Farmer | null) => Boolean(f?.momoNumber);
 export const detailsDone = (f: Farmer | null) => Boolean(f?.address);
@@ -62,7 +65,8 @@ export async function fetchFarmer(): Promise<Farmer | null> {
   return {
     address: data.address,
     locality: data.locality,
-    language: data.language,
+    latitude: data.latitude,
+    longitude: data.longitude,
     momoNetwork: data.momo_network,
     momoNumber: data.momo_number,
     momoName: data.momo_name,
@@ -75,7 +79,8 @@ export async function saveDetails(d: FarmerDetails): Promise<void> {
     p_name: d.name,
     p_address: d.address,
     p_locality: d.locality,
-    p_language: d.language,
+    p_latitude: d.latitude,
+    p_longitude: d.longitude,
   });
   if (error) throw new Error('Could not save your details.');
 }
@@ -105,7 +110,7 @@ export async function fetchListings(): Promise<ProduceListing[]> {
 }
 
 export async function fetchCollectionPoints(): Promise<CollectionPoint[]> {
-  const { data, error } = await supabase.from('collection_points').select('id, name').eq('active', true).order('name');
+  const { data, error } = await supabase.from('collection_points').select('id, name, address').eq('active', true).order('name');
   if (error) throw new Error('Could not load collection points.');
   return data ?? [];
 }

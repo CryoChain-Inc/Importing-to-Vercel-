@@ -30,7 +30,8 @@ export function FarmerProfileCard({
     name,
     address: farmer.address ?? '',
     locality: farmer.locality ?? '',
-    language: farmer.language ?? '',
+    latitude: farmer.latitude,
+    longitude: farmer.longitude,
   });
   const [wallet, setWallet] = useState<Wallet>({
     network: farmer.momoNetwork ?? '',
@@ -73,7 +74,7 @@ export function FarmerProfileCard({
             <Row label="Name" value={name} />
             <Row label="Address" value={farmer.address} />
             <Row label="Nearest town" value={farmer.locality} />
-            <Row label="Language" value={farmer.language} />
+            <Row label="Location" value={farmer.latitude != null ? `${farmer.latitude.toFixed(5)}, ${farmer.longitude?.toFixed(5)}` : null} />
           </View>
         )}
       </Card>
