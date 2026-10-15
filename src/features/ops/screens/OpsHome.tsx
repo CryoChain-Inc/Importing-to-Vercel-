@@ -28,6 +28,7 @@ interface Data {
   lots: ops.LotRow[];
   orders: buyers.OrderRow[];
   requirements: buyers.RequirementRow[];
+  categories: ops.Category[];
   products: ops.Product[];
   prices: ops.PriceRow[];
   points: ops.PointRow[];
@@ -49,7 +50,7 @@ export function OpsHome({ account }: { account: Account }) {
         ops.fetchFarmers(), ops.fetchSupply(), ops.fetchLots(), buyers.fetchOrders(), buyers.fetchRequirements(),
         ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchTeam(), ops.fetchConfig(),
       ]);
-      setData({ farmers, supply, lots, orders, requirements, products: cat.products, prices: cat.prices, points, team, config });
+      setData({ farmers, supply, lots, orders, requirements, categories: cat.categories, products: cat.products, prices: cat.prices, points, team, config });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');

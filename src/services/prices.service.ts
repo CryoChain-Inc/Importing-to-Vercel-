@@ -1,4 +1,5 @@
 import type { CropPrice } from '../types/auth';
+import { imageUrl } from './catalogueImage';
 import { supabase } from './supabase';
 
 export interface PriceBoardData {
@@ -10,7 +11,7 @@ export interface PriceBoardData {
 export async function fetchPrices(gradeAOnly = false): Promise<PriceBoardData> {
   let q = supabase
     .from('crop_prices')
-    .select('product_id, grade, unit, price, prev_price, window_label, updated_at, products!inner(name)')
+    .select('product_id, grade, unit, price, prev_price, updated_at, products!inner(name, image_path, categories(name))')
     .eq('products.active', true)
     .order('updated_at', { ascending: false });
   if (gradeAOnly) q = q.eq('grade', 'A');
@@ -24,7 +25,8 @@ export async function fetchPrices(gradeAOnly = false): Promise<PriceBoardData> {
     unit: r.unit,
     price: Number(r.price),
     changePct: r.prev_price ? ((Number(r.price) - Number(r.prev_price)) / Number(r.prev_price)) * 100 : 0,
-    window: r.window_label ?? '',
+    category: r.products.categories?.name ?? '',
+    imageUrl: imageUrl(r.products.image_path),
   }));
   prices.sort((a, b) => a.crop.localeCompare(b.crop) || a.grade.localeCompare(b.grade));
   return { prices, updatedAt: rows[0]?.updated_at ?? null };

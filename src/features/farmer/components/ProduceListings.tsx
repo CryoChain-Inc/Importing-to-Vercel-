@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { createListing, deleteListing, fetchCollectionPoints, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
+import { createListing, deleteListing, fetchCollectionPoints, fetchProductNames, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
 /** Listing form is locked until a wallet is saved (the database enforces this too). */
@@ -20,6 +20,7 @@ export function ProduceListings({
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [points, setPoints] = useState<CollectionPoint[]>([]);
+  const [products, setProducts] = useState<string[]>([]);
   const [pointName, setPointName] = useState('');
   const [product, setProduct] = useState('');
   const [weight, setWeight] = useState('');
@@ -27,11 +28,12 @@ export function ProduceListings({
   const [error, setError] = useState<string | null>(null);
   const weightKg = Number(weight);
   const point = points.find((p) => p.name === pointName) ?? points[0];
-  const chosen = point?.products.includes(product) ? product : (point?.products[0] ?? '');
+  const chosen = products.includes(product) ? product : (products[0] ?? '');
   const ready = Boolean(point) && chosen.length > 1 && Number.isFinite(weightKg) && weightKg > 0;
 
   useEffect(() => {
     fetchCollectionPoints().then(setPoints, (e) => setError(e.message));
+    fetchProductNames().then(setProducts, (e) => setError(e.message));
   }, []);
 
   const run = async (fn: () => Promise<void>) => {
@@ -58,8 +60,7 @@ export function ProduceListings({
             {point ? (
               <>
                 <ChoiceChips label="Collection point" options={points.map((p) => p.name)} value={point.name} onChange={setPointName} />
-                <Text style={s.meta}>{point.window}</Text>
-                <ChoiceChips label="Product" options={point.products} value={chosen} onChange={setProduct} />
+                <ChoiceChips label="Product" options={products} value={chosen} onChange={setProduct} />
               </>
             ) : (
               <Text style={s.meta}>No collection points are open yet. Check back soon.</Text>

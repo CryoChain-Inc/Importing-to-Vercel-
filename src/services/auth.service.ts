@@ -1,4 +1,4 @@
-import { isEmail, isPhone, normalizePhone } from '../utils/format';
+import { isEmail, normalizePhone } from '../utils/format';
 import { supabase } from './supabase';
 
 export type UserRole = 'pending' | 'farmer' | 'buyer' | 'agent' | 'driver' | 'ops';
@@ -47,15 +47,31 @@ export const authService = {
   },
 
   /** Sets the buyer role on profiles and creates the buyers row in one step. */
-  async completeBuyerOnboarding(b: { business: string; contact: string; phone: string; email: string; location: string }) {
+  async completeBuyerOnboarding(b: { organization: string; name: string; location: string }) {
     const { error } = await supabase.rpc('complete_buyer_onboarding', {
-      p_business: b.business,
-      p_contact: b.contact,
-      p_phone: isPhone(b.phone) ? normalizePhone(b.phone) : '',
-      p_email: b.email,
+      p_organization: b.organization,
+      p_name: b.name,
       p_location: b.location,
     });
     if (error) throw error;
+  },
+
+  /** Starts adding or changing the signed-in user's email/phone; a code goes to the new address. */
+  async requestContactChange(identifier: string) {
+    const { error } = await supabase.auth.updateUser(target(identifier));
+    if (!error) return;
+    if (error.code === 'email_exists' || error.code === 'phone_exists')
+      throw new Error(`That ${isEmail(identifier) ? 'email' : 'phone number'} belongs to another account.`);
+    throw error;
+  },
+
+  /** Returns false for a wrong or expired code. On success auth.users (and, via trigger, profiles) holds the new value. */
+  async confirmContactChange(identifier: string, token: string) {
+    const t = target(identifier);
+    const { error } = await supabase.auth.verifyOtp(
+      'email' in t ? { ...t, token, type: 'email_change' } : { ...t, token, type: 'phone_change' },
+    );
+    return !error;
   },
 
   signOut: () => supabase.auth.signOut(),

@@ -5,8 +5,8 @@ import { Webhook } from 'npm:standardwebhooks@1.0.0';
 const hookSecret = (Deno.env.get('SEND_EMAIL_HOOK_SECRET') ?? '').replace('v1,whsec_', '');
 
 type HookPayload = {
-  user: { email: string };
-  email_data: { token: string };
+  user: { email?: string; new_email?: string; email_change?: string };
+  email_data: { token: string; token_new?: string; email_action_type?: string; new_email?: string };
 };
 
 Deno.serve(async (req) => {
@@ -24,16 +24,25 @@ Deno.serve(async (req) => {
     console.error('EMAIL_FROM secret is not set');
     return Response.json({ error: { http_code: 500, message: 'Email sender not configured' } });
   }
+  // Adding/changing an email: the code goes to the new address (secure email change is off).
+  const change = email_data.email_action_type === 'email_change';
+  const newEmail = user.new_email || user.email_change || email_data.new_email;
+  const to = change ? newEmail || user.email : user.email;
+  const code = change ? email_data.token_new || email_data.token : email_data.token;
+  if (!to) {
+    console.error('no recipient', { user: Object.keys(user), email_data: Object.keys(email_data), type: email_data.email_action_type });
+    return Response.json({ error: { http_code: 400, message: 'No email address to send to' } });
+  }
   const auth = btoa(`${Deno.env.get('TWILIO_ACCOUNT_SID')}:${Deno.env.get('TWILIO_AUTH_TOKEN')}`);
   const res = await fetch('https://comms.twilio.com/v1/Emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
     body: JSON.stringify({
       from: { address: from, name: 'CryoChain' },
-      to: [{ address: user.email }],
+      to: [{ address: to }],
       content: {
-        subject: 'Your CryoChain sign-in code',
-        html: `<p>Your sign-in code is <strong style="font-size:20px">${email_data.token}</strong>.</p><p>It expires shortly. If you didn't request it, ignore this email.</p>`,
+        subject: change ? 'Confirm your email for CryoChain' : 'Your CryoChain sign-in code',
+        html: `<p>Your ${change ? 'confirmation' : 'sign-in'} code is <strong style="font-size:20px">${code}</strong>.</p><p>It expires shortly. If you didn't request it, ignore this email.</p>`,
       },
     }),
   });

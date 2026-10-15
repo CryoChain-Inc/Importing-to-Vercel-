@@ -4,32 +4,41 @@ import { Button, Card, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { saveBuyerDetails, type BuyerDetails } from '../../../services/buyer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { isEmail, isPhone } from '../../../utils/format';
+import { ChangeContact } from '../../auth/components/ChangeContact';
 import { useAction } from '../../ops/components/useAction';
 
-/** Business details used on orders and deliveries. */
+/** Organization details used on orders and deliveries. Phone and email change only through a verified code. */
 export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; onRefresh: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onRefresh);
   const [d, setD] = useState(details);
   const [saved, setSaved] = useState(false);
-  const set = (k: keyof BuyerDetails) => (v: string) => { setSaved(false); setD({ ...d, [k]: v }); };
-
-  const phoneBad = d.phone.trim() !== '' && !isPhone(d.phone);
-  const emailBad = d.email.trim() !== '' && !isEmail(d.email);
-  const valid = d.business.trim().length >= 2 && d.contact.trim().length >= 2 && d.location.trim().length >= 2 && !phoneBad && !emailBad;
+  const [changing, setChanging] = useState<'email' | 'phone' | null>(null);
+  const set = (k: 'organization' | 'name' | 'location') => (v: string) => { setSaved(false); setD({ ...d, [k]: v }); };
+  const valid = d.organization.trim().length >= 2 && d.name.trim().length >= 2 && d.location.trim().length >= 2;
 
   return (
     <Card style={s.form}>
       <Text style={s.title}>Account details</Text>
       {error ? <Banner text={error} /> : null}
-      <Input label="Business name" value={d.business} onChangeText={set('business')} />
-      <Input label="Contact person" value={d.contact} onChangeText={set('contact')} />
-      <Input label="Phone" value={d.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={phoneBad ? 'Enter a valid Ghana number' : undefined} />
-      <Input label="Email" value={d.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" error={emailBad ? 'Enter a valid email' : undefined} />
+      <Input label="Organization name" value={d.organization} onChangeText={set('organization')} />
+      <Input label="Your name" value={d.name} onChangeText={set('name')} />
       <Input label="Delivery location" value={d.location} onChangeText={set('location')} />
       <Button label={saved ? 'Saved' : 'Save details'} loading={busy} disabled={!valid}
         onPress={() => run(async () => { await saveBuyerDetails(d); setSaved(true); })} />
+
+      <Text style={s.title}>Sign-in contacts</Text>
+      {changing ? (
+        <ChangeContact kind={changing} current={changing === 'email' ? details.email : details.phone}
+          onDone={async () => { setChanging(null); await onRefresh(); }} onCancel={() => setChanging(null)} />
+      ) : (
+        <>
+          <Text style={s.value}>Phone: {details.phone || 'not added'}</Text>
+          <Button label={details.phone ? 'Change phone' : 'Add phone'} variant="ghost" onPress={() => setChanging('phone')} />
+          <Text style={s.value}>Email: {details.email || 'not added'}</Text>
+          <Button label={details.email ? 'Change email' : 'Add email'} variant="ghost" onPress={() => setChanging('email')} />
+        </>
+      )}
     </Card>
   );
 }
@@ -37,4 +46,5 @@ export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; on
 const styles = (c: Record<ColorToken, string>) => ({
   form: { gap: 12 },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
+  value: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink },
 });

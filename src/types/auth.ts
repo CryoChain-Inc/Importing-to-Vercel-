@@ -19,13 +19,14 @@ export interface CropPrice {
   unit: string;
   price: number;
   changePct: number;
-  window: string;
+  category: string;
+  imageUrl: string | null;
 }
 
 export interface BuyerForm {
-  business: string;
-  contact: string;
-  phone: string;
-  email: string;
+  organization: string;
+  name: string;
+  /** The contact the user did not sign in with (phone if they used email, and vice versa); verified after sign-up. */
+  otherContact: string;
   location: string;
 }

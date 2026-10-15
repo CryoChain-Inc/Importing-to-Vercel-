@@ -1,4 +1,4 @@
-import { normalizePhone, windowLabel } from '../utils/format';
+import { normalizePhone } from '../utils/format';
 import { supabase } from './supabase';
 
 export interface Farmer {
@@ -35,8 +35,6 @@ export interface ProduceListing {
 export interface CollectionPoint {
   id: string;
   name: string;
-  window: string;
-  products: string[];
 }
 
 const FARMER_COLUMNS = 'address, locality, language, momo_network, momo_number, momo_name, wallet_verified_at';
@@ -107,17 +105,15 @@ export async function fetchListings(): Promise<ProduceListing[]> {
 }
 
 export async function fetchCollectionPoints(): Promise<CollectionPoint[]> {
-  const { data, error } = await supabase
-    .from('collection_points')
-    .select('id, name, days, window_start, window_end, collection_point_products(products(name))')
-    .order('name');
+  const { data, error } = await supabase.from('collection_points').select('id, name').eq('active', true).order('name');
   if (error) throw new Error('Could not load collection points.');
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.name,
-    window: windowLabel(r.days, r.window_start, r.window_end),
-    products: r.collection_point_products.map((x: any) => x.products.name),
-  }));
+  return data ?? [];
+}
+
+export async function fetchProductNames(): Promise<string[]> {
+  const { data, error } = await supabase.from('products').select('name').eq('active', true).order('name');
+  if (error) throw new Error('Could not load products.');
+  return (data ?? []).map((r) => r.name);
 }
 
 export async function createListing(pointId: string, product: string, weightKg: number): Promise<void> {
@@ -125,7 +121,7 @@ export async function createListing(pointId: string, product: string, weightKg: 
   const { error } = await supabase
     .from('produce_listings')
     .insert({ farmer_id: farmerId, collection_point_id: pointId, product: product.trim(), weight_kg: weightKg });
-  if (error) throw new Error('Could not add the listing. Check your MoMo wallet and that the collection point takes this product.');
+  if (error) throw new Error('Could not add the listing. Check your MoMo wallet and that the collection point is active.');
 }
 
 export async function deleteListing(id: string): Promise<void> {
