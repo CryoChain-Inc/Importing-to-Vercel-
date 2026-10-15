@@ -29,6 +29,7 @@ export interface LotRow {
   code: string;
   product: string;
   totalKg: number;
+  pricePerKg: number | null;
   state: string;
   listings: number;
   createdAt: string;
@@ -277,7 +278,7 @@ export async function inviteStaff(i: { name: string; phone: string; email: strin
 export async function fetchLots(): Promise<LotRow[]> {
   const { data, error } = await supabase
     .from('lots')
-    .select('id, code, product, total_kg, state, created_at, produce_listings(count)')
+    .select('id, code, product, total_kg, price_per_kg, state, created_at, produce_listings(count)')
     .order('created_at', { ascending: false });
   fail('Could not load lots.')(error);
   return (data ?? []).map((r: any) => ({
@@ -285,6 +286,7 @@ export async function fetchLots(): Promise<LotRow[]> {
     code: r.code,
     product: r.product,
     totalKg: Number(r.total_kg),
+    pricePerKg: r.price_per_kg == null ? null : Number(r.price_per_kg),
     state: r.state,
     listings: r.produce_listings?.[0]?.count ?? 0,
     createdAt: r.created_at,
@@ -292,8 +294,8 @@ export async function fetchLots(): Promise<LotRow[]> {
 }
 
 /** Atomic: the database locks the listings and re-checks one product, unallocated, and the 3,000 kg cap. */
-export async function createLot(listingIds: string[]): Promise<void> {
-  const { error } = await supabase.rpc('create_lot', { p_listing_ids: listingIds });
+export async function createLot(listingIds: string[], pricePerKg: number, requirementId?: string): Promise<void> {
+  const { error } = await supabase.rpc('create_lot', { p_listing_ids: listingIds, p_price_per_kg: pricePerKg, p_requirement_id: requirementId ?? null });
   if (error) {
     throw new Error(/already in a lot/.test(error.message) ? 'Some of those listings were just allocated. Refresh and try again.' : 'Could not create the lot.');
   }

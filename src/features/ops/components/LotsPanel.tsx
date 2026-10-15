@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips } from '../../../components/common';
+import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
   cancelLot, createLot, LOT_MAX_KG, LOT_MIN_KG, STOP_MIN_VALUE_GHS,
@@ -11,20 +11,32 @@ import { ghs } from '../../../utils/format';
 import { MultiChips } from './MultiChips';
 import { useAction } from './useAction';
 
+/** Set by "Create lot" on a buyer requirement: preselects the product and ties the new lot to it. */
+export interface LotDraft {
+  requirementId: string;
+  product: string;
+  price: number;
+  summary: string;
+}
+
 const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
 /** Build a lot from unallocated listings of one product; list and cancel existing lots. */
-export function LotsPanel({ supply, lots, products, prices, onChange }: {
+export function LotsPanel({ supply, lots, products, prices, draft, onChange }: {
   supply: SupplyRow[];
   lots: LotRow[];
   products: Product[];
   prices: PriceRow[];
+  draft: LotDraft | null;
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onChange);
   const [picked, setPicked] = useState<string[]>([]);
-  const [productName, setProductName] = useState('');
+  // The parent remounts this panel (key) when a new draft arrives, so the draft only seeds initial state.
+  const [productName, setProductName] = useState(draft?.product ?? '');
+  const [price, setPrice] = useState(draft ? String(draft.price) : '');
+  const [requirementId, setRequirementId] = useState<string | undefined>(draft?.requirementId);
 
   const pool = supply.filter((r) => !r.lotId);
   const names = [...new Set(pool.map((r) => r.product))].sort();
@@ -43,6 +55,7 @@ export function LotsPanel({ supply, lots, products, prices, onChange }: {
   });
 
   const over = total > LOT_MAX_KG;
+  const sellPrice = Number(price);
   const warnings = [
     total > 0 && total < LOT_MIN_KG ? `Under ${kg(LOT_MIN_KG)}: the truck won't be full.` : null,
     ...[...stops.values()].map((st) =>
@@ -57,16 +70,23 @@ export function LotsPanel({ supply, lots, products, prices, onChange }: {
       <Card style={s.form}>
         <Text style={s.title}>Create lot</Text>
         <Text style={s.meta}>One product per lot, up to {kg(LOT_MAX_KG)} (one truck). Aim for {kg(LOT_MIN_KG)}+ across 2–3 stops.</Text>
+        {requirementId && draft ? <Banner tone="info" text={`For requirement: ${draft.summary}. Creating the lot marks it matched.`} /> : null}
         {names.length ? (
           <>
-            <ChoiceChips label="Product" options={names} value={product} onChange={(n) => { setProductName(n); setPicked([]); }} />
+            <ChoiceChips label="Product" options={names} value={product} onChange={(n) => { setProductName(n); setPicked([]); setRequirementId(undefined); }} />
             <MultiChips label="Available listings" value={picked} onChange={setPicked}
               options={candidates.map((r) => ({ key: r.id, label: `${r.farmer} · ${r.point} · ${kg(r.weightKg)}` }))} />
             <Text style={[s.value, over && s.bad]}>{kg(total)} / {kg(LOT_MAX_KG)} · {selected.length} listing{selected.length === 1 ? '' : 's'}</Text>
             {over ? <Text style={s.bad}>Over the vehicle capacity. Remove some listings.</Text> : null}
             {warnings.map((w) => <Text key={w} style={s.meta}>⚠ {w}</Text>)}
-            <Button label="Create lot" loading={busy} disabled={!selected.length || over}
-              onPress={() => run(async () => { await createLot(selected.map((r) => r.id)); setPicked([]); })} />
+            <Input label="Price buyers pay (GH₵ per kg)" value={price} onChangeText={setPrice} keyboardType="decimal-pad"
+              hint={priceA ? `Farmer Grade A price is ${ghs(priceA)}/kg.` : undefined} />
+            <Button label="Create lot" loading={busy} disabled={!selected.length || over || !(sellPrice > 0)}
+              onPress={() => run(async () => {
+                await createLot(selected.map((r) => r.id), sellPrice, requirementId);
+                setPicked([]);
+                setRequirementId(undefined);
+              })} />
           </>
         ) : <Text style={s.meta}>No unallocated supply. Listings appear here once farmers list produce.</Text>}
       </Card>
@@ -77,7 +97,7 @@ export function LotsPanel({ supply, lots, products, prices, onChange }: {
             <Text style={s.name}>{l.code} · {l.product}</Text>
             <Badge label={l.state.replace('_', ' ')} tone={l.state === 'cancelled' ? 'neutral' : 'success'} />
           </View>
-          <Text style={s.meta}>{kg(l.totalKg)} · {l.listings} listing{l.listings === 1 ? '' : 's'} · {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
+          <Text style={s.meta}>{kg(l.totalKg)}{l.pricePerKg ? ` at ${ghs(l.pricePerKg)}/kg` : ' · no price'} · {l.listings} listing{l.listings === 1 ? '' : 's'} · {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
           {l.state === 'listed' ? <Button size="sm" variant="outline" label="Cancel lot" onPress={() => run(() => cancelLot(l.id))} /> : null}
         </Card>
       ))}
