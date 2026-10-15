@@ -340,3 +340,59 @@ export async function cancelLot(id: string): Promise<void> {
   const { error } = await supabase.rpc('cancel_lot', { p_lot_id: id });
   fail('Could not cancel that lot.')(error);
 }
+
+export interface AssignedRoute {
+  id: string;
+  agentId: string;
+  agentName: string;
+  driverName: string;
+  destination: string;
+  stops: { pointName: string; locality: string; product: string }[];
+}
+
+/** Today's routes, one per agent, as ops assigned them. */
+export async function fetchRoutes(): Promise<AssignedRoute[]> {
+  const { data, error } = await supabase
+    .from('routes')
+    .select('id, agent_id, destination, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name), route_stops(product, collection_points(name, locality))')
+    .eq('service_date', accraToday());
+  fail('Could not load routes.')(error);
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    agentId: r.agent_id,
+    agentName: r.profiles?.display_name ?? 'Agent',
+    driverName: r.driver?.display_name ?? '',
+    destination: r.destination ?? '',
+    stops: (r.route_stops ?? [])
+      .map((s: any) => ({
+        pointName: s.collection_points?.name ?? 'Collection point',
+        locality: s.collection_points?.locality ?? '',
+        product: s.product,
+      }))
+      .sort((a: { pointName: string }, b: { pointName: string }) => a.pointName.localeCompare(b.pointName)),
+  }));
+}
+
+/** Replaces that agent's stops for today. */
+export async function assignRoute(
+  agentId: string,
+  stops: { pointId: string; product: string }[],
+  driverId: string,
+  destination: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('assign_route', {
+    p_agent_id: agentId,
+    p_stops: stops.map((s) => ({ collection_point_id: s.pointId, product: s.product })),
+    p_driver_id: driverId,
+    p_destination: destination.trim(),
+  });
+  if (!error) return;
+  const msg = error.message ?? '';
+  if (/choose an agent/.test(msg)) throw new Error('Choose a field agent.');
+  if (/choose a driver/.test(msg)) throw new Error('Choose a driver.');
+  if (/enter a destination/.test(msg)) throw new Error('Enter where this load will be delivered.');
+  if (/driver already assigned/.test(msg)) throw new Error('That driver already has a route today.');
+  if (/at least one stop/.test(msg)) throw new Error('Choose at least one collection point.');
+  if (/ops only/.test(msg)) throw new Error('Only operations can assign a route.');
+  throw new Error('Could not assign that route.');
+}

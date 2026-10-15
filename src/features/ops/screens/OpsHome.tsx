@@ -16,10 +16,11 @@ import { PaymentsPanel } from '../components/PaymentsPanel';
 import { PointsPanel } from '../components/PointsPanel';
 import { PricesPanel } from '../components/PricesPanel';
 import { RequirementsPanel } from '../components/RequirementsPanel';
+import { RoutesPanel } from '../components/RoutesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
 
-const TABS = ['Farmers', 'Supply', 'Requirements', 'Lots', 'Payments', 'Prices', 'Collection points', 'Team', 'Settings'];
+const TABS = ['Farmers', 'Supply', 'Requirements', 'Lots', 'Payments', 'Prices', 'Collection points', 'Routes', 'Team', 'Settings'];
 
 interface Data {
   farmers: ops.FarmerRow[];
@@ -88,8 +89,9 @@ export function OpsHome({ account }: { account: Account }) {
             {tab === 'Lots' ? <LotsPanel key={draft?.requirementId ?? 'new'} supply={data.supply} lots={data.lots} products={data.products} prices={data.prices} draft={draft} onChange={load} /> : null}
             {tab === 'Requirements' ? <RequirementsPanel requirements={data.requirements} onCreateLot={startLot} onChange={load} /> : null}
             {tab === 'Payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
-            {tab === 'Prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
-            {tab === 'Collection points' ? <PointsPanel points={data.points} onChange={load} /> : null}
+            {tab === 'Prices' ? <PricesPanel products={data.products} prices={data.prices} onChange={load} /> : null}
+            {tab === 'Collection points' ? <PointsPanel points={data.points} products={data.products} onChange={load} /> : null}
+            {tab === 'Routes' ? <RoutesPanel team={data.team} points={data.points} products={data.products} supply={data.supply} onChange={load} /> : null}
             {tab === 'Team' ? <TeamPanel team={data.team} onChange={load} /> : null}
             {tab === 'Settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
           </>
