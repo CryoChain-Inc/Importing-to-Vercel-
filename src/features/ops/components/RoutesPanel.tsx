@@ -43,7 +43,7 @@ export function RoutesPanel({
   const [picked, setPicked] = useState<string[]>([]);
   const agent = agents.find((item) => (item.name || 'Unnamed agent') === agentLabel) ?? agents[0];
   const driver = drivers.find((item) => (item.name || 'Unnamed driver') === driverLabel) ?? drivers[0];
-  const byProduct = new Map(products.map((product) => [product.id, product.name]));
+  const activeProducts = products.filter((product) => product.active);
 
   useEffect(() => {
     fetchRoutes().then(setRoutes, (e) => setLoadError(e instanceof Error ? e.message : 'Could not load routes.'));
@@ -52,17 +52,14 @@ export function RoutesPanel({
   const options = points
     .filter((point) => point.active)
     .flatMap((point) =>
-      point.productIds
-        .map((id) => byProduct.get(id))
-        .filter((name): name is string => Boolean(name))
-        .map((product) => {
-          const listed = supply.filter((row) => row.pointId === point.id && row.product === product);
-          const kg = listed.reduce((sum, row) => sum + row.weightKg, 0);
-          return {
-            key: `${point.id}|${product}`,
-            label: `${point.name} · ${product} · ${listed.length} listed${listed.length ? `, ${kg.toLocaleString('en-GH', { maximumFractionDigits: 0 })} kg` : ''}`,
-          };
-        }),
+      activeProducts.map((product) => {
+        const listed = supply.filter((row) => row.pointId === point.id && row.product === product.name);
+        const kg = listed.reduce((sum, row) => sum + row.weightKg, 0);
+        return {
+          key: `${point.id}|${product.name}`,
+          label: `${point.name} · ${product.name} · ${listed.length} listed${listed.length ? `, ${kg.toLocaleString('en-GH', { maximumFractionDigits: 0 })} kg` : ''}`,
+        };
+      }),
     );
 
   return (

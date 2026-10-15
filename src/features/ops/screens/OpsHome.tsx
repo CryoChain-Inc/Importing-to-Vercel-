@@ -20,7 +20,7 @@ import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
 import { RoutesPanel } from '../components/RoutesPanel';
 
-const TABS = ['Farmers', 'Supply', 'Requirements', 'Lots', 'Payments', 'Prices', 'Collection points', 'Team', 'Settings'];
+const TABS = ['Farmers', 'Supply', 'Requirements', 'Lots', 'Payments', 'Prices', 'Collection points','Routes', 'Team', 'Settings'];
 
 interface Data {
   farmers: ops.FarmerRow[];

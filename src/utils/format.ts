@@ -9,10 +9,13 @@ export function normalizePhone(raw: string): string {
 export const isPhone = (raw: string) => /^233\d{9}$/.test(normalizePhone(raw));
 export const isEmail = (raw: string) => /^\S+@\S+\.\S+$/.test(raw.trim());
 
-/** Calendar date in Ghana, YYYY-MM-DD. Routes are assigned for this day. */
-export function accraToday(): string {
+/** Today's calendar service date in Ghana (YYYY-MM-DD), matching route service_date in Africa/Accra timezone. */
+export function getTodayServiceDate(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Accra', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
+
+/** @deprecated Use getTodayServiceDate() */
+export const accraToday = getTodayServiceDate;
 
 /** Local display, e.g. 024 555 0142. */
 export function localPhone(raw: string | null | undefined): string {
