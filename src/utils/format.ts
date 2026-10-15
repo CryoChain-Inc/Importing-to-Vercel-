@@ -9,6 +9,22 @@ export function normalizePhone(raw: string): string {
 export const isPhone = (raw: string) => /^233\d{9}$/.test(normalizePhone(raw));
 export const isEmail = (raw: string) => /^\S+@\S+\.\S+$/.test(raw.trim());
 
+/** Calendar date in Ghana, YYYY-MM-DD. Routes are assigned for this day. */
+export function accraToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Accra', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+/** Local display, e.g. 024 555 0142. */
+export function localPhone(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const d = normalizePhone(raw);
+  if (d.startsWith('233') && d.length === 12) {
+    const local = `0${d.slice(3)}`;
+    return `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
+  }
+  return formatPhone(raw);
+}
+
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const d = normalizePhone(raw);
