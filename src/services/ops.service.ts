@@ -72,7 +72,6 @@ export interface PointRow {
   start: string;
   end: string;
   active: boolean;
-  productIds: string[];
 }
 
 export interface OpsConfig {
@@ -202,7 +201,7 @@ export async function deletePrice(productId: string, grade: string): Promise<voi
 export async function fetchPoints(): Promise<PointRow[]> {
   const { data, error } = await supabase
     .from('collection_points')
-    .select('id, name, locality, address, days, window_start, window_end, active, collection_point_products(product_id)')
+    .select('id, name, locality, address, days, window_start, window_end, active')
     .order('created_at', { ascending: false });
   fail('Could not load collection points.')(error);
   return (data ?? []).map((r: any) => ({
@@ -214,7 +213,6 @@ export async function fetchPoints(): Promise<PointRow[]> {
     start: r.window_start,
     end: r.window_end,
     active: r.active,
-    productIds: r.collection_point_products.map((x: any) => x.product_id),
   }));
 }
 
@@ -225,27 +223,25 @@ export interface NewPoint {
   days: number[];
   start: string;
   end: string;
-  productIds: string[];
 }
 
+const pointFields = (p: NewPoint) => ({
+  name: p.name.trim(),
+  locality: p.locality.trim() || null,
+  address: p.address.trim() || null,
+  days: p.days,
+  window_start: p.start,
+  window_end: p.end,
+});
+
 export async function createPoint(p: NewPoint): Promise<void> {
-  const { data, error } = await supabase
-    .from('collection_points')
-    .insert({
-      name: p.name.trim(),
-      locality: p.locality.trim() || null,
-      address: p.address.trim() || null,
-      days: p.days,
-      window_start: p.start,
-      window_end: p.end,
-    })
-    .select('id')
-    .single();
+  const { error } = await supabase.from('collection_points').insert(pointFields(p));
   fail('Could not create the collection point (check the time window).')(error);
-  const { error: e2 } = await supabase
-    .from('collection_point_products')
-    .insert(p.productIds.map((product_id) => ({ collection_point_id: data!.id, product_id })));
-  fail('Point created, but its products could not be saved.')(e2);
+}
+
+export async function updatePoint(id: string, p: NewPoint): Promise<void> {
+  const { error } = await supabase.from('collection_points').update(pointFields(p)).eq('id', id);
+  fail('Could not update the collection point (check the time window).')(error);
 }
 
 export async function setPointActive(id: string, active: boolean): Promise<void> {
