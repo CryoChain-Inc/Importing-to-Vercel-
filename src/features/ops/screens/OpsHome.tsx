@@ -18,6 +18,7 @@ import { PricesPanel } from '../components/PricesPanel';
 import { RequirementsPanel } from '../components/RequirementsPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
+import { RoutesPanel } from '../components/RoutesPanel';
 
 const TABS = ['Farmers', 'Supply', 'Requirements', 'Lots', 'Payments', 'Prices', 'Collection points', 'Team', 'Settings'];
 
@@ -90,6 +91,7 @@ export function OpsHome({ account }: { account: Account }) {
             {tab === 'Payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
             {tab === 'Prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
             {tab === 'Collection points' ? <PointsPanel points={data.points} onChange={load} /> : null}
+            {tab === 'Routes' ? <RoutesPanel team={data.team} points={data.points} products={data.products} supply={data.supply} onChange={load} /> : null}
             {tab === 'Team' ? <TeamPanel team={data.team} onChange={load} /> : null}
             {tab === 'Settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
           </>
