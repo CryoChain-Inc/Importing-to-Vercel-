@@ -17,13 +17,16 @@ export interface AgentFarmer {
   product: string;
   listedKg: number;
   capture: AgentCapture | null;
+  /** What the farmer will be paid for this capture, once the lot is delivered. */
+  net: number | null;
 }
 
 export interface AgentStop {
   id: string;
   pointName: string;
   locality: string;
-  product: string;
+  windowStart: string | null;
+  windowEnd: string | null;
   confirmed: boolean;
   farmers: AgentFarmer[];
 }
@@ -35,8 +38,9 @@ interface PointEmbed {
 
 interface StopRow {
   id: string;
-  product: string;
   collection_point_id: string;
+  window_start: string | null;
+  window_end: string | null;
   confirmed_at: string | null;
   collection_points: PointEmbed | PointEmbed[] | null;
 }
@@ -50,6 +54,7 @@ interface ListingRow {
   id: string;
   product: string;
   weight_kg: number | string;
+  lot_id: string | null;
   collection_point_id: string | null;
   farmers: { profiles: ProfileEmbed | ProfileEmbed[] | null } | { profiles: ProfileEmbed | ProfileEmbed[] | null }[] | null;
 }
@@ -70,33 +75,36 @@ function one<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
+/** Today's stops: the collection points of the paid lots on this agent's route. */
 export async function fetchTodayRoute(): Promise<AgentStop[]> {
   const { data, error } = await supabase
     .from('routes')
-    .select('id, route_stops(id, product, collection_point_id, confirmed_at, collection_points(name, locality))')
+    .select('id, route_lots(lot_id), route_stops(id, collection_point_id, confirmed_at, window_start, window_end, collection_points(name, locality))')
     .eq('service_date', accraToday())
     .maybeSingle();
   if (error) fail('Could not load today\'s route.');
   const stopRows = (data?.route_stops ?? []) as unknown as StopRow[];
   if (!stopRows.length) return [];
 
-  const pointIds = [...new Set(stopRows.map((s) => s.collection_point_id))];
+  const lotIds = ((data?.route_lots ?? []) as { lot_id: string }[]).map((l) => l.lot_id);
   const { data: listingData, error: listingError } = await supabase
     .from('produce_listings')
-    .select('id, product, weight_kg, collection_point_id, farmers(profiles(display_name, phone))')
-    .in('collection_point_id', pointIds);
+    .select('id, product, weight_kg, lot_id, collection_point_id, farmers(profiles(display_name, phone))')
+    .in('lot_id', lotIds);
   if (listingError) fail('Could not load the farmers on this route.');
 
   const listings = (listingData ?? []) as unknown as ListingRow[];
   const listingIds = listings.map((l) => l.id);
   const captures = new Map<string, CaptureRow>();
+  const nets = new Map<string, number>();
   if (listingIds.length) {
-    const { data: captureData, error: captureError } = await supabase
-      .from('captures')
-      .select('listing_id, recorded_kg, grade, photo_path')
-      .in('listing_id', listingIds);
-    if (captureError) fail('Could not load saved captures.');
-    (captureData ?? []).forEach((row) => captures.set((row as CaptureRow).listing_id, row as CaptureRow));
+    const [captureRes, settlementRes] = await Promise.all([
+      supabase.from('captures').select('listing_id, recorded_kg, grade, photo_path').in('listing_id', listingIds),
+      supabase.from('settlements').select('listing_id, net').in('listing_id', listingIds),
+    ]);
+    if (captureRes.error) fail('Could not load saved captures.');
+    (captureRes.data ?? []).forEach((row) => captures.set((row as CaptureRow).listing_id, row as CaptureRow));
+    (settlementRes.data ?? []).forEach((row) => nets.set(row.listing_id, Number(row.net)));
   }
 
   const urls = new Map<string, string>();
@@ -113,10 +121,11 @@ export async function fetchTodayRoute(): Promise<AgentStop[]> {
       id: stop.id,
       pointName: one(stop.collection_points)?.name ?? 'Collection point',
       locality: one(stop.collection_points)?.locality ?? '',
-      product: stop.product,
+      windowStart: stop.window_start,
+      windowEnd: stop.window_end,
       confirmed: Boolean(stop.confirmed_at),
       farmers: listings
-        .filter((l) => l.collection_point_id === stop.collection_point_id && l.product === stop.product)
+        .filter((l) => l.collection_point_id === stop.collection_point_id)
         .map((l) => {
           const saved = captures.get(l.id);
           const profile = one(one(l.farmers)?.profiles);
@@ -126,6 +135,7 @@ export async function fetchTodayRoute(): Promise<AgentStop[]> {
             phone: profile?.phone ?? '',
             product: l.product,
             listedKg: Number(l.weight_kg),
+            net: nets.get(l.id) ?? null,
             capture: saved
               ? {
                   recordedKg: Number(saved.recorded_kg),
@@ -138,7 +148,7 @@ export async function fetchTodayRoute(): Promise<AgentStop[]> {
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
     }))
-    .sort((a, b) => a.pointName.localeCompare(b.pointName) || a.product.localeCompare(b.product));
+    .sort((a, b) => (a.windowStart ?? '').localeCompare(b.windowStart ?? '') || a.pointName.localeCompare(b.pointName));
 }
 
 export async function saveCapture(
@@ -163,6 +173,8 @@ export async function saveCapture(
     { listing_id: listingId, agent_id: userId, recorded_kg: input.kg, grade: input.grade, photo_path: path },
     { onConflict: 'listing_id' },
   );
+  if (/locked/.test(error?.message ?? '')) fail('This lot has been delivered, so the capture can no longer change.');
+  if (/no price for grade/.test(error?.message ?? '')) fail('There is no published price for that grade yet. Ask operations to set one.');
   if (error) fail('Could not save this capture.');
 }
 

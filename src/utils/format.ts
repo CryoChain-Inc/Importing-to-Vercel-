@@ -47,3 +47,12 @@ export const maskPhone = (raw: string) => {
   const d = normalizePhone(raw);
   return d.length < 4 ? d : `••• ••• ${d.slice(-3)}`;
 };
+
+const accra = (iso: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Accra', ...opts }).format(new Date(iso));
+
+/** "Fri 16 Oct, 06:00–10:00" in Ghana time. */
+export function fmtWindow(startIso: string | null | undefined, endIso: string | null | undefined): string {
+  if (!startIso || !endIso) return '';
+  const hm = { hour: '2-digit', minute: '2-digit', hour12: false } as const;
+  return `${accra(startIso, { weekday: 'short', day: 'numeric', month: 'short' })}, ${accra(startIso, hm)}–${accra(endIso, hm)}`;
+}

@@ -1,10 +1,10 @@
-import React from 'react';
-import { Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { Badge, Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { cancelOrder, orderStatus, payOnline, type Order, type TransferDetails } from '../../../services/buyer.service';
+import { cancelOrder, fetchTracking, orderStatus, payOnline, type Order, type OrderTracking, type TransferDetails } from '../../../services/buyer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtWindow, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 
 const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
@@ -17,6 +17,10 @@ export function Orders({ orders, transfer, onRefresh }: {
 }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onRefresh);
+  const [tracking, setTracking] = useState<Record<string, OrderTracking>>({});
+  useEffect(() => {
+    fetchTracking().then(setTracking, () => undefined);
+  }, [orders]);
 
   return (
     <View style={s.list}>
@@ -33,6 +37,7 @@ export function Orders({ orders, transfer, onRefresh }: {
             </View>
             <Text style={s.meta}>{o.lotCode} · {kg(o.totalKg)} · {new Date(o.createdAt).toLocaleDateString('en-GH')}</Text>
             <Text style={s.total}>{ghs(o.amount)}</Text>
+            {o.state === 'paid' && tracking[o.id] ? <Tracking t={tracking[o.id]} s={s} /> : null}
             {o.state === 'awaiting_payment' ? (
               <>
                 {o.payment === 'failed' || o.payment === 'abandoned' ? (
@@ -63,6 +68,34 @@ export function Orders({ orders, transfer, onRefresh }: {
   );
 }
 
+const STEPS = ['Paid', 'Pickup scheduled', 'Being collected', 'On the way', 'Delivered'];
+
+/** Where the lot is, from the farm gate to the buyer. */
+function Tracking({ t, s }: { t: OrderTracking; s: ReturnType<typeof styles> }) {
+  const step = t.deliveredAt ? 4 : t.lotState === 'in_transit' ? 3 : t.captured > 0 ? 2 : t.pickupStart ? 1 : 0;
+  return (
+    <View style={s.box}>
+      <Text style={s.boxTitle}>{STEPS[step]}</Text>
+      <Text style={s.meta}>{STEPS.map((label, i) => `${i <= step ? '●' : '○'} ${label}`).join('   ')}</Text>
+      {t.pickupStart && !t.captured ? <Text style={s.meta}>Pickup: {fmtWindow(t.pickupStart, t.pickupEnd)}</Text> : null}
+      {t.deliveryStart && !t.deliveredAt ? <Text style={s.meta}>Arrives: {fmtWindow(t.deliveryStart, t.deliveryEnd)}</Text> : null}
+      <Text style={s.meta}>Expected {kg(t.expectedKg)} from {t.farmers} farmer{t.farmers === 1 ? '' : 's'}.</Text>
+      {t.captured > 0 ? <Text style={s.meta}>Weighed so far: {kg(t.capturedKg)} ({t.captured} of {t.farmers} farmers)</Text> : null}
+      {t.captures.some((c) => c.url) ? (
+        <ScrollView horizontal contentContainerStyle={s.photos}>
+          {t.captures.filter((c) => c.url).map((c, i) => (
+            <View key={i} style={s.photo}>
+              <Image source={{ uri: c.url! }} style={s.image} accessibilityLabel={`Captured produce, ${kg(c.kg)}, grade ${c.grade}`} />
+              <Text style={s.meta}>{kg(c.kg)} · {c.grade}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+      {t.deliveredAt ? <Text style={s.meta}>Delivered {new Date(t.deliveredAt).toLocaleString('en-GH')}.</Text> : null}
+    </View>
+  );
+}
+
 function Row({ s, k, v }: { s: ReturnType<typeof styles>; k: string; v: string }) {
   return (
     <View style={s.row}>
@@ -82,6 +115,9 @@ const styles = (c: Record<ColorToken, string>) => ({
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   box: { gap: 6, padding: 12, borderRadius: 12, backgroundColor: c.surfaceSunken },
   boxTitle: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
+  photos: { gap: 10 },
+  photo: { gap: 4 },
+  image: { width: 120, height: 90, borderRadius: 8 },
   row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 12 },
   k: { fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted },
   v: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink, flexShrink: 1, textAlign: 'right' as const },

@@ -7,7 +7,7 @@ import { fetchTodayRoute, saveCapture, confirmStop, type AgentFarmer, type Agent
 import { authService } from '../../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
-import { localPhone } from '../../../utils/format';
+import { fmtWindow, ghs, localPhone } from '../../../utils/format';
 import { CaptureForm } from '../components/CaptureForm';
 
 type Screen =
@@ -111,7 +111,7 @@ function RouteList({ stops, onOpen }: { stops: AgentStop[]; onOpen: (id: string)
                 <Text style={s.name}>{stop.pointName}</Text>
                 <Badge label={stop.farmers.length ? `${captured} of ${stop.farmers.length} captured` : 'No listings'} tone={captured && captured === stop.farmers.length ? 'success' : 'warning'} />
               </View>
-              <Text style={s.meta}>{[stop.locality, stop.product].filter(Boolean).join(' · ')}</Text>
+              <Text style={s.meta}>{[stop.locality, fmtWindow(stop.windowStart, stop.windowEnd)].filter(Boolean).join(' · ')}</Text>
               <Button label="Open stop" onPress={() => onOpen(stop.id)} />
             </Card>
           );
@@ -119,7 +119,7 @@ function RouteList({ stops, onOpen }: { stops: AgentStop[]; onOpen: (id: string)
       )}
       <Card tone="tint" style={s.card}>
         <Text style={s.name}>What happens next</Text>
-        <Text style={s.meta}>Open a stop. Weigh, grade and photograph every farmer, then confirm the lot so the driver can collect it.</Text>
+        <Text style={s.meta}>Open a stop. Weigh, grade and photograph every farmer, then confirm the stop so the driver can collect it.</Text>
       </Card>
     </View>
   );
@@ -150,19 +150,19 @@ function StopFarmers({ stop, onBack, onCapture, onConfirm }: {
     <View style={s.stack}>
       <Button label="Today's route" variant="ghost" size="sm" onPress={onBack} />
       <Text style={s.section}>{stop.pointName}</Text>
-      <Text style={s.meta}>{[stop.locality, stop.product].filter(Boolean).join(' · ')}</Text>
+      <Text style={s.meta}>{[stop.locality, fmtWindow(stop.windowStart, stop.windowEnd)].filter(Boolean).join(' · ')}</Text>
       {error ? <Banner text={error} /> : null}
       <Text style={s.name}>Farmers at this stop</Text>
       {stop.farmers.length === 0 ? (
         <Card style={s.card}>
-          <Text style={s.meta}>No farmers have listed {stop.product} at this collection point yet.</Text>
+          <Text style={s.meta}>No farmers from the paid lots are at this collection point.</Text>
         </Card>
       ) : (
         stop.farmers.map((farmer) => <FarmerCard key={farmer.listingId} farmer={farmer} onCapture={() => onCapture(farmer.listingId)} />)
       )}
       {stop.confirmed ? <Badge label="Ready for collection" tone="success" /> : null}
-      {allCaptured && !stop.confirmed ? <Button label="Confirm lot" onPress={confirm} loading={busy} /> : null}
-      {stop.farmers.length > 0 && !allCaptured ? <Text style={s.meta}>Capture every farmer before confirming this lot for collection.</Text> : null}
+      {allCaptured && !stop.confirmed ? <Button label="Confirm stop" onPress={confirm} loading={busy} /> : null}
+      {stop.farmers.length > 0 && !allCaptured ? <Text style={s.meta}>Capture every farmer before confirming this stop for collection.</Text> : null}
     </View>
   );
 }
@@ -177,6 +177,7 @@ function FarmerCard({ farmer, onCapture }: { farmer: AgentFarmer; onCapture: () 
         <Badge label={saved ? `${kgText(saved.recordedKg)}, ${saved.grade}` : 'Not captured'} tone={saved ? 'success' : 'warning'} />
       </View>
       <Text style={s.meta}>{farmer.product}, listed {kgText(farmer.listedKg)}{farmer.phone ? ` · ${localPhone(farmer.phone)}` : ''}</Text>
+      {farmer.net != null ? <Text style={s.meta}>Farmer receives {ghs(farmer.net)} once the lot is delivered.</Text> : null}
       <Button label={saved ? 'Edit capture' : 'Capture weight and grade'} variant={saved ? 'outline' : 'primary'} onPress={onCapture} />
     </Card>
   );

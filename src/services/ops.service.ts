@@ -341,58 +341,133 @@ export async function cancelLot(id: string): Promise<void> {
   fail('Could not cancel that lot.')(error);
 }
 
-export interface AssignedRoute {
+export interface PaidLot {
   id: string;
-  agentId: string;
-  agentName: string;
-  driverName: string;
-  destination: string;
-  stops: { pointName: string; locality: string; product: string }[];
+  code: string;
+  product: string;
+  totalKg: number;
+  buyer: string;
+  location: string;
 }
 
-/** Today's routes, one per agent, as ops assigned them. */
-export async function fetchRoutes(): Promise<AssignedRoute[]> {
+/** Paid lots that are not on a route yet: the only lots a route can be planned for. */
+export async function fetchPaidLots(): Promise<PaidLot[]> {
+  const { data, error } = await supabase
+    .from('lots')
+    .select('id, code, product, total_kg, orders(state, buyers(organization_name, delivery_location))')
+    .eq('state', 'escrow_funded')
+    .order('created_at');
+  fail('Could not load paid lots.')(error);
+  return (data ?? []).map((r: any) => {
+    const buyer = (r.orders ?? []).find((o: any) => o.state === 'paid')?.buyers;
+    return {
+      id: r.id,
+      code: r.code,
+      product: r.product,
+      totalKg: Number(r.total_kg),
+      buyer: buyer?.organization_name ?? 'Unknown buyer',
+      location: buyer?.delivery_location ?? '',
+    };
+  });
+}
+
+export interface PlannedRoute {
+  id: string;
+  date: string;
+  agentName: string;
+  driverName: string;
+  started: boolean;
+  stops: { pointName: string; locality: string; windowStart: string; windowEnd: string; arrived: boolean; departed: boolean }[];
+  lots: { code: string; product: string; kg: number; buyer: string; location: string; windowStart: string; windowEnd: string; delivered: boolean }[];
+}
+
+/** Routes from today onwards, soonest first. */
+export async function fetchRoutes(): Promise<PlannedRoute[]> {
   const { data, error } = await supabase
     .from('routes')
-    .select('id, agent_id, destination, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name), route_stops(product, collection_points(name, locality))')
-    .eq('service_date', accraToday());
+    .select(
+      'id, service_date, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name),' +
+        ' route_stops(position, window_start, window_end, arrived_at, confirmed_at, departed_at, collection_points(name, locality)),' +
+        ' route_lots(window_start, window_end, delivered_at, lots(code, product, total_kg, orders(state, buyers(organization_name, delivery_location))))',
+    )
+    .gte('service_date', accraToday())
+    .order('service_date');
   fail('Could not load routes.')(error);
   return (data ?? []).map((r: any) => ({
     id: r.id,
-    agentId: r.agent_id,
+    date: r.service_date,
     agentName: r.profiles?.display_name ?? 'Agent',
     driverName: r.driver?.display_name ?? '',
-    destination: r.destination ?? '',
+    started: (r.route_stops ?? []).some((s: any) => s.arrived_at || s.confirmed_at),
     stops: (r.route_stops ?? [])
+      .slice()
+      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
       .map((s: any) => ({
         pointName: s.collection_points?.name ?? 'Collection point',
         locality: s.collection_points?.locality ?? '',
-        product: s.product,
-      }))
-      .sort((a: { pointName: string }, b: { pointName: string }) => a.pointName.localeCompare(b.pointName)),
+        windowStart: s.window_start,
+        windowEnd: s.window_end,
+        arrived: Boolean(s.arrived_at),
+        departed: Boolean(s.departed_at),
+      })),
+    lots: (r.route_lots ?? [])
+      .slice()
+      .sort((a: any, b: any) => a.window_start.localeCompare(b.window_start))
+      .map((l: any) => {
+        const buyer = (l.lots?.orders ?? []).find((o: any) => o.state === 'paid')?.buyers;
+        return {
+          code: l.lots?.code ?? '',
+          product: l.lots?.product ?? '',
+          kg: Number(l.lots?.total_kg ?? 0),
+          buyer: buyer?.organization_name ?? 'Unknown buyer',
+          location: buyer?.delivery_location ?? '',
+          windowStart: l.window_start,
+          windowEnd: l.window_end,
+          delivered: Boolean(l.delivered_at),
+        };
+      }),
   }));
 }
 
-/** Replaces that agent's stops for today. */
-export async function assignRoute(
-  agentId: string,
-  stops: { pointId: string; product: string }[],
-  driverId: string,
-  destination: string,
-): Promise<void> {
-  const { error } = await supabase.rpc('assign_route', {
-    p_agent_id: agentId,
-    p_stops: stops.map((s) => ({ collection_point_id: s.pointId, product: s.product })),
-    p_driver_id: driverId,
-    p_destination: destination.trim(),
+export interface RoutePlan {
+  date: string;
+  agentId: string;
+  driverId: string;
+  /** Pickup windows as HH:MM in Ghana time. */
+  stops: { pointId: string; start: string; end: string }[];
+  /** Buyer arrival windows as HH:MM in Ghana time. */
+  lots: { lotId: string; start: string; end: string }[];
+}
+
+const PLAN_ERRORS: [RegExp, string][] = [
+  [/choose a date/, 'Choose today or a later date.'],
+  [/choose an agent/, 'Choose a field agent.'],
+  [/choose a driver/, 'Choose a driver.'],
+  [/already has a route/, 'That agent or driver already has a route on this date.'],
+  [/at least one lot/, 'Choose at least one paid lot.'],
+  [/paid and not yet/, 'One of those lots is not paid, or is already on a route. Refresh and try again.'],
+  [/no collection point/, 'A listing in these lots has no collection point.'],
+  [/stops must match/, 'The pickup stops no longer match the chosen lots. Refresh and try again.'],
+  [/HH:MM/, 'Enter times as HH:MM, for example 06:30.'],
+  [/end after it starts/, 'Each window must end after it starts.'],
+  [/after the last pickup/, 'Buyer arrival windows must start after the last pickup window ends.'],
+  [/ops only/, 'Only operations can plan a route.'],
+];
+
+export async function planRoute(plan: RoutePlan): Promise<void> {
+  const { error } = await supabase.rpc('plan_route', {
+    p_date: plan.date,
+    p_agent_id: plan.agentId,
+    p_driver_id: plan.driverId,
+    p_stops: plan.stops.map((s) => ({ collection_point_id: s.pointId, start: s.start, end: s.end })),
+    p_lots: plan.lots.map((l) => ({ lot_id: l.lotId, start: l.start, end: l.end })),
   });
   if (!error) return;
-  const msg = error.message ?? '';
-  if (/choose an agent/.test(msg)) throw new Error('Choose a field agent.');
-  if (/choose a driver/.test(msg)) throw new Error('Choose a driver.');
-  if (/enter a destination/.test(msg)) throw new Error('Enter where this load will be delivered.');
-  if (/driver already assigned/.test(msg)) throw new Error('That driver already has a route today.');
-  if (/at least one stop/.test(msg)) throw new Error('Choose at least one collection point.');
-  if (/ops only/.test(msg)) throw new Error('Only operations can assign a route.');
-  throw new Error('Could not assign that route.');
+  throw new Error(PLAN_ERRORS.find(([re]) => re.test(error.message ?? ''))?.[1] ?? 'Could not plan that route.');
+}
+
+/** Only a route nobody has started; its lots go back to paid and unrouted. */
+export async function cancelRoute(routeId: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_route', { p_route_id: routeId });
+  if (error) throw new Error(/cannot be cancelled/.test(error.message ?? '') ? 'This route has already started and cannot be cancelled.' : 'Could not cancel that route.');
 }

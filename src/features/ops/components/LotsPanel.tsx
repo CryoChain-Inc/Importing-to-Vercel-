@@ -98,6 +98,7 @@ export function LotsPanel({ supply, lots, products, prices, draft, onChange }: {
             <Badge label={l.state.replace('_', ' ')} tone={l.state === 'cancelled' ? 'neutral' : 'success'} />
           </View>
           <Text style={s.meta}>{kg(l.totalKg)}{l.pricePerKg ? ` at ${ghs(l.pricePerKg)}/kg` : ' · no price'} · {l.listings} listing{l.listings === 1 ? '' : 's'} · {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
+          {supply.filter((r) => r.lotId === l.id).map((r) => <Text key={r.id} style={s.meta}>{r.farmer} · {r.point} · {kg(r.weightKg)}</Text>)}
           {l.state === 'listed' ? <Button size="sm" variant="outline" label="Cancel lot" onPress={() => run(() => cancelLot(l.id))} /> : null}
         </Card>
       ))}

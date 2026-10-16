@@ -3,9 +3,9 @@ import { Text, View } from 'react-native';
 import { Button, Badge, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import type { PickedImage } from '../../../services/catalogueImage';
-import { createListing, deleteListing, estimateListing, fetchCollectionPoints, fetchPricedGrades, fetchProductNames, GRADES, MIN_PHOTOS, type CollectionPoint, type Estimate, type ListingStage, type ProduceListing } from '../../../services/farmer.service';
+import { createListing, deleteListing, estimateListing, fetchCollectionPoints, fetchNotices, fetchPricedGrades, fetchProductNames, GRADES, MIN_PHOTOS, type CollectionPoint, type Estimate, type ListingStage, type Notice, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtWindow, ghs } from '../../../utils/format';
 import { PhotoPicker } from './PhotoPicker';
 
 /** Listing form is locked until a wallet is saved (the database enforces this too). */
@@ -34,6 +34,7 @@ export function ProduceListings({
   const [computed, setComputed] = useState<{ key: string; value: Estimate | null }>({ key: '', value: null });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const weightKg = Number(weight);
   const point = points.find((p) => p.name === pointName) ?? points[0];
   const chosen = products.includes(product) ? product : (products[0] ?? '');
@@ -60,6 +61,11 @@ export function ProduceListings({
     fetchProductNames().then(setProducts, (e) => setError(e.message));
     fetchPricedGrades().then(setPriced, () => setPricesFailed(true));
   }, []);
+
+  // Listings change when a lot is bought, a pickup is scheduled or produce is weighed, so refresh the updates with them.
+  useEffect(() => {
+    fetchNotices().then(setNotices, () => undefined);
+  }, [listings]);
 
   useEffect(() => {
     if (!priced || !chosen) return;
@@ -97,6 +103,17 @@ export function ProduceListings({
   return (
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
+      {notices.length ? (
+        <Card tone="tint" style={s.updates}>
+          <Text style={s.section}>Updates</Text>
+          {notices.slice(0, 4).map((n) => (
+            <View key={n.id}>
+              <Text style={s.product}>{n.title}</Text>
+              <Text style={s.meta}>{n.body}</Text>
+            </View>
+          ))}
+        </Card>
+      ) : null}
       {walletReady ? (
         <Card>
           <Text style={s.title}>List produce</Text>
@@ -152,8 +169,13 @@ export function ProduceListings({
             onRemove={(id) => run(() => deleteListing(id))}
           />
           <ListingGroup
+            title="Sold, waiting for pickup"
+            listings={listings.filter((listing) => listing.stage === 'sold' || listing.stage === 'scheduled')}
+            empty="Nothing sold yet."
+          />
+          <ListingGroup
             title="Collected listings"
-            listings={listings.filter((listing) => listing.stage !== 'available')}
+            listings={listings.filter((listing) => ['captured', 'loaded', 'delivered'].includes(listing.stage))}
             empty="Nothing has been collected yet."
             onRemove={(id) => run(() => deleteListing(id))}
           />
@@ -164,7 +186,9 @@ export function ProduceListings({
 }
 
 const STAGE: Record<ListingStage, { label: string; tone: 'neutral' | 'info' | 'warning' | 'success' }> = {
-  available: { label: 'Waiting for collection', tone: 'neutral' },
+  available: { label: 'Not sold yet', tone: 'neutral' },
+  sold: { label: 'Sold, awaiting pickup date', tone: 'info' },
+  scheduled: { label: 'Pickup scheduled', tone: 'info' },
   captured: { label: 'Captured', tone: 'info' },
   loaded: { label: 'Loaded', tone: 'warning' },
   delivered: { label: 'Delivered', tone: 'success' },
@@ -199,15 +223,22 @@ function ListingGroup({
                 {listing.recordedKg != null && listing.recordedKg !== listing.weightKg ? (
                   <Text style={s.meta}>Listed {listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg</Text>
                 ) : null}
+                {listing.pickupStart && listing.stage === 'scheduled' ? <Text style={s.meta}>Pickup at {listing.point}: {fmtWindow(listing.pickupStart, listing.pickupEnd)}</Text> : null}
+                {listing.recordedGrade ? <Text style={s.meta}>Grade {listing.recordedGrade} at collection</Text> : null}
+                {listing.payoutNet != null ? (
+                  <Text style={s.net}>You get {ghs(listing.payoutNet)}{listing.payoutStatus === 'pending' ? ' (payable once the buyer has received the lot)' : listing.payoutStatus === 'payable' ? ' (payable now)' : ' (paid)'}</Text>
+                ) : null}
                 {listing.stage === 'available' && listing.estNet != null ? <Text style={s.meta}>Expected {ghs(listing.estNet)} after {ghs(listing.estFee ?? 0)} fee</Text> : null}
                 <View style={s.badges}>
                   <Badge label={stage.label} tone={stage.tone} />
                   <Badge label={listing.inLot ? (listing.lotCode ? `In lot ${listing.lotCode}` : 'In a lot') : 'Not in a lot'} tone={listing.inLot ? 'warning' : 'neutral'} />
                 </View>
                 <Text style={s.meta}>
-                  {listing.inLot
-                    ? 'Ops added this to a lot, so buyers can see it. It can no longer be removed.'
-                    : 'Not added to a lot yet. You can still remove it.'}
+                  {listing.stage === 'sold' || listing.stage === 'scheduled'
+                    ? 'A buyer has paid for this produce. It can no longer be removed.'
+                    : listing.inLot
+                      ? 'Ops added this to a lot, so buyers can see it. It can no longer be removed.'
+                      : 'Not added to a lot yet. You can still remove it.'}
                 </Text>
               </View>
               {onRemove && !listing.inLot ? <Button label="Remove" variant="ghost" size="sm" onPress={() => onRemove(listing.id)} /> : null}
@@ -222,6 +253,7 @@ function ListingGroup({
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 12 },
   group: { gap: 12 },
+  updates: { gap: 10 },
   section: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   copy: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted, marginTop: 4, marginBottom: 14 },

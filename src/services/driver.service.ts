@@ -4,23 +4,38 @@ export interface DriverStop {
   id: string;
   pointName: string;
   locality: string;
-  product: string;
+  windowStart: string | null;
+  windowEnd: string | null;
+  products: string[];
   farmers: number;
   listedKg: number;
   captured: number;
+  capturedKg: number;
   confirmed: boolean;
   arrivedAt: string | null;
   temperatureC: number | null;
   departedAt: string | null;
 }
 
-export interface DriverRoute {
-  id: string;
-  destination: string;
-  plate: string;
+export interface DriverDelivery {
+  lotId: string;
+  code: string;
+  product: string;
+  expectedKg: number;
+  buyer: string;
+  location: string;
+  windowStart: string;
+  windowEnd: string;
   deliveredAt: string | null;
   receivedBy: string;
+}
+
+export interface DriverRoute {
+  id: string;
+  plate: string;
+  deliveredAt: string | null;
   stops: DriverStop[];
+  deliveries: DriverDelivery[];
 }
 
 const explain = (error: { message?: string } | null, fallback: string) => {
@@ -31,7 +46,8 @@ const explain = (error: { message?: string } | null, fallback: string) => {
   if (/temperature out of range/.test(msg)) throw new Error('That temperature is outside the allowed range.');
   if (/enter the receiver/.test(msg)) throw new Error('Enter the name of the person receiving the load.');
   if (/take a photograph/.test(msg)) throw new Error('Take a photograph of the delivered load.');
-  if (/finish every stop/.test(msg)) throw new Error('Leave every stop before completing the delivery.');
+  if (/finish every stop/.test(msg)) throw new Error('Load every stop before delivering.');
+  if (/lot not on your route/.test(msg)) throw new Error('That lot is not on your route, or is already delivered.');
   throw new Error(fallback);
 };
 
@@ -42,16 +58,16 @@ export async function fetchDriverRoute(): Promise<DriverRoute | null> {
   const row = data as DriverRoute;
   return {
     ...row,
-    destination: row.destination ?? '',
     plate: row.plate ?? '',
-    receivedBy: row.receivedBy ?? '',
     stops: (row.stops ?? []).map((stop) => ({
       ...stop,
       farmers: Number(stop.farmers),
       listedKg: Number(stop.listedKg),
       captured: Number(stop.captured),
+      capturedKg: Number(stop.capturedKg),
       temperatureC: stop.temperatureC == null ? null : Number(stop.temperatureC),
     })),
+    deliveries: (row.deliveries ?? []).map((d) => ({ ...d, expectedKg: Number(d.expectedKg), receivedBy: d.receivedBy ?? '' })),
   };
 }
 
@@ -67,14 +83,15 @@ export const logTemperature = (stopId: string, celsius: number) =>
 
 export const departStop = (stopId: string) => call('depart_stop', { p_stop_id: stopId }, 'Could not confirm that you are leaving.');
 
-export async function completeDelivery(routeId: string, receiver: string, photo: { uri: string; mime: string }): Promise<void> {
+/** Hands one lot to its buyer. That is what makes the farmers' settlements for the lot payable. */
+export async function completeLotDelivery(routeId: string, lotId: string, receiver: string, photo: { uri: string; mime: string }): Promise<void> {
   const userId = await requireUserId();
-  const path = `${userId}/${routeId}.jpg`;
+  const path = `${userId}/${routeId}-${lotId}.jpg`;
   const blob = await (await fetch(photo.uri)).blob();
   const uploaded = await supabase.storage.from('deliveries').upload(path, blob, {
     upsert: true,
     contentType: photo.mime || 'image/jpeg',
   });
   if (uploaded.error) throw new Error('Could not save the photograph.');
-  await call('complete_delivery', { p_route_id: routeId, p_receiver: receiver.trim(), p_photo_path: path }, 'Could not complete the delivery.');
+  await call('complete_lot_delivery', { p_route_id: routeId, p_lot_id: lotId, p_receiver: receiver.trim(), p_photo_path: path }, 'Could not complete the delivery.');
 }
