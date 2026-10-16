@@ -27,7 +27,7 @@ export interface Wallet {
   name: string;
 }
 
-export type ListingStage = 'available' | 'captured' | 'loaded' | 'delivered';
+export type ListingStage = 'available' | 'sold' | 'scheduled' | 'captured' | 'loaded' | 'delivered';
 
 export interface ProduceListing {
   id: string;
@@ -43,6 +43,12 @@ export interface ProduceListing {
   stage: ListingStage;
   inLot: boolean;
   lotCode: string | null;
+  recordedGrade: string | null;
+  pickupStart: string | null;
+  pickupEnd: string | null;
+  /** Owed for the captured weight and grade, after the fee. Payable once the lot is delivered. */
+  payoutNet: number | null;
+  payoutStatus: 'pending' | 'payable' | 'paid' | null;
 }
 
 export interface Estimate {
@@ -123,7 +129,7 @@ export async function saveWallet(w: Wallet): Promise<void> {
   if (error) throw new Error('Could not save your wallet.');
 }
 
-const STAGES: ListingStage[] = ['available', 'captured', 'loaded', 'delivered'];
+const STAGES: ListingStage[] = ['available', 'sold', 'scheduled', 'captured', 'loaded', 'delivered'];
 
 function toListing(row: any, stage: ListingStage = 'available'): ProduceListing {
   const recorded = stage === 'available' ? null : row.recorded_kg;
@@ -141,6 +147,11 @@ function toListing(row: any, stage: ListingStage = 'available'): ProduceListing 
     stage: STAGES.includes(stage) ? stage : 'available',
     inLot: typeof row.in_lot === 'boolean' ? row.in_lot : row.lot_id != null,
     lotCode: row.lot_code ?? null,
+    recordedGrade: row.recorded_grade ?? null,
+    pickupStart: row.pickup_start ?? null,
+    pickupEnd: row.pickup_end ?? null,
+    payoutNet: row.settlement_net == null ? null : Number(row.settlement_net),
+    payoutStatus: row.settlement_status ?? null,
   };
 }
 
@@ -262,4 +273,18 @@ async function deleteListingDirect(id: string): Promise<string[]> {
   if (error) throw removalError(error);
   if (!data?.length) throw new Error('Could not remove that listing.');
   return (row?.image_paths ?? []) as string[];
+}
+
+export interface Notice {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+/** Updates the system sent this farmer: bought, pickup scheduled, weighed, delivered. */
+export async function fetchNotices(): Promise<Notice[]> {
+  const { data, error } = await supabase.from('notifications').select('id, title, body, created_at').order('created_at', { ascending: false }).limit(10);
+  if (error) throw new Error('Could not load your updates.');
+  return (data ?? []).map((r) => ({ id: r.id, title: r.title, body: r.body, createdAt: r.created_at }));
 }

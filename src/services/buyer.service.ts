@@ -242,3 +242,44 @@ export function orderStatus(o: Pick<Order, 'state' | 'lotState'>): { label: stri
   };
   return { label: journey[o.lotState] ?? 'Paid', tone: o.lotState === 'disputed' ? 'danger' : 'success' };
 }
+
+export interface OrderTracking {
+  orderId: string;
+  lotState: string;
+  expectedKg: number;
+  farmers: number;
+  captured: number;
+  capturedKg: number;
+  captures: { kg: number; grade: string; url: string | null }[];
+  pickupStart: string | null;
+  pickupEnd: string | null;
+  deliveryStart: string | null;
+  deliveryEnd: string | null;
+  deliveredAt: string | null;
+}
+
+/** Progress of each paid order from route planning to delivery, with the agent's capture photographs (signed, private). */
+export async function fetchTracking(): Promise<Record<string, OrderTracking>> {
+  const { data, error } = await supabase.rpc('buyer_tracking');
+  fail('Could not load order tracking.')(error);
+  const rows = (data ?? []) as any[];
+  const paths = rows.flatMap((r) => (r.captures ?? []).map((c: any) => c.path as string));
+  const urls = new Map<string, string>();
+  if (paths.length) {
+    const signed = await supabase.storage.from('captures').createSignedUrls(paths, 60 * 30);
+    signed.data?.forEach((item) => item.path && item.signedUrl && urls.set(item.path, item.signedUrl));
+  }
+  return Object.fromEntries(
+    rows.map((r) => [
+      r.orderId,
+      {
+        ...r,
+        expectedKg: Number(r.expectedKg),
+        farmers: Number(r.farmers),
+        captured: Number(r.captured),
+        capturedKg: Number(r.capturedKg),
+        captures: (r.captures ?? []).map((c: any) => ({ kg: Number(c.kg), grade: c.grade, url: urls.get(c.path) ?? null })),
+      } as OrderTracking,
+    ]),
+  );
+}

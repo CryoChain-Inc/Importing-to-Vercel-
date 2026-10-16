@@ -5,14 +5,15 @@ import { Badge, Button, Card, Input, ThemeToggle } from '../../../components/com
 import { Banner } from '../../../components/feedback';
 import { useNav } from '../../../navigation';
 import {
-  arriveStop, completeDelivery, departStop, fetchDriverRoute, logTemperature,
-  type DriverRoute, type DriverStop,
+  arriveStop, completeLotDelivery, departStop, fetchDriverRoute, logTemperature,
+  type DriverDelivery, type DriverRoute, type DriverStop,
 } from '../../../services/driver.service';
 import { authService } from '../../../services/auth.service';
+import { fmtWindow } from '../../../utils/format';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 
-type Screen = { name: 'route' } | { name: 'stop'; stopId: string } | { name: 'delivery' };
+type Screen = { name: 'route' } | { name: 'stop'; stopId: string } | { name: 'delivery'; lotId: string };
 
 const kgText = (n: number) => `${Number(n).toLocaleString('en-GH', { maximumFractionDigits: 0 })} kg`;
 
@@ -54,6 +55,7 @@ export function DriverHome({ account }: { account: Account }) {
 
   const signOut = () => authService.signOut().finally(() => reset({ name: 'landing' }));
   const stop = screen.name === 'stop' ? route?.stops.find((item) => item.id === screen.stopId) ?? null : null;
+  const delivery = screen.name === 'delivery' ? route?.deliveries.find((item) => item.lotId === screen.lotId) ?? null : null;
   const run = async (fn: () => Promise<void>) => {
     setError(null);
     try {
@@ -82,7 +84,7 @@ export function DriverHome({ account }: { account: Account }) {
             <Manifest
               route={route}
               onOpen={(stopId) => setScreen({ name: 'stop', stopId })}
-              onDeliver={() => setScreen({ name: 'delivery' })}
+              onDeliver={(lotId) => setScreen({ name: 'delivery', lotId })}
             />
           ) : null}
 
@@ -91,9 +93,10 @@ export function DriverHome({ account }: { account: Account }) {
           ) : null}
           {screen.name === 'stop' && route && !stop ? <Banner text="That stop is no longer on today's route." /> : null}
 
-          {screen.name === 'delivery' && route ? (
+          {screen.name === 'delivery' && route && delivery ? (
             <ProofOfDelivery
               route={route}
+              delivery={delivery}
               onBack={() => setScreen({ name: 'route' })}
               onDone={async () => {
                 await load();
@@ -109,16 +112,16 @@ export function DriverHome({ account }: { account: Account }) {
   );
 }
 
-function Manifest({ route, onOpen, onDeliver }: { route: DriverRoute | null; onOpen: (id: string) => void; onDeliver: () => void }) {
+function Manifest({ route, onOpen, onDeliver }: { route: DriverRoute | null; onOpen: (id: string) => void; onDeliver: (lotId: string) => void }) {
   const s = useThemedStyles(styles);
   const stops = route?.stops ?? [];
+  const deliveries = route?.deliveries ?? [];
   const loaded = stops.length > 0 && stops.every((stop) => stop.departedAt);
-  const product = stops[0]?.product;
   return (
     <View style={s.stack}>
       <Text style={s.section}>Today's route</Text>
       <Text style={s.meta}>
-        {stops.length === 0 ? 'No stops yet.' : `${stops.length} stop${stops.length === 1 ? '' : 's'}`}
+        {stops.length === 0 ? 'No stops yet.' : `${stops.length} stop${stops.length === 1 ? '' : 's'}, ${deliveries.length} deliver${deliveries.length === 1 ? 'y' : 'ies'}`}
         {route?.plate ? ` · vehicle ${route.plate}` : ''}
       </Text>
       {stops.length === 0 ? (
@@ -127,36 +130,38 @@ function Manifest({ route, onOpen, onDeliver }: { route: DriverRoute | null; onO
           <Text style={s.meta}>Operations has not assigned today's stops. Check again after they do.</Text>
         </Card>
       ) : (
-        stops.map((stop, index) => (
-          <Card key={stop.id} style={s.card}>
-            <View style={s.row}>
-              <Text style={s.name}>{index + 1}. {stop.pointName}</Text>
-              <Badge label={stop.departedAt ? 'Loaded' : stop.arrivedAt ? 'Arrived' : 'Not started'} tone={stop.departedAt ? 'success' : stop.arrivedAt ? 'warning' : 'neutral'} />
-            </View>
-            <Text style={s.meta}>{[stop.locality, `${stop.farmers} farmer${stop.farmers === 1 ? '' : 's'}`, kgText(stop.listedKg)].filter(Boolean).join(' · ')}</Text>
-            <Button label="Open stop" onPress={() => onOpen(stop.id)} />
-          </Card>
-        ))
+        <>
+          <Text style={s.name}>Collect</Text>
+          {stops.map((stop, index) => (
+            <Card key={stop.id} style={s.card}>
+              <View style={s.row}>
+                <Text style={s.name}>{index + 1}. {stop.pointName}</Text>
+                <Badge label={stop.departedAt ? 'Loaded' : stop.arrivedAt ? 'Arrived' : 'Not started'} tone={stop.departedAt ? 'success' : stop.arrivedAt ? 'warning' : 'neutral'} />
+              </View>
+              <Text style={s.meta}>{[fmtWindow(stop.windowStart, stop.windowEnd), stop.locality, `${stop.farmers} farmer${stop.farmers === 1 ? '' : 's'}`, kgText(stop.listedKg)].filter(Boolean).join(' · ')}</Text>
+              <Button label="Open stop" onPress={() => onOpen(stop.id)} />
+            </Card>
+          ))}
+          <Text style={s.name}>Deliver</Text>
+          {deliveries.map((d) => (
+            <Card key={d.lotId} tone={d.deliveredAt ? 'tint' : undefined} style={s.card}>
+              <View style={s.row}>
+                <Text style={s.name}>{d.buyer}</Text>
+                <Badge label={d.deliveredAt ? 'Delivered' : 'To deliver'} tone={d.deliveredAt ? 'success' : 'neutral'} />
+              </View>
+              <Text style={s.meta}>{[d.code, `${d.product} ${kgText(d.expectedKg)}`, d.location, fmtWindow(d.windowStart, d.windowEnd)].filter(Boolean).join(' · ')}</Text>
+              {d.deliveredAt ? <Text style={s.meta}>Received by {d.receivedBy}.</Text> : null}
+              {!d.deliveredAt ? <Button label="Deliver to this buyer" disabled={!loaded} onPress={() => onDeliver(d.lotId)} /> : null}
+            </Card>
+          ))}
+        </>
       )}
-      {loaded && route && !route.deliveredAt ? (
-        <Card tone="tint" style={s.card}>
-          <Text style={s.name}>Delivery: {product}</Text>
-          <Text style={s.meta}>Ready to deliver{route.destination ? ` to ${route.destination}` : ''}.</Text>
-          <Button label="Deliver this load" onPress={onDeliver} />
-        </Card>
-      ) : null}
-      {route?.deliveredAt ? (
-        <Card tone="tint" style={s.card}>
-          <Text style={s.name}>Delivered</Text>
-          <Text style={s.meta}>Received by {route.receivedBy}{route.destination ? ` in ${route.destination}` : ''}.</Text>
-        </Card>
-      ) : null}
       <Card tone="tint" style={s.card}>
         <Text style={s.name}>What happens next</Text>
         <Text style={s.meta}>
           {loaded && !route?.deliveredAt
-            ? 'You have a load on board. Deliver it, photograph it, and record the name of the person who receives it.'
-            : 'Open a stop. Record your arrival, log the temperature, then load once the agent has confirmed the lot.'}
+            ? 'Everything is on board. Deliver each lot to its buyer, photograph it, and record the name of the person who receives it.'
+            : 'Open a stop. Record your arrival, log the temperature, then load once the agent has confirmed the stop. Deliveries unlock when every stop is loaded.'}
         </Text>
       </Card>
     </View>
@@ -179,12 +184,12 @@ function StopVisit({ stop, onBack, onRun }: { stop: DriverStop; onBack: () => vo
     <View style={s.stack}>
       <Button label="Today's route" variant="ghost" size="sm" onPress={onBack} />
       <Text style={s.section}>{stop.pointName}</Text>
-      <Text style={s.meta}>{[stop.locality, stop.product].filter(Boolean).join(' · ')}</Text>
+      <Text style={s.meta}>{[fmtWindow(stop.windowStart, stop.windowEnd), stop.locality, stop.products.join(', ')].filter(Boolean).join(' · ')}</Text>
 
       <Card style={s.card}>
         <Text style={s.meta}>Expected load</Text>
         <Text style={s.kilo}>{kgText(stop.listedKg)}</Text>
-        <Text style={s.meta}>{stop.farmers} farmer{stop.farmers === 1 ? '' : 's'} at this stop</Text>
+        <Text style={s.meta}>{stop.farmers} farmer{stop.farmers === 1 ? '' : 's'} at this stop{stop.captured ? ` · ${kgText(stop.capturedKg)} weighed by the agent` : ''}</Text>
       </Card>
 
       {!stop.arrivedAt ? <Button label="I have arrived" onPress={() => act(() => arriveStop(stop.id))} loading={busy} /> : null}
@@ -233,13 +238,12 @@ function StopVisit({ stop, onBack, onRun }: { stop: DriverStop; onBack: () => vo
   );
 }
 
-function ProofOfDelivery({ route, onBack, onDone }: { route: DriverRoute; onBack: () => void; onDone: () => Promise<void> }) {
+function ProofOfDelivery({ route, delivery, onBack, onDone }: { route: DriverRoute; delivery: DriverDelivery; onBack: () => void; onDone: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const [receiver, setReceiver] = useState('');
   const [photo, setPhoto] = useState<{ uri: string; mime: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const product = route.stops[0]?.product ?? 'Produce';
   const ready = receiver.trim().length >= 2 && photo !== null;
 
   const save = async () => {
@@ -247,7 +251,7 @@ function ProofOfDelivery({ route, onBack, onDone }: { route: DriverRoute; onBack
     setBusy(true);
     setError(null);
     try {
-      await completeDelivery(route.id, receiver, photo);
+      await completeLotDelivery(route.id, delivery.lotId, receiver, photo);
       await onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not complete the delivery.');
@@ -258,7 +262,7 @@ function ProofOfDelivery({ route, onBack, onDone }: { route: DriverRoute; onBack
   return (
     <View style={s.stack}>
       <Text style={s.section}>Proof of delivery</Text>
-      <Text style={s.meta}>{product}{route.destination ? ` to ${route.destination}` : ''}. This is what lets the buyer accept and the farmers get paid.</Text>
+      <Text style={s.meta}>{delivery.product} {kgText(delivery.expectedKg)} to {delivery.buyer}{delivery.location ? `, ${delivery.location}` : ''}. This is what makes the farmers' payments payable.</Text>
       {error ? <Banner text={error} /> : null}
       <Card style={s.card}>
         {photo ? <Image source={{ uri: photo.uri }} style={s.preview} accessibilityLabel="Photograph of the delivered load" /> : null}
