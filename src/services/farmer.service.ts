@@ -110,6 +110,12 @@ export async function saveDetails(d: FarmerDetails): Promise<void> {
   if (error) throw new Error('Could not save your details.');
 }
 
+/** Registered name for a MoMo wallet, or null when it can't be checked. Advisory: saving never depends on it. */
+export async function lookupWalletName(network: string, number: string): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke('verify-wallet', { body: { network, number: normalizePhone(number) } });
+  return error || !data?.name ? null : String(data.name);
+}
+
 export async function saveWallet(w: Wallet): Promise<void> {
   const id = await userId();
   const { error } = await supabase

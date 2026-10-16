@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Text, View } from 'react-native';
 import { Badge, ThemeToggle } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell, type TabDef } from '../../../components/layout';
@@ -53,6 +53,20 @@ export function BuyerHome({ account }: { account: Account }) {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Paystack sends the buyer back with ?reference=...; confirm it (the webhook may be slower) and refresh.
+  useEffect(() => {
+    const check = async (url: string | null) => {
+      const ref = buyer.paymentReference(url);
+      if (!ref) return;
+      await buyer.verifyPayment(ref);
+      setTab('orders');
+      await load();
+    };
+    Linking.getInitialURL().then(check);
+    const sub = Linking.addEventListener('url', (e) => check(e.url));
+    return () => sub.remove();
   }, [load]);
 
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
