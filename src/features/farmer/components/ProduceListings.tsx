@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
+import { Button, Badge, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import type { PickedImage } from '../../../services/catalogueImage';
-import { createListing, deleteListing, estimateListing, fetchCollectionPoints, fetchProductNames, GRADES, MIN_PHOTOS, type CollectionPoint, type Estimate, type ProduceListing } from '../../../services/farmer.service';
+import { createListing, deleteListing, estimateListing, fetchCollectionPoints, fetchPricedGrades, fetchProductNames, GRADES, MIN_PHOTOS, type CollectionPoint, type Estimate, type ListingStage, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { PhotoPicker } from './PhotoPicker';
@@ -24,6 +24,8 @@ export function ProduceListings({
   const { colors } = useTheme();
   const [points, setPoints] = useState<CollectionPoint[]>([]);
   const [products, setProducts] = useState<string[]>([]);
+  const [priced, setPriced] = useState<Record<string, string[]> | null>(null);
+  const [pricesFailed, setPricesFailed] = useState(false);
   const [pointName, setPointName] = useState('');
   const [product, setProduct] = useState('');
   const [grade, setGrade] = useState('A');
@@ -35,24 +37,49 @@ export function ProduceListings({
   const weightKg = Number(weight);
   const point = points.find((p) => p.name === pointName) ?? points[0];
   const chosen = products.includes(product) ? product : (products[0] ?? '');
+  const gradeOptions = priced ? (priced[chosen] ?? []) : GRADES;
   const key = `${chosen}|${weightKg}|${grade}`;
   const validKg = Number.isFinite(weightKg) && weightKg > 0;
   const estimate = computed.key === key ? computed.value : null;
-  const ready = Boolean(point) && chosen.length > 1 && validKg && Boolean(estimate) && photos.length >= MIN_PHOTOS;
+  const priceKnown = priced ? gradeOptions.includes(grade) : null;
+  const blockedOnPrice = priceKnown === false;
+  const photosShort = Math.max(0, MIN_PHOTOS - photos.length);
+  const ready = Boolean(point) && chosen.length > 1 && validKg && photosShort === 0 && !blockedOnPrice && (priced !== null || pricesFailed);
+  const blockReason = !point
+    ? null
+    : blockedOnPrice
+      ? `No published price for ${chosen} yet. Pick another product.`
+      : !validKg
+        ? null
+        : photosShort > 0
+          ? `Add ${photosShort} more photo${photosShort === 1 ? '' : 's'} (at least ${MIN_PHOTOS}).`
+          : null;
 
   useEffect(() => {
     fetchCollectionPoints().then(setPoints, (e) => setError(e.message));
     fetchProductNames().then(setProducts, (e) => setError(e.message));
+    fetchPricedGrades().then(setPriced, () => setPricesFailed(true));
   }, []);
 
   useEffect(() => {
-    if (!chosen || !validKg) return;
+    if (!priced || !chosen) return;
+    const options = priced[chosen] ?? [];
+    if (options.length > 0 && !options.includes(grade)) setGrade(options[0]);
+  }, [priced, chosen, grade]);
+
+  useEffect(() => {
+    if (!chosen || !validKg || blockedOnPrice) return;
     let stale = false;
-    estimateListing(chosen, weightKg, grade).then((value) => !stale && setComputed({ key, value }), () => undefined);
+    estimateListing(chosen, weightKg, grade).then(
+      (value) => {
+        if (!stale) setComputed({ key, value });
+      },
+      () => undefined,
+    );
     return () => {
       stale = true;
     };
-  }, [chosen, weightKg, validKg, grade, key]);
+  }, [chosen, weightKg, validKg, grade, key, blockedOnPrice]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -69,17 +96,17 @@ export function ProduceListings({
 
   return (
     <View style={s.wrap}>
+      {error ? <Banner text={error} /> : null}
       {walletReady ? (
         <Card>
           <Text style={s.title}>List produce</Text>
           <Text style={s.copy}>Add the product and the weight you have ready for collection.</Text>
-          {error ? <Banner text={error} /> : null}
           <View style={s.form}>
             {point ? (
               <>
                 <ChoiceChips label="Collection point" options={points.map((p) => p.name)} value={point.name} onChange={setPointName} />
                 <ChoiceChips label="Product" options={products} value={chosen} onChange={setProduct} />
-                <ChoiceChips label="Grade" options={GRADES} value={grade} onChange={setGrade} />
+                {gradeOptions.length > 0 ? <ChoiceChips label="Grade" options={gradeOptions} value={grade} onChange={setGrade} /> : null}
               </>
             ) : (
               <Text style={s.meta}>No collection points are open yet. Check back soon.</Text>
@@ -92,10 +119,9 @@ export function ProduceListings({
                 <Text style={s.net}>You get about {ghs(estimate.net)}</Text>
                 <Text style={s.meta}>Final amount is set by the weight and grade recorded at collection.</Text>
               </View>
-            ) : validKg ? (
-              <Text style={s.meta}>No published price for this product and grade yet.</Text>
             ) : null}
             <PhotoPicker value={photos} onChange={setPhotos} />
+            {blockReason ? <Text style={s.meta}>{blockReason}</Text> : null}
             <Button
               label="Add listing"
               onPress={() => run(async () => { await createListing(point!.id, chosen, weightKg, grade, photos); setWeight(''); setPhotos([]); })}
@@ -118,25 +144,85 @@ export function ProduceListings({
           <Text style={s.empty}>No produce listed yet.</Text>
         </Card>
       ) : (
-        listings.map((listing) => (
+        <>
+          <ListingGroup
+            title="Available listings"
+            listings={listings.filter((listing) => listing.stage === 'available')}
+            empty="No produce waiting for collection."
+            onRemove={(id) => run(() => deleteListing(id))}
+          />
+          <ListingGroup
+            title="Collected listings"
+            listings={listings.filter((listing) => listing.stage !== 'available')}
+            empty="Nothing has been collected yet."
+            onRemove={(id) => run(() => deleteListing(id))}
+          />
+        </>
+      )}
+    </View>
+  );
+}
+
+const STAGE: Record<ListingStage, { label: string; tone: 'neutral' | 'info' | 'warning' | 'success' }> = {
+  available: { label: 'Waiting for collection', tone: 'neutral' },
+  captured: { label: 'Captured', tone: 'info' },
+  loaded: { label: 'Loaded', tone: 'warning' },
+  delivered: { label: 'Delivered', tone: 'success' },
+};
+
+function ListingGroup({
+  title,
+  listings,
+  empty,
+  onRemove,
+}: {
+  title: string;
+  listings: ProduceListing[];
+  empty: string;
+  onRemove?: (id: string) => void;
+}) {
+  const s = useThemedStyles(styles);
+  return (
+    <View style={s.group}>
+      <Text style={s.section}>{title}</Text>
+      {listings.length === 0 ? <Text style={s.meta}>{empty}</Text> : listings.map((listing) => {
+        const stage = STAGE[listing.stage];
+        const kg = listing.recordedKg ?? listing.weightKg;
+        return (
           <Card key={listing.id}>
             <View style={s.item}>
               <View style={s.itemText}>
                 <Text style={s.product}>{listing.product} · Grade {listing.grade}</Text>
-                <Text style={s.meta}>{listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg{listing.point ? ` · ${listing.point}` : ''}</Text>
-                {listing.estNet != null ? <Text style={s.meta}>Expected {ghs(listing.estNet)} after {ghs(listing.estFee ?? 0)} fee</Text> : null}
+                <Text style={s.meta}>
+                  {kg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg{listing.recordedKg != null ? ' recorded' : ''}{listing.point ? ` · ${listing.point}` : ''}
+                </Text>
+                {listing.recordedKg != null && listing.recordedKg !== listing.weightKg ? (
+                  <Text style={s.meta}>Listed {listing.weightKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg</Text>
+                ) : null}
+                {listing.stage === 'available' && listing.estNet != null ? <Text style={s.meta}>Expected {ghs(listing.estNet)} after {ghs(listing.estFee ?? 0)} fee</Text> : null}
+                <View style={s.badges}>
+                  <Badge label={stage.label} tone={stage.tone} />
+                  <Badge label={listing.inLot ? (listing.lotCode ? `In lot ${listing.lotCode}` : 'In a lot') : 'Not in a lot'} tone={listing.inLot ? 'warning' : 'neutral'} />
+                </View>
+                <Text style={s.meta}>
+                  {listing.inLot
+                    ? 'Ops added this to a lot, so buyers can see it. It can no longer be removed.'
+                    : 'Not added to a lot yet. You can still remove it.'}
+                </Text>
               </View>
-              <Button label="Remove" variant="ghost" size="sm" onPress={() => run(() => deleteListing(listing.id))} />
+              {onRemove && !listing.inLot ? <Button label="Remove" variant="ghost" size="sm" onPress={() => onRemove(listing.id)} /> : null}
             </View>
           </Card>
-        ))
-      )}
+        );
+      })}
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 12 },
+  group: { gap: 12 },
+  section: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   copy: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted, marginTop: 4, marginBottom: 14 },
   form: { gap: 14 },
@@ -146,6 +232,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   empty: { fontFamily: fonts.sansRegular, fontSize: 14, color: c.inkMuted },
   item: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
   itemText: { flex: 1, gap: 2 },
+  badges: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginTop: 6 },
   product: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   estimate: { gap: 2, padding: 12, borderRadius: 12, backgroundColor: c.surfaceSunken },
   net: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },

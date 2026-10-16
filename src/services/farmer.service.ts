@@ -27,6 +27,8 @@ export interface Wallet {
   name: string;
 }
 
+export type ListingStage = 'available' | 'captured' | 'loaded' | 'delivered';
+
 export interface ProduceListing {
   id: string;
   product: string;
@@ -37,6 +39,10 @@ export interface ProduceListing {
   imagePaths: string[];
   estNet: number | null;
   estFee: number | null;
+  recordedKg: number | null;
+  stage: ListingStage;
+  inLot: boolean;
+  lotCode: string | null;
 }
 
 export interface Estimate {
@@ -113,23 +119,40 @@ export async function saveWallet(w: Wallet): Promise<void> {
   if (error) throw new Error('Could not save your wallet.');
 }
 
-export async function fetchListings(): Promise<ProduceListing[]> {
-  const { data, error } = await supabase
-    .from('produce_listings')
-    .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee, collection_points(name)')
-    .order('created_at', { ascending: false });
-  if (error) throw new Error('Could not load your listings.');
-  return (data ?? []).map((row: any) => ({
+const STAGES: ListingStage[] = ['available', 'captured', 'loaded', 'delivered'];
+
+function toListing(row: any, stage: ListingStage = 'available'): ProduceListing {
+  const recorded = stage === 'available' ? null : row.recorded_kg;
+  return {
     id: row.id,
     product: row.product,
     weightKg: Number(row.weight_kg),
     createdAt: row.created_at,
-    point: row.collection_points?.name ?? '',
+    point: row.point ?? row.collection_points?.name ?? '',
     grade: row.grade,
     imagePaths: row.image_paths ?? [],
     estNet: row.est_net == null ? null : Number(row.est_net),
     estFee: row.est_fee == null ? null : Number(row.est_fee),
-  }));
+    recordedKg: recorded == null ? null : Number(recorded),
+    stage: STAGES.includes(stage) ? stage : 'available',
+    inLot: typeof row.in_lot === 'boolean' ? row.in_lot : row.lot_id != null,
+    lotCode: row.lot_code ?? null,
+  };
+}
+
+export async function fetchListings(): Promise<ProduceListing[]> {
+  const listed = await supabase.rpc('farmer_listings');
+  const missing = listed.error?.code === 'PGRST202' || (listed.error?.message ?? '').includes('Could not find the function');
+  if (!missing) {
+    if (listed.error) throw new Error('Could not load your listings.');
+    return (listed.data ?? []).map((row: any) => toListing(row, STAGES.includes(row.stage) ? row.stage : 'available'));
+  }
+  const { data, error } = await supabase
+    .from('produce_listings')
+    .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee, lot_id, collection_points(name)')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error('Could not load your listings.');
+  return (data ?? []).map((row) => toListing(row));
 }
 
 export async function fetchCollectionPoints(): Promise<CollectionPoint[]> {
@@ -144,13 +167,34 @@ export async function fetchProductNames(): Promise<string[]> {
   return (data ?? []).map((r) => r.name);
 }
 
+/** Grades that have a published farm-gate price, keyed by product name. */
+export async function fetchPricedGrades(): Promise<Record<string, string[]>> {
+  const { data, error } = await supabase.from('crop_prices').select('grade, products!inner(name)').eq('products.active', true);
+  if (error) throw new Error('Could not load prices.');
+  const found: Record<string, string[]> = {};
+  for (const row of data ?? []) {
+    const name = (row as { products?: { name?: string } }).products?.name;
+    const grade = (row as { grade?: string }).grade;
+    if (!name || !grade) continue;
+    (found[name] ??= []).push(grade);
+  }
+  for (const name of Object.keys(found)) found[name] = GRADES.filter((g) => found[name].includes(g));
+  return found;
+}
+
 /** Expected payout for a listing: farm-gate price for the chosen grade x kg, less the collection fee. Null when no price is published. */
 export async function estimateListing(product: string, kg: number, grade: string): Promise<Estimate | null> {
   const { data, error } = await supabase.rpc('estimate_listing', { p_product: product, p_kg: kg, p_grade: grade });
   if (error) throw new Error('Could not work out the expected payout.');
-  const r = data?.[0];
-  if (!r) return null;
-  return { pricePerKg: Number(r.price_per_kg), gross: Number(r.gross), feeRate: Number(r.fee_rate), fee: Number(r.fee), net: Number(r.net) };
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    price_per_kg?: number | string | null;
+    gross?: number | string | null;
+    fee_rate?: number | string | null;
+    fee?: number | string | null;
+    net?: number | string | null;
+  } | null;
+  if (row?.price_per_kg == null) return null;
+  return { pricePerKg: Number(row.price_per_kg), gross: Number(row.gross), feeRate: Number(row.fee_rate), fee: Number(row.fee), net: Number(row.net) };
 }
 
 async function uploadPhotos(farmerId: string, images: PickedImage[]): Promise<string[]> {
@@ -186,9 +230,32 @@ export async function createListing(pointId: string, product: string, weightKg: 
   }
 }
 
+function removalError(error: { message?: string; code?: string }): Error {
+  const msg = error.message ?? '';
+  if (msg.includes('already in a lot')) return new Error('This listing is already in a collection lot, so it can no longer be removed.');
+  if (msg.includes('listing not found')) return new Error('That listing is no longer on your account.');
+  return new Error('Could not remove that listing.');
+}
+
 export async function deleteListing(id: string): Promise<void> {
-  const { data } = await supabase.from('produce_listings').select('image_paths').eq('id', id).maybeSingle();
-  const { error } = await supabase.from('produce_listings').delete().eq('id', id);
-  if (error) throw new Error('Could not remove that listing.');
-  if (data?.image_paths?.length) await supabase.storage.from(PRODUCE_BUCKET).remove(data.image_paths);
+  const removed = await supabase.rpc('delete_own_listing', { p_id: id });
+  const missing = removed.error?.code === 'PGRST202' || (removed.error?.message ?? '').includes('Could not find the function');
+  const paths = missing ? await deleteListingDirect(id) : ((removed.data ?? []) as string[]);
+  if (!missing && removed.error) throw removalError(removed.error);
+  if (!paths.length) return;
+  try {
+    await supabase.storage.from(PRODUCE_BUCKET).remove(paths);
+  } catch {
+    // The listing row is already gone. A leftover photo should not keep it on screen.
+  }
+}
+
+/** Used when the withdraw function is not on the database yet. Confirms a row actually went. */
+async function deleteListingDirect(id: string): Promise<string[]> {
+  const { data: row } = await supabase.from('produce_listings').select('image_paths, lot_id').eq('id', id).maybeSingle();
+  if (row?.lot_id) throw new Error('This listing is already in a collection lot, so it can no longer be removed.');
+  const { data, error } = await supabase.from('produce_listings').delete().eq('id', id).select('id');
+  if (error) throw removalError(error);
+  if (!data?.length) throw new Error('Could not remove that listing.');
+  return (row?.image_paths ?? []) as string[];
 }
