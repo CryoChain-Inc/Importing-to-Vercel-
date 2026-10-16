@@ -41,6 +41,7 @@
           "locationWhenInUsePermission": "CryoChain shares the truck position with operations while a collection run has position sharing on."
         }
       ]
-    ]
+    ],
+    "scheme": "cryochain"
   }
 }
