@@ -1,3 +1,4 @@
+import { Linking, Platform } from 'react-native';
 import { supabase } from './supabase';
 
 export interface TodayLot {
@@ -21,6 +22,8 @@ export interface Order {
   product: string;
   totalKg: number;
   lotState: string;
+  /** Status of the latest Paystack attempt, if any; failed/abandoned means the buyer can retry. */
+  payment: 'pending' | 'success' | 'failed' | 'abandoned' | 'mismatch' | 'orphaned' | null;
 }
 
 export interface TransferDetails {
@@ -86,15 +89,16 @@ export async function fetchTodayLots(): Promise<TodayLot[]> {
 }
 
 /** Atomic: reserves the lot and snapshots the amount, so two buyers can't take the same lot. */
-export async function placeOrder(lotId: string): Promise<void> {
-  const { error } = await supabase.rpc('place_order', { p_lot_id: lotId });
+export async function placeOrder(lotId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('place_order', { p_lot_id: lotId });
   rpcError(error, { 'no longer available': 'Someone just took that lot. Pick another.' }, 'Could not place the order.');
+  return data as string;
 }
 
 export async function fetchOrders(): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, lots(code, product, total_kg, state)')
+    .select('id, code, amount, state, created_at, lots(code, product, total_kg, state), payments(status, created_at)')
     .order('created_at', { ascending: false });
   fail('Could not load your orders.')(error);
   return (data ?? []).map((r: any) => ({
@@ -107,12 +111,35 @@ export async function fetchOrders(): Promise<Order[]> {
     product: r.lots?.product ?? '',
     totalKg: Number(r.lots?.total_kg ?? 0),
     lotState: r.lots?.state ?? '',
+    payment: [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]?.status ?? null,
   }));
 }
 
 export async function cancelOrder(id: string): Promise<void> {
   const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
   fail('Could not cancel that order.')(error);
+}
+
+/** Opens Paystack checkout for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
+export async function payOnline(orderId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('paystack-init', { body: { order_id: orderId } });
+  if (error || !data?.url) {
+    // Non-2xx responses hide the body inside error.context; surface our message when there is one.
+    const body = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
+    throw new Error(body?.error ?? data?.error ?? 'Could not start the payment. Please try again.');
+  }
+  if (Platform.OS === 'web') window.location.assign(data.url);
+  else await Linking.openURL(data.url);
+}
+
+/** Returning from Paystack: pull the reference out of the callback URL and confirm it server-side. */
+export function paymentReference(url: string | null): string | null {
+  const m = url?.match(/[?&](?:reference|trxref)=([^&#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+export async function verifyPayment(reference: string): Promise<void> {
+  await supabase.functions.invoke('paystack-verify', { body: { reference } });
 }
 
 /** Ops bank account for transfers; only buyers can call it (ops_config is ops-only). */

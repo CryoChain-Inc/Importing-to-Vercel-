@@ -1,15 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { placeOrder, type TodayLot } from '../../../services/buyer.service';
+import { payOnline, placeOrder, type TodayLot } from '../../../services/buyer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 
 const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
-/** Today's open lots. Confirming reserves the lot and moves the buyer to its bank-transfer instructions. */
+/** Today's open lots. "Confirm and pay" first asks how to pay; only then is the lot reserved (order placed). */
 export function TodayLots({ lots, onOrdered, onRefresh }: {
   lots: TodayLot[];
   onOrdered: () => void;
@@ -17,6 +17,7 @@ export function TodayLots({ lots, onOrdered, onRefresh }: {
 }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onRefresh);
+  const [choosing, setChoosing] = useState<string | null>(null);
 
   return (
     <View style={s.list}>
@@ -33,9 +34,16 @@ export function TodayLots({ lots, onOrdered, onRefresh }: {
           </View>
           <Text style={s.meta}>{kg(l.totalKg)} at {ghs(l.pricePerKg)}/kg · cold chain from farm gate</Text>
           <Text style={s.total}>{ghs(l.amount)}</Text>
-          <Text style={s.meta}>Pay by bank transfer. Paystack (card, mobile wallet) is coming soon.</Text>
-          <Button label="Confirm and pay" loading={busy}
-            onPress={() => run(async () => { await placeOrder(l.id); onOrdered(); })} />
+          {choosing === l.id ? (
+            <>
+              <Text style={s.meta}>How would you like to pay? Your order is created when you choose.</Text>
+              <Button label="Pay online (mobile money or bank)" loading={busy}
+                onPress={() => run(async () => { const id = await placeOrder(l.id); onOrdered(); await payOnline(id); })} />
+              <Button variant="outline" label="Pay by bank transfer" disabled={busy}
+                onPress={() => run(async () => { await placeOrder(l.id); onOrdered(); })} />
+              <Button variant="ghost" size="sm" label="Back" disabled={busy} onPress={() => setChoosing(null)} />
+            </>
+          ) : <Button label="Confirm and pay" onPress={() => setChoosing(l.id)} />}
         </Card>
       ))}
     </View>

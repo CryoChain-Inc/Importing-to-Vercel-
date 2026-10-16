@@ -2,14 +2,14 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { cancelOrder, orderStatus, type Order, type TransferDetails } from '../../../services/buyer.service';
+import { cancelOrder, orderStatus, payOnline, type Order, type TransferDetails } from '../../../services/buyer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 
 const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
-/** Order status; unpaid orders show where to send the bank transfer and the reference to use. */
+/** Order status; unpaid orders can be paid online with Paystack (retry after a failure) or by bank transfer using the reference. */
 export function Orders({ orders, transfer, onRefresh }: {
   orders: Order[];
   transfer: TransferDetails | null;
@@ -35,8 +35,13 @@ export function Orders({ orders, transfer, onRefresh }: {
             <Text style={s.total}>{ghs(o.amount)}</Text>
             {o.state === 'awaiting_payment' ? (
               <>
+                {o.payment === 'failed' || o.payment === 'abandoned' ? (
+                  <Banner text={o.payment === 'failed' ? 'Your last payment attempt failed. No money was taken; try again.' : 'Your last payment was not completed. Try again when you are ready.'} />
+                ) : null}
+                {o.payment === 'pending' ? <Text style={s.meta}>A payment is in progress. If you already paid, it will show here shortly.</Text> : null}
+                <Button label={o.payment === 'failed' || o.payment === 'abandoned' ? 'Try again with Paystack' : 'Pay online (mobile money or bank)'} loading={busy} onPress={() => run(() => payOnline(o.id))} />
                 <View style={s.box}>
-                  <Text style={s.boxTitle}>Pay by bank transfer</Text>
+                  <Text style={s.boxTitle}>Or pay by bank transfer</Text>
                   {transfer ? (
                     <>
                       <Row s={s} k="Bank" v={transfer.bankName} />
