@@ -9,7 +9,7 @@ import { FarmerOnboarding } from '../../farmer/onboarding/FarmerOnboarding';
 import { useNav } from '../../../navigation';
 import { useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account, BuyerForm } from '../../../types/auth';
-import { isEmail, isPhone } from '../../../utils/format';
+import { BUYER_NAME_MAX, EMAIL_MAX, isEmail, isPhone } from '../../../utils/format';
 import { authService } from '../../../services/auth.service';
 import { ChangeContact } from '../components/ChangeContact';
 import { DuplicateNotice } from '../components/DuplicateNotice';
@@ -77,7 +77,8 @@ function BuyerFormView({ identifier, onDone, onDuplicate }: FormProps) {
     else onDone(a);
   }, onDuplicate, clear);
   const otherOk = f.otherContact.trim() === '' || (viaEmail ? isPhone(f.otherContact) : isEmail(f.otherContact));
-  const ready = f.organization.trim().length > 1 && f.name.trim().length > 1 && f.location !== '' && otherOk;
+  const name = f.name.trim();
+  const ready = f.organization.trim().length > 1 && name.length > 1 && name.length <= BUYER_NAME_MAX && f.location !== '' && otherOk;
 
   if (account)
     return (
@@ -89,11 +90,11 @@ function BuyerFormView({ identifier, onDone, onDuplicate }: FormProps) {
     <View style={s.form}>
       {error ? <Banner text={error} /> : null}
       <Input label="Organization name" value={f.organization} onChangeText={(organization) => update({ organization })} autoComplete="organization" />
-      <Input label="Your name" value={f.name} onChangeText={(name) => update({ name })} autoComplete="name" />
+      <Input label="Your name" value={f.name} onChangeText={(name) => update({ name })} maxLength={BUYER_NAME_MAX} autoComplete="name" />
       {viaEmail ? (
         <Input label="Phone number (optional)" prefix="+233" value={f.otherContact} onChangeText={(otherContact) => update({ otherContact })} keyboardType="phone-pad" hint="For delivery updates. We'll send a code to confirm it." />
       ) : (
-        <Input label="Email (optional)" value={f.otherContact} onChangeText={(otherContact) => update({ otherContact })} keyboardType="email-address" autoCapitalize="none" hint="For sign-in links and order updates. We'll send a code to confirm it." />
+        <Input label="Email (optional)" value={f.otherContact} onChangeText={(otherContact) => update({ otherContact })} maxLength={EMAIL_MAX} keyboardType="email-address" autoCapitalize="none" hint="For sign-in links and order updates. We'll send a code to confirm it." />
       )}
       <ChoiceChips label="Delivery location" options={DELIVERY_LOCATIONS} value={f.location} onChange={(location) => update({ location })} />
       <Button label="Create account" size="lg" onPress={() => run(() => registerBuyer(f))} loading={busy} disabled={!ready} />

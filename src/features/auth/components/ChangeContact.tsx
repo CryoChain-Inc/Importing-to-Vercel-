@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Button, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { authService } from '../../../services/auth.service';
-import { isEmail, isPhone } from '../../../utils/format';
+import { EMAIL_MAX, isEmail, isPhone } from '../../../utils/format';
 import { errorMessage } from '../errors';
 import { VerifyCode } from './VerifyCode';
 
@@ -54,6 +54,7 @@ export function ChangeContact({ kind, current, onDone, onCancel }: {
         prefix={kind === 'phone' ? '+233' : undefined}
         value={value}
         onChangeText={setValue}
+        maxLength={kind === 'email' ? EMAIL_MAX : undefined}
         keyboardType={kind === 'email' ? 'email-address' : 'phone-pad'}
         autoCapitalize="none"
         hint={current ? `Currently ${current}. We'll send a code to confirm the new one.` : "We'll send a code to confirm it."}

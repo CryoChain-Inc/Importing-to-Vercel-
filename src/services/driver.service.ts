@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { requireUserId, supabase } from './supabase';
 
 export interface DriverStop {
   id: string;
@@ -68,9 +68,8 @@ export const logTemperature = (stopId: string, celsius: number) =>
 export const departStop = (stopId: string) => call('depart_stop', { p_stop_id: stopId }, 'Could not confirm that you are leaving.');
 
 export async function completeDelivery(routeId: string, receiver: string, photo: { uri: string; mime: string }): Promise<void> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('Sign in again to continue.');
-  const path = `${userData.user.id}/${routeId}.jpg`;
+  const userId = await requireUserId();
+  const path = `${userId}/${routeId}.jpg`;
   const blob = await (await fetch(photo.uri)).blob();
   const uploaded = await supabase.storage.from('deliveries').upload(path, blob, {
     upsert: true,

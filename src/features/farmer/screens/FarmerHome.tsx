@@ -49,6 +49,15 @@ export function FarmerHome({ account }: { account: Account }) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [load]);
+
   const signOut = () => authService.signOut().finally(() => reset({ name: 'landing' }));
   const walletReady = hasWallet(farmer);
 

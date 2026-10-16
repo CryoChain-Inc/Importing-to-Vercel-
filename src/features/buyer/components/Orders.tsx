@@ -38,8 +38,9 @@ export function Orders({ orders, transfer, onRefresh }: {
                 {o.payment === 'failed' || o.payment === 'abandoned' ? (
                   <Banner text={o.payment === 'failed' ? 'Your last payment attempt failed. No money was taken; try again.' : 'Your last payment was not completed. Try again when you are ready.'} />
                 ) : null}
-                {o.payment === 'pending' ? <Text style={s.meta}>A payment is in progress. If you already paid, it will show here shortly.</Text> : null}
+                {o.payment === 'pending' ? <Text style={s.meta}>A payment is in progress. If you already paid, it will show here shortly. You can still cancel if you have not paid.</Text> : null}
                 <Button label={o.payment === 'failed' || o.payment === 'abandoned' ? 'Try again with Paystack' : 'Pay online (mobile money or bank)'} loading={busy} onPress={() => run(() => payOnline(o.id))} />
+                <Button size="sm" variant="outline" label="Cancel order" loading={busy} onPress={() => run(() => cancelOrder(o.id))} />
                 <View style={s.box}>
                   <Text style={s.boxTitle}>Or pay by bank transfer</Text>
                   {transfer ? (
@@ -53,7 +54,6 @@ export function Orders({ orders, transfer, onRefresh }: {
                     </>
                   ) : <Text style={s.meta}>Bank details aren’t available yet. Please contact support.</Text>}
                 </View>
-                <Button size="sm" variant="outline" label="Cancel order" loading={busy} onPress={() => run(() => cancelOrder(o.id))} />
               </>
             ) : null}
           </Card>

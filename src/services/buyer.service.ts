@@ -1,5 +1,5 @@
 import { Linking, Platform } from 'react-native';
-import { supabase } from './supabase';
+import { requireUserId, supabase } from './supabase';
 
 export interface TodayLot {
   id: string;
@@ -115,9 +115,15 @@ export async function fetchOrders(): Promise<Order[]> {
   }));
 }
 
+/** Cancels an unpaid order and returns its lot to today's marketplace. */
 export async function cancelOrder(id: string): Promise<void> {
+  await requireUserId();
   const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
-  fail('Could not cancel that order.')(error);
+  rpcError(error, {
+    'not signed in': 'Sign in again to continue.',
+    'order cannot be cancelled': 'This order can no longer be cancelled.',
+    'Could not find the function': 'Cancelling orders is not available yet. Apply the latest database update, then try again.',
+  }, 'Could not cancel that order.');
 }
 
 /** Opens Paystack checkout for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
@@ -177,10 +183,9 @@ export async function fetchRequirements(): Promise<Requirement[]> {
 }
 
 export async function createRequirement(r: NewRequirement): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Sign in again to continue.');
+  const buyerId = await requireUserId();
   const { error } = await supabase.from('requirements').insert({
-    buyer_id: user.id,
+    buyer_id: buyerId,
     product: r.product,
     grade: r.grade,
     quantity_kg: r.quantityKg,
@@ -197,12 +202,11 @@ export async function closeRequirement(id: string): Promise<void> {
 }
 
 export async function fetchBuyerDetails(): Promise<BuyerDetails> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Sign in again to continue.');
+  const buyerId = await requireUserId();
   const { data, error } = await supabase
     .from('buyers')
     .select('organization_name, delivery_location, profiles(display_name, phone, email)')
-    .eq('id', user.id)
+    .eq('id', buyerId)
     .single();
   fail('Could not load your account.')(error);
   const p = (data as any).profiles;

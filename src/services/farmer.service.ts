@@ -1,6 +1,6 @@
 import { normalizePhone } from '../utils/format';
 import type { PickedImage } from './catalogueImage';
-import { supabase } from './supabase';
+import { requireUserId, supabase } from './supabase';
 
 export interface Farmer {
   address: string | null;
@@ -71,9 +71,7 @@ export const hasWallet = (f: Farmer | null) => Boolean(f?.momoNumber);
 export const detailsDone = (f: Farmer | null) => Boolean(f?.address);
 
 async function userId(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new Error('Sign in again to continue.');
-  return data.user.id;
+  return requireUserId();
 }
 
 /** Role selection: sets the role and creates the empty farmers row. */
