@@ -1,5 +1,5 @@
 // Paystack -> us. Deployed with verify_jwt = false (see config.toml); authenticity comes from the HMAC signature.
-import { applyTransaction, validSignature } from '../_shared/paystack.ts';
+import { applyTransaction, applyTransferEvent, validSignature } from '../_shared/paystack.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -10,6 +10,7 @@ Deno.serve(async (req) => {
   try {
     const event = JSON.parse(raw) as { event: string; data: any };
     if (event.event === 'charge.success') await applyTransaction(event.data);
+    else if (['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) await applyTransferEvent(event.event, event.data);
   } catch (e) {
     console.error('paystack-webhook', e);
     return new Response('error', { status: 500 }); // non-2xx makes Paystack retry

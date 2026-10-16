@@ -41,3 +41,24 @@ export async function applyTransaction(tx: { reference: string; status: string; 
     await db.rpc('fail_paystack_payment', { p_reference: tx.reference, p_status: tx.status, p_message: tx.gateway_response ?? '' });
   }
 }
+
+export const MOMO_BANK: Record<string, string> = { 'MTN MoMo': 'MTN', 'Telecel Cash': 'VOD', 'AirtelTigo Money': 'ATL' };
+
+/** 233XXXXXXXXX / 0XXXXXXXXX / XXXXXXXXX -> 0XXXXXXXXX, the form Paystack wants for Ghana MoMo. */
+export function localMsisdn(number: unknown) {
+  const d = String(number ?? '').replace(/\D/g, '');
+  return d.startsWith('233') ? `0${d.slice(3)}` : d.startsWith('0') ? d : `0${d}`;
+}
+
+/** Applies a transfer.success / transfer.failed / transfer.reversed webhook to our transfer row (matched by reference). */
+export async function applyTransferEvent(event: string, data: { reference: string; transfer_code?: string; reason?: string }) {
+  const status = event === 'transfer.success' ? 'succeeded' : 'failed';
+  const db = admin();
+  const { data: t } = await db.from('payout_transfers').select('id').eq('reference', data.reference).maybeSingle();
+  if (!t) return;
+  const { error } = await db.rpc('apply_transfer_result', {
+    p_transfer: t.id, p_status: status, p_provider_ref: data.transfer_code ?? null,
+    p_error: status === 'failed' ? `Paystack: ${event.replace('transfer.', '')}${data.reason ? ` (${data.reason})` : ''}` : null,
+  });
+  if (error) throw new Error(error.message);
+}
