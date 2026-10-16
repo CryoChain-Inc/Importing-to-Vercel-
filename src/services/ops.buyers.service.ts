@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { requireUserId, supabase } from './supabase';
 
 export interface OrderRow {
   id: string;
@@ -61,8 +61,12 @@ export async function confirmPayment(orderId: string): Promise<void> {
 
 /** Releases the lot back to sale. */
 export async function cancelOrder(orderId: string): Promise<void> {
+  await requireUserId();
   const { error } = await supabase.rpc('cancel_order', { p_order_id: orderId });
-  fail('Could not cancel that order.')(error);
+  if (!error) return;
+  if (error.message.includes('not signed in')) throw new Error('Sign in again to continue.');
+  if (error.message.includes('order cannot be cancelled')) throw new Error('This order can no longer be cancelled.');
+  throw new Error('Could not cancel that order.');
 }
 
 export async function fetchRequirements(): Promise<RequirementRow[]> {

@@ -7,7 +7,15 @@ export function normalizePhone(raw: string): string {
 }
 
 export const isPhone = (raw: string) => /^233\d{9}$/.test(normalizePhone(raw));
-export const isEmail = (raw: string) => /^\S+@\S+\.\S+$/.test(raw.trim());
+/** Person's name on a buyer account. */
+export const BUYER_NAME_MAX = 80;
+/** RFC 5321: the whole address is at most 254 characters, and the part before @ is at most 64. */
+export const EMAIL_MAX = 254;
+export const isEmail = (raw: string) => {
+  const v = raw.trim();
+  const at = v.indexOf('@');
+  return at > 0 && at <= 64 && v.length <= EMAIL_MAX && /^\S+@\S+\.\S+$/.test(v);
+};
 
 /** Today's calendar service date in Ghana (YYYY-MM-DD), matching route service_date in Africa/Accra timezone. */
 export function getTodayServiceDate(): string {

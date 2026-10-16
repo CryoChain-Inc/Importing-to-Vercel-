@@ -115,9 +115,15 @@ export async function fetchOrders(): Promise<Order[]> {
   }));
 }
 
+/** Cancels an unpaid order and returns its lot to today's marketplace. */
 export async function cancelOrder(id: string): Promise<void> {
+  await requireUserId();
   const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
-  fail('Could not cancel that order.')(error);
+  rpcError(error, {
+    'not signed in': 'Sign in again to continue.',
+    'order cannot be cancelled': 'This order can no longer be cancelled.',
+    'Could not find the function': 'Cancelling orders is not available yet. Apply the latest database update, then try again.',
+  }, 'Could not cancel that order.');
 }
 
 /** Opens Paystack checkout for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
