@@ -1,5 +1,5 @@
 import { Linking, Platform } from 'react-native';
-import { supabase } from './supabase';
+import { requireUserId, supabase } from './supabase';
 
 export interface TodayLot {
   id: string;
@@ -177,10 +177,9 @@ export async function fetchRequirements(): Promise<Requirement[]> {
 }
 
 export async function createRequirement(r: NewRequirement): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Sign in again to continue.');
+  const buyerId = await requireUserId();
   const { error } = await supabase.from('requirements').insert({
-    buyer_id: user.id,
+    buyer_id: buyerId,
     product: r.product,
     grade: r.grade,
     quantity_kg: r.quantityKg,
@@ -197,12 +196,11 @@ export async function closeRequirement(id: string): Promise<void> {
 }
 
 export async function fetchBuyerDetails(): Promise<BuyerDetails> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Sign in again to continue.');
+  const buyerId = await requireUserId();
   const { data, error } = await supabase
     .from('buyers')
     .select('organization_name, delivery_location, profiles(display_name, phone, email)')
-    .eq('id', user.id)
+    .eq('id', buyerId)
     .single();
   fail('Could not load your account.')(error);
   const p = (data as any).profiles;

@@ -1,5 +1,5 @@
 import { accraToday } from '../utils/format';
-import { supabase } from './supabase';
+import { requireUserId, supabase } from './supabase';
 
 export type CaptureGrade = 'A' | 'B' | 'Reject';
 
@@ -145,9 +145,7 @@ export async function saveCapture(
   listingId: string,
   input: { kg: number; grade: CaptureGrade; photo?: { uri: string; mime: string } | null; existingPath?: string },
 ): Promise<void> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('Sign in again to continue.');
-  const userId = userData.user.id;
+  const userId = await requireUserId();
 
   let path = input.existingPath ?? '';
   if (input.photo) {
