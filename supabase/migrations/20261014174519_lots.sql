@@ -2,7 +2,7 @@
 -- vehicle load (3,000 kg), per docs/Workflow-short.md §3.2. A lot cannot exist without listings (I1), and a
 -- listing belongs to at most one lot. The 2,700 kg minimum and GHS 6,200 stop-value rule are advisory in the UI.
 
-create sequence public.lot_code_seq;
+create sequence if not exists public.lot_code_seq;
 
 create table public.lots (
   id uuid primary key default gen_random_uuid(),

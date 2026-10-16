@@ -41,7 +41,7 @@ alter table public.lots
 create index lots_sale_idx on public.lots (sale_date) where state = 'listed' and price_per_kg is not null;
 
 -- ── Orders ──────────────────────────────────────────────────────────────────
-create sequence public.order_code_seq;
+create sequence if not exists public.order_code_seq;
 
 create table public.orders (
   id uuid primary key default gen_random_uuid(),
