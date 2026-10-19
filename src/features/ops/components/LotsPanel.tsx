@@ -1,119 +1,104 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/common';
+import { Pressable, Text, View } from 'react-native';
+import { Badge, Button, Card, ChoiceChips, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import {
-  cancelLot, createLot, LOT_MAX_KG, LOT_MIN_KG, STOP_MIN_VALUE_GHS,
-  type LotRow, type PriceRow, type Product, type SupplyRow,
-} from '../../../services/ops.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { cancelLot, type LotRow, type PriceRow, type Product, type SupplyRow } from '../../../services/ops.service';
+import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-import { MultiChips } from './MultiChips';
+import { LotBuilder } from './LotBuilder';
+import { LotTrailView, StageBar } from './LotTrail';
+import { Empty, kg, SectionTitle, usePaged } from './OpsBits';
 import { useAction } from './useAction';
 
-/** Set by "Create lot" on a buyer requirement: preselects the product and ties the new lot to it. */
-export interface LotDraft {
-  requirementId: string;
-  product: string;
-  price: number;
-  summary: string;
-}
+const FILTERS = ['All', 'Open', 'Paid', 'On the road', 'Delivered', 'Cancelled'];
+const group = (state: string) =>
+  state === 'listed' || state === 'escrow_pending' ? 'Open' : state === 'escrow_funded' ? 'Paid' : state === 'collecting' || state === 'in_transit' ? 'On the road' : state === 'cancelled' ? 'Cancelled' : 'Delivered';
 
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
-
-/** Build a lot from unallocated listings of one product; list and cancel existing lots. */
-export function LotsPanel({ supply, lots, products, prices, draft, onChange }: {
+/** Build lots, then follow each one from listing to delivery, with the agent's and driver's records. */
+export function LotsPanel({ supply, lots, products, prices, onChange }: {
   supply: SupplyRow[];
   lots: LotRow[];
   products: Product[];
   prices: PriceRow[];
-  draft: LotDraft | null;
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
+  const { colors } = useTheme();
   const { busy, error, run } = useAction(onChange);
-  const [picked, setPicked] = useState<string[]>([]);
-  // The parent remounts this panel (key) when a new draft arrives, so the draft only seeds initial state.
-  const [productName, setProductName] = useState(draft?.product ?? '');
-  const [price, setPrice] = useState(draft ? String(draft.price) : '');
-  const [requirementId, setRequirementId] = useState<string | undefined>(draft?.requirementId);
-
-  const pool = supply.filter((r) => !r.lotId);
-  const names = [...new Set(pool.map((r) => r.product))].sort();
-  const product = names.includes(productName) ? productName : names[0];
-  const candidates = pool.filter((r) => r.product === product);
-  const selected = candidates.filter((r) => picked.includes(r.id));
-
-  const total = selected.reduce((a, r) => a + r.weightKg, 0);
-  // Listings carry no grade yet, so stop value is estimated at the Grade A price.
-  const productId = products.find((p) => p.name === product)?.id;
-  const priceA = prices.find((r) => r.productId === productId && r.grade === 'A')?.price;
-  const stops = new Map<string, { name: string; kg: number }>();
-  selected.forEach((r) => {
-    const k = r.pointId ?? 'none';
-    stops.set(k, { name: r.point, kg: (stops.get(k)?.kg ?? 0) + r.weightKg });
-  });
-
-  const over = total > LOT_MAX_KG;
-  const sellPrice = Number(price);
-  const warnings = [
-    total > 0 && total < LOT_MIN_KG ? `Under ${kg(LOT_MIN_KG)}: the truck won't be full.` : null,
-    ...[...stops.values()].map((st) =>
-      priceA && st.kg * priceA < STOP_MIN_VALUE_GHS ? `${st.name}: ${ghs(st.kg * priceA)} is under the ${ghs(STOP_MIN_VALUE_GHS)} stop minimum.` : null,
-    ),
-    selected.length > 0 && !priceA ? 'No Grade A price set, so stop value can\'t be checked.' : null,
-  ].filter(Boolean) as string[];
+  const [filter, setFilter] = useState('All');
+  const [open, setOpen] = useState<string | null>(null);
+  const filtered = lots.filter((l) => filter === 'All' || group(l.state) === filter);
+  const { rows, more } = usePaged(filtered, filter);
 
   return (
     <View style={s.list}>
       {error ? <Banner text={error} /> : null}
-      <Card style={s.form}>
-        <Text style={s.title}>Create lot</Text>
-        <Text style={s.meta}>One product per lot, up to {kg(LOT_MAX_KG)} (one truck). Aim for {kg(LOT_MIN_KG)}+ across 2–3 stops.</Text>
-        {requirementId && draft ? <Banner tone="info" text={`For requirement: ${draft.summary}. Creating the lot marks it matched.`} /> : null}
-        {names.length ? (
-          <>
-            <ChoiceChips label="Product" options={names} value={product} onChange={(n) => { setProductName(n); setPicked([]); setRequirementId(undefined); }} />
-            <MultiChips label="Available listings" value={picked} onChange={setPicked}
-              options={candidates.map((r) => ({ key: r.id, label: `${r.farmer} · ${r.point} · ${kg(r.weightKg)}` }))} />
-            <Text style={[s.value, over && s.bad]}>{kg(total)} / {kg(LOT_MAX_KG)} · {selected.length} listing{selected.length === 1 ? '' : 's'}</Text>
-            {over ? <Text style={s.bad}>Over the vehicle capacity. Remove some listings.</Text> : null}
-            {warnings.map((w) => <Text key={w} style={s.meta}>⚠ {w}</Text>)}
-            <Input label="Price buyers pay (GH₵ per kg)" value={price} onChangeText={setPrice} keyboardType="decimal-pad"
-              hint={priceA ? `Farmer Grade A price is ${ghs(priceA)}/kg.` : undefined} />
-            <Button label="Create lot" loading={busy} disabled={!selected.length || over || !(sellPrice > 0)}
-              onPress={() => run(async () => {
-                await createLot(selected.map((r) => r.id), sellPrice, requirementId);
-                setPicked([]);
-                setRequirementId(undefined);
-              })} />
-          </>
-        ) : <Text style={s.meta}>No unallocated supply. Listings appear here once farmers list produce.</Text>}
-      </Card>
+      <LotBuilder supply={supply} products={products} prices={prices} onChange={onChange} />
 
-      {lots.map((l) => (
-        <Card key={l.id} style={s.item}>
-          <View style={s.top}>
-            <Text style={s.name}>{l.code} · {l.product}</Text>
-            <Badge label={l.state.replace('_', ' ')} tone={l.state === 'cancelled' ? 'neutral' : 'success'} />
-          </View>
-          <Text style={s.meta}>{kg(l.totalKg)}{l.pricePerKg ? ` at ${ghs(l.pricePerKg)}/kg` : ' · no price'} · {l.listings} listing{l.listings === 1 ? '' : 's'} · {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
-          {supply.filter((r) => r.lotId === l.id).map((r) => <Text key={r.id} style={s.meta}>{r.farmer} · {r.point} · {kg(r.weightKg)}</Text>)}
-          {l.state === 'listed' ? <Button size="sm" variant="outline" label="Cancel lot" onPress={() => run(() => cancelLot(l.id))} /> : null}
-        </Card>
-      ))}
+      <SectionTitle title="Lots" note="Open a lot to see where it is and what the agent and driver recorded." />
+      {lots.length === 0 ? <Empty icon="package" title="No lots yet" hint="Group available listings into a lot above. Buyers can then order it." /> : (
+        <>
+          <ChoiceChips label="Status" options={FILTERS} value={filter} onChange={setFilter} />
+          {filtered.length === 0 ? <Text style={s.meta}>No lots with this status.</Text> : null}
+          {rows.map((l) => {
+            const on = open === l.id;
+            const farmers = supply.filter((r) => r.lotId === l.id);
+            return (
+              <Card key={l.id} style={s.item}>
+                <Pressable accessibilityRole="button" accessibilityState={{ expanded: on }} onPress={() => setOpen(on ? null : l.id)} style={s.head}>
+                  <View style={s.grow}>
+                    <Text style={s.name} numberOfLines={1}>{l.code} · {l.product}</Text>
+                    <Text style={s.meta}>Created {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
+                  </View>
+                  <Badge label={group(l.state)} tone={l.state === 'cancelled' ? 'neutral' : group(l.state) === 'Open' ? 'warning' : 'success'} />
+                  <Icon name="chevronDown" size={18} color={colors.inkMuted} />
+                </Pressable>
+                <View style={s.facts}>
+                  <Fact label="Weight" value={kg(l.totalKg)} />
+                  <Fact label="Value" value={l.pricePerKg ? ghs(l.totalKg * l.pricePerKg) : 'No price'} />
+                  <Fact label="Farmers" value={String(l.listings)} />
+                </View>
+                {l.state !== 'cancelled' ? <View style={s.stage}><StageBar state={l.state} /></View> : null}
+                {on ? (
+                  <View style={s.body}>
+                    <Text style={s.sub}>Farmers in this lot</Text>
+                    {farmers.map((r) => <Text key={r.id} style={s.meta}>{r.farmer} · {r.point} · {kg(r.weightKg)}</Text>)}
+                    {l.state !== 'listed' && l.state !== 'cancelled' ? <LotTrailView lotId={l.id} /> : null}
+                    {l.state === 'listed' ? <Button size="sm" variant="outline" label="Cancel lot" loading={busy} onPress={() => run(() => cancelLot(l.id))} /> : null}
+                  </View>
+                ) : null}
+              </Card>
+            );
+          })}
+          {more}
+        </>
+      )}
+    </View>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  const s = useThemedStyles(styles);
+  return (
+    <View style={s.fact}>
+      <Text style={s.factLabel}>{label}</Text>
+      <Text style={s.factValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  list: { gap: 10 },
-  form: { gap: 12 },
-  item: { gap: 6, alignItems: 'flex-start' as const },
-  top: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8, alignSelf: 'stretch' as const },
-  title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
-  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, flexShrink: 1 },
-  value: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
-  bad: { fontFamily: fonts.sansBold, fontSize: 13, color: c.dangerInk },
-  meta: { fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted },
+  list: { gap: 12 },
+  item: { padding: 0, overflow: 'hidden' as const },
+  head: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, padding: 14 },
+  grow: { flex: 1, gap: 2 },
+  facts: { flexDirection: 'row' as const, marginHorizontal: 14, marginBottom: 14, borderRadius: 12, backgroundColor: c.surfaceSunken },
+  fact: { flex: 1, gap: 2, paddingVertical: 10, paddingHorizontal: 12 },
+  factLabel: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted },
+  factValue: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  stage: { paddingHorizontal: 14, paddingBottom: 16 },
+  body: { gap: 8, padding: 14, borderTopWidth: 1, borderTopColor: c.borderSubtle, alignItems: 'flex-start' as const },
+  sub: { fontFamily: fonts.sansBold, fontSize: 13, color: c.ink },
+  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
+  meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

@@ -1,15 +1,60 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
-import { Button, Card, ChoiceChips, Input } from '../../../components/common';
+import { Image, Text, View } from 'react-native';
+import { Badge, Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
+import { imageUrl } from '../../../services/catalogueImage';
 import { deletePrice, setPrice, type Category, type PriceRow, type Product } from '../../../services/ops.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { CategoriesSection, ProductsSection } from './CatalogueSections';
+import { Empty, Segmented, usePaged } from './OpsBits';
 import { useAction } from './useAction';
 
 const GRADES = ['A', 'B', 'C'];
-const VIEWS = ['Prices', 'Products', 'Categories'];
+type View_ = 'prices' | 'products' | 'categories';
+
+const change = (r: PriceRow) => {
+  if (!r.prevPrice) return null;
+  const pct = ((r.price - r.prevPrice) / r.prevPrice) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+};
+
+/** One grade row: shows the price, or turns into an inline editor. */
+function GradeRow({ product, grade, row, editing, onEdit, onDone, onSaved }: {
+  product: Product; grade: string; row?: PriceRow; editing: boolean;
+  onEdit: () => void; onDone: () => void; onSaved: () => Promise<void>;
+}) {
+  const s = useThemedStyles(styles);
+  const { busy, error, run } = useAction(onSaved);
+  const [text, setText] = useState(row ? String(row.price) : '');
+  const amount = Number(text);
+  const delta = row ? change(row) : null;
+  if (!editing) {
+    return (
+      <View style={s.grade}>
+        <Text style={s.gradeName}>Grade {grade}</Text>
+        <View style={s.gradeVal}>
+          <Text style={[s.price, !row && s.unset]}>{row ? ghs(row.price) : 'Not set'}</Text>
+          {delta ? <Text style={[s.delta, row!.price < row!.prevPrice! && s.down]}>{delta}</Text> : null}
+        </View>
+        <Button size="sm" variant={row ? 'outline' : 'tonal'} label={row ? 'Edit' : 'Set'} onPress={onEdit} />
+      </View>
+    );
+  }
+  return (
+    <View style={s.editor}>
+      <Text style={s.gradeName}>Grade {grade} · price per kg</Text>
+      {error ? <Banner text={error} /> : null}
+      <Input label="GH₵ per kg" value={text} onChangeText={setText} keyboardType="decimal-pad" placeholder="8.50" autoFocus />
+      {grade === 'A' ? <Text style={s.meta}>Grade A is shown on the public landing page. The previous price is kept to show the change.</Text> : null}
+      <View style={s.actions}>
+        <Button size="sm" label="Save price" loading={busy} disabled={!(amount > 0)} onPress={() => run(async () => { await setPrice(product.id, grade, amount); onDone(); })} />
+        {row ? <Button size="sm" variant="danger" label="Remove" disabled={busy} onPress={() => run(async () => { await deletePrice(product.id, grade); onDone(); })} /> : null}
+        <Button size="sm" variant="ghost" label="Cancel" onPress={onDone} />
+      </View>
+    </View>
+  );
+}
 
 export function PricesPanel({ categories, products, prices, onChange }: {
   categories: Category[];
@@ -18,82 +63,78 @@ export function PricesPanel({ categories, products, prices, onChange }: {
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
-  const { busy, error, run } = useAction(onChange);
-  const [view, setView] = useState('Prices');
-  const [categoryName, setCategoryName] = useState('');
-  const [productName, setProductName] = useState('');
-  const [grade, setGrade] = useState('A');
-  const [price, setPriceText] = useState('');
-
-  const live = products.filter((p) => p.active);
-  const categoryNames = [...new Set(live.map((p) => p.category))].sort();
-  const category = categoryNames.includes(categoryName) ? categoryName : categoryNames[0];
-  const inCategory = live.filter((p) => p.category === category);
-  const product = inCategory.find((p) => p.name === productName) ?? inCategory[0];
-  const amount = Number(price);
-  const editing = product ? prices.find((r) => r.productId === product.id && r.grade === grade) : undefined;
-
-  const edit = (p: Product, r: PriceRow) => {
-    setCategoryName(p.category);
-    setProductName(p.name);
-    setGrade(r.grade);
-    setPriceText(String(r.price));
-  };
+  const { colors } = useTheme();
+  const [view, setView] = useState<View_>('prices');
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('All');
+  const [edit, setEdit] = useState<{ id: string; grade: string } | null>(null);
+  const needle = q.trim().toLowerCase();
+  const filtered = products.filter((p) => (category === 'All' || p.category === category) && (!needle || p.name.toLowerCase().includes(needle)));
+  const { rows, more } = usePaged(filtered, `${category}|${needle}`, 5);
 
   return (
     <View style={s.list}>
-      <ChoiceChips label="Manage" options={VIEWS} value={view} onChange={setView} />
-      {view === 'Categories' ? <CategoriesSection categories={categories} onChange={onChange} /> : null}
-      {view === 'Products' ? <ProductsSection categories={categories} products={products} onChange={onChange} /> : null}
-      {view === 'Prices' ? (
-        <>
-          {error ? <Banner text={error} /> : null}
-          <Card style={s.form}>
-            <Text style={s.title}>{editing ? 'Edit price' : 'Set price'}</Text>
-            <Text style={s.meta}>Grade A is shown on the public landing page. The previous price is kept to show the change.</Text>
-            {product ? (
-              <>
-                <ChoiceChips label="Category" options={categoryNames} value={category} onChange={setCategoryName} />
-                <ChoiceChips label="Product" options={inCategory.map((p) => p.name)} value={product.name} onChange={setProductName} />
-                <ChoiceChips label="Grade" options={GRADES} value={grade} onChange={setGrade} />
-                <Input label="Price per kg (GH₵)" value={price} onChangeText={setPriceText} keyboardType="decimal-pad" placeholder={editing ? String(editing.price) : '8.50'} />
-                <Button label={editing ? 'Update price' : 'Save price'} loading={busy} disabled={!(amount > 0)}
-                  onPress={() => run(async () => { await setPrice(product.id, grade, amount); setPriceText(''); })} />
-              </>
-            ) : <Text style={s.meta}>Add a category and a product first.</Text>}
-          </Card>
-
-          {products.map((p) => {
-            const rows = prices.filter((r) => r.productId === p.id).sort((a, b) => a.grade.localeCompare(b.grade));
-            return (
-              <Card key={p.id} style={s.item}>
-                <Text style={s.name}>{p.name} <Text style={s.meta}>· {p.category}{p.active ? '' : ' · hidden'}</Text></Text>
-                {rows.length ? rows.map((r) => (
-                  <View key={r.grade} style={s.top}>
-                    <Text style={s.meta}>Grade {r.grade}</Text>
-                    <Text style={s.value}>
-                      {ghs(r.price)}{r.prevPrice ? `  (${r.price >= r.prevPrice ? '+' : ''}${(((r.price - r.prevPrice) / r.prevPrice) * 100).toFixed(1)}%)` : ''}
-                    </Text>
-                    <Button label="Edit" size="sm" variant="outline" onPress={() => edit(p, r)} />
-                    <Button label="Remove" size="sm" variant="danger" loading={busy} onPress={() => run(() => deletePrice(p.id, r.grade))} />
+      <Segmented value={view} onChange={setView} options={[
+        { key: 'prices', label: 'Prices', count: prices.length },
+        { key: 'products', label: 'Products', count: products.length },
+        { key: 'categories', label: 'Categories', count: categories.length },
+      ]} />
+      {view === 'categories' ? <CategoriesSection categories={categories} onChange={onChange} /> : null}
+      {view === 'products' ? <ProductsSection categories={categories} products={products} onChange={onChange} /> : null}
+      {view === 'prices' ? (
+        products.length === 0 ? <Empty icon="tag" title="No products yet" hint="Add a category and a product first, then set a farm-gate price for each grade." /> : (
+          <>
+            <Input label="Search products" value={q} onChangeText={setQ} placeholder="Garden egg" />
+            <ChoiceChips label="Category" options={['All', ...categories.map((c) => c.name)]} value={category} onChange={setCategory} />
+            {filtered.length === 0 ? <Text style={s.meta}>No product matches.</Text> : null}
+            {rows.map((p) => {
+              const photo = imageUrl(p.imagePath);
+              return (
+                <Card key={p.id} style={s.item}>
+                  <View style={s.head}>
+                    {photo ? <Image source={{ uri: photo }} style={s.thumb} accessibilityLabel={p.name} /> : <View style={[s.thumb, s.noThumb]}><Icon name="leaf" size={20} color={colors.inkMuted} /></View>}
+                    <View style={s.grow}>
+                      <Text style={s.name} numberOfLines={1}>{p.name}</Text>
+                      <Text style={s.meta}>{p.category}</Text>
+                    </View>
+                    {p.active ? null : <Badge label="Hidden" tone="neutral" />}
                   </View>
-                )) : <Text style={s.meta}>No prices set.</Text>}
-              </Card>
-            );
-          })}
-        </>
+                  <View style={s.grades}>
+                    {GRADES.map((g) => (
+                      <GradeRow key={`${p.id}${g}${prices.find((r) => r.productId === p.id && r.grade === g)?.price}`} product={p} grade={g}
+                        row={prices.find((r) => r.productId === p.id && r.grade === g)}
+                        editing={edit?.id === p.id && edit.grade === g}
+                        onEdit={() => setEdit({ id: p.id, grade: g })} onDone={() => setEdit(null)} onSaved={onChange} />
+                    ))}
+                  </View>
+                </Card>
+              );
+            })}
+            {more}
+          </>
+        )
       ) : null}
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  list: { gap: 10 },
-  form: { gap: 12 },
-  item: { gap: 6 },
-  top: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8 },
-  title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
+  list: { gap: 12 },
+  item: { gap: 12, padding: 16 },
+  head: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  grow: { flex: 1, gap: 2 },
+  thumb: { width: 52, height: 52, borderRadius: 14, backgroundColor: c.surfaceSunken },
+  noThumb: { alignItems: 'center' as const, justifyContent: 'center' as const },
+  grades: { borderRadius: 14, backgroundColor: c.surfaceSunken, overflow: 'hidden' as const },
+  grade: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, minHeight: 56, paddingHorizontal: 14, paddingVertical: 6 },
+  gradeName: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted, width: 64 },
+  gradeVal: { flex: 1, flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 8 },
+  price: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  unset: { fontFamily: fonts.sansRegular, color: c.inkMuted },
+  delta: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.brandInk },
+  down: { color: c.dangerInk },
+  editor: { gap: 10, padding: 14, backgroundColor: c.brandTint },
+  actions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
   name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
-  value: { flex: 1, textAlign: 'right' as const, fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
-  meta: { fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted },
+  meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

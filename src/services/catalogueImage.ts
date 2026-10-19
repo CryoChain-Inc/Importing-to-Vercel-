@@ -27,3 +27,7 @@ export async function replaceImage(kind: 'categories' | 'products', id: string, 
   if (oldPath) await supabase.storage.from(BUCKET).remove([oldPath]);
   return path;
 }
+
+export async function removeStoredImage(path: string) {
+  await supabase.storage.from(BUCKET).remove([path]);
+}
