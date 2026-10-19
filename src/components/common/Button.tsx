@@ -27,8 +27,9 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const off = disabled || loading;
-  const textColor = off ? colors.inkMuted : colors[TEXT[variant]];
-  const fill = variant === 'primary' && !off;
+  const isPrimary = variant === 'primary';
+  const textColor = isPrimary ? '#ffffff' : off ? colors.inkMuted : (colors[TEXT[variant]] ?? colors.ink);
+  const fill = isPrimary;
 
   return (
     <Pressable
@@ -43,7 +44,8 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
         variant === 'tonal' || variant === 'secondary' ? s.tonal : null,
         variant === 'outline' ? s.outline : null,
         variant === 'danger' ? s.danger : null,
-        off ? s.off : null,
+        off && !isPrimary ? s.off : null,
+        off && isPrimary ? s.primaryDisabled : null,
         hovered && !off ? s.hovered : null,
         pressed && !off ? s.pressed : null,
         focused ? focusRing(colors.focusRing) : null,
@@ -70,6 +72,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   md: { minHeight: TOUCH, paddingHorizontal: 20 },
   lg: { minHeight: 56, paddingHorizontal: 24, borderRadius: 14 },
   fill: { backgroundColor: c.brand600 },
+  primaryDisabled: { opacity: 0.5 },
   tonal: { backgroundColor: c.brandTint },
   outline: { borderWidth: 1.5, borderColor: c.borderStrong },
   danger: { backgroundColor: c.dangerFill },
