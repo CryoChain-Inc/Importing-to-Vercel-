@@ -17,7 +17,7 @@ export function Badge({ label, tone = 'neutral' }: BadgeProps) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start' as const },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' as const },
   success: { backgroundColor: c.brandTint },
   warning: { backgroundColor: c.harvestTint },
   danger: { backgroundColor: c.dangerFill },

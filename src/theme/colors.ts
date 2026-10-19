@@ -5,6 +5,7 @@ export const lightColors = {
   surfaceRaised: '#ffffff',
   surfaceSunken: '#ebf0ec',
   borderSubtle: '#dfe5e1',
+  cardEdge: 'transparent',
   borderStrong: '#7f8a84',
   ink: '#14201a',
   inkMuted: '#56615b',
@@ -38,11 +39,12 @@ export const lightColors = {
 export type ColorToken = keyof typeof lightColors;
 
 export const darkColors: Record<ColorToken, string> = {
-  bgApp: '#0b0c0c',
-  surfaceCard: '#151716',
-  surfaceRaised: '#1d2120',
-  surfaceSunken: '#0f1110',
-  borderSubtle: '#262b29',
+  bgApp: '#0a0d0b',
+  surfaceCard: '#171d19',
+  surfaceRaised: '#202824',
+  surfaceSunken: '#0d110f',
+  borderSubtle: '#2e3732',
+  cardEdge: '#2e3732',
   borderStrong: '#6b7570',
   ink: '#f1f5f2',
   inkMuted: '#9aa39e',

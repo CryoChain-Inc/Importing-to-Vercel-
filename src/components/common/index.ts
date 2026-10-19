@@ -9,3 +9,4 @@ export * from './Gradient';
 export * from './Icon';
 export * from './Brand';
 export * from './ThemeToggle';
+export * from './HeroCard';

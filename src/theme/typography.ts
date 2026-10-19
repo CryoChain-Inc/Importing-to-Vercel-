@@ -38,5 +38,5 @@ export const textStyles = {
     letterSpacing: 0.8,
     textTransform: 'uppercase' as const,
   },
-  price: { fontFamily: fonts.sansBold, fontSize: 24, lineHeight: 28 },
+  price: { fontFamily: fonts.sansBold, fontSize: 24, lineHeight: 28, fontVariant: ['tabular-nums' as const] },
 } as const;

@@ -20,7 +20,7 @@ export function Gradient({ kind, style, children }: GradientProps) {
   const dy = -Math.cos(rad) / 2;
 
   return (
-    <View style={[{ overflow: 'hidden' }, style]}>
+    <View style={[{ overflow: 'hidden', backgroundColor: g.colors[Math.floor((g.colors.length - 1) / 2)] }, style]}>
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
         <Defs>
           <LinearGradient id={id} x1={0.5 - dx} y1={0.5 - dy} x2={0.5 + dx} y2={0.5 + dy}>

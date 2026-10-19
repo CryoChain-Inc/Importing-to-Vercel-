@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { fonts, TOUCH, useThemedStyles, type ColorToken } from '../../theme';
+import { type PressState, fonts, TOUCH, useThemedStyles, type ColorToken } from '../../theme';
 
 export interface ChoiceChipsProps {
   label: string;
@@ -18,7 +18,7 @@ export function ChoiceChips({ label, options, value, onChange }: ChoiceChipsProp
         {options.map((o) => {
           const on = o === value;
           return (
-            <Pressable key={o} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(o)} style={[s.chip, on && s.chipOn]}>
+            <Pressable key={o} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(o)} style={({ pressed, hovered }: PressState) => [s.chip, on && s.chipOn, hovered && !on ? s.chipHover : null, pressed ? s.chipPress : null]}>
               <Text style={[s.text, on && s.textOn]}>{o}</Text>
             </Pressable>
           );
@@ -41,6 +41,8 @@ const styles = (c: Record<ColorToken, string>) => ({
     borderColor: c.borderStrong,
     backgroundColor: c.surfaceCard,
   },
+  chipHover: { backgroundColor: c.surfaceSunken },
+  chipPress: { transform: [{ scale: 0.97 }] },
   chipOn: { backgroundColor: c.brandTint, borderColor: c.brand600 },
   text: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink },
   textOn: { color: c.brandInk, fontFamily: fonts.sansBold },
