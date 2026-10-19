@@ -36,7 +36,6 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
       disabled={off}
       accessibilityRole="button"
       accessibilityState={{ disabled: off }}
-      android_ripple={off ? undefined : { color: 'rgba(255,255,255,0.18)' }}
       style={({ pressed, hovered, focused }: PressState) => [
         s.base,
         size === 'sm' ? s.sm : size === 'lg' ? s.lg : s.md,

@@ -54,6 +54,7 @@ export function TabShell<K extends string>({ tabs, tab, onSelect, children }: {
         </View>
       ) : null}
       <ScrollView style={s.main} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        {wide ? null : <View style={s.phoneTop}><Brand /><ThemeToggle /></View>}
         <View style={s.content}>{children}</View>
       </ScrollView>
       {wide ? null : <View style={s.bar} accessibilityRole="tablist">{tabs.map((t) => button(t))}</View>}
@@ -74,6 +75,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   railFoot: { gap: 12, alignItems: 'flex-start' as const },
   main: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 32, gap: 12 },
+  phoneTop: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   content: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const, gap: 16 },
   bar: { flexDirection: 'row' as const, backgroundColor: c.surfaceCard, borderTopWidth: 1, borderTopColor: c.borderSubtle },
   barTab: { flex: 1, minHeight: 60, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 2 },
