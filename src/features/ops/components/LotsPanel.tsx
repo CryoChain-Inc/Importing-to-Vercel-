@@ -48,7 +48,7 @@ export function LotsPanel({ supply, lots, products, prices, onChange }: {
                 <Pressable accessibilityRole="button" accessibilityState={{ expanded: on }} onPress={() => setOpen(on ? null : l.id)} style={s.head}>
                   <View style={s.grow}>
                     <Text style={s.name} numberOfLines={1}>{l.code} · {l.product}</Text>
-                    <Text style={s.meta}>Created {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
+                    <Text style={s.meta}>{l.grade ? `Grade ${l.grade} · ` : ''}Created {new Date(l.createdAt).toLocaleDateString('en-GH')}</Text>
                   </View>
                   <Badge label={group(l.state)} tone={l.state === 'cancelled' ? 'neutral' : group(l.state) === 'Open' ? 'warning' : 'success'} />
                   <Icon name="chevronDown" size={18} color={colors.inkMuted} />

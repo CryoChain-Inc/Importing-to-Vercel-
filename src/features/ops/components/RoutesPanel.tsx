@@ -153,8 +153,8 @@ export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; su
               <Text style={s.label}>Collection stops</Text>
               {route.stops.map((st, i) => (
                 <View key={i} style={s.line}>
-                  <Text style={[s.meta, s.grow]}>{i + 1}. {st.pointName}{st.locality ? ` · ${st.locality}` : ''} · {fmtWindow(st.windowStart, st.windowEnd)}</Text>
-                  <Badge label={st.departed ? 'Loaded' : st.arrived ? 'Agent there' : 'Waiting'} tone={st.departed ? 'success' : st.arrived ? 'warning' : 'neutral'} />
+                  <Text style={[s.meta, s.grow]}>{i + 1}. {st.pointName}{st.locality ? ` · ${st.locality}` : ''} · {fmtWindow(st.windowStart, st.windowEnd)}{st.temperatureC != null ? ` · ${st.temperatureC}°C` : ''}</Text>
+                  <Badge label={st.departed ? 'Loaded' : st.arrived ? 'Driver there' : 'Waiting'} tone={st.departed ? 'success' : st.arrived ? 'warning' : 'neutral'} />
                 </View>
               ))}
               <Text style={s.label}>Deliveries</Text>
@@ -164,8 +164,8 @@ export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; su
                     <Text style={[s.meta, s.grow]}>{l.code} · {l.product} {kg(l.kg)} → {l.buyer}{l.location ? `, ${l.location}` : ''} · {fmtWindow(l.windowStart, l.windowEnd)}</Text>
                     <Badge label={l.delivered ? 'Delivered' : 'On route'} tone={l.delivered ? 'success' : 'neutral'} />
                   </View>
-                  {l.id ? <Button size="sm" variant="outline" icon="camera" label={shown === l.id ? 'Hide photos and records' : 'Agent and driver photos'} onPress={() => setShown(shown === l.id ? null : l.id)} /> : null}
-                  {shown === l.id ? <LotTrailView lotId={l.id} /> : null}
+                  {l.id && !l.delivered ? <Button size="sm" variant="outline" icon="camera" label={shown === l.id ? 'Hide photos and records' : 'Agent and driver photos'} onPress={() => setShown(shown === l.id ? null : l.id)} /> : null}
+                  {l.id && (l.delivered || shown === l.id) ? <LotTrailView lotId={l.id} /> : null}
                 </View>
               ))}
               {!route.started ? <Button size="sm" variant="outline" label="Cancel route" loading={busy} onPress={() => run(() => cancelRoute(route.id))} /> : null}

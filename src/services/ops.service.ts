@@ -27,6 +27,8 @@ export interface SupplyRow {
   lotState: string | null;
   /** Storage paths of the farmer's photos in the produce bucket. */
   imagePaths: string[];
+  /** Grade the farmer declared; a lot holds one grade. */
+  grade: 'A' | 'B' | 'C';
   createdAt: string;
 }
 
@@ -38,6 +40,8 @@ export interface LotRow {
   id: string;
   code: string;
   product: string;
+  /** Null on lots made before grades were enforced. */
+  grade: string | null;
   totalKg: number;
   pricePerKg: number | null;
   state: string;
@@ -115,7 +119,7 @@ export async function fetchFarmers(): Promise<FarmerRow[]> {
 export async function fetchSupply(): Promise<SupplyRow[]> {
   const { data, error } = await supabase
     .from('produce_listings')
-    .select('id, product, weight_kg, image_paths, created_at, lot_id, farmer_id, collection_point_id, lots(state), farmers(locality, profiles(display_name)), collection_points(name)')
+    .select('id, product, grade, weight_kg, image_paths, created_at, lot_id, farmer_id, collection_point_id, lots(state), farmers(locality, profiles(display_name)), collection_points(name)')
     .order('created_at', { ascending: false });
   fail('Could not load supply.')(error);
   return (data ?? []).map((r: any) => ({
@@ -130,6 +134,7 @@ export async function fetchSupply(): Promise<SupplyRow[]> {
     lotId: r.lot_id,
     lotState: r.lots?.state ?? null,
     imagePaths: r.image_paths ?? [],
+    grade: r.grade ?? 'A',
     createdAt: r.created_at,
   }));
 }
@@ -330,13 +335,14 @@ export async function inviteStaff(i: { name: string; phone: string; email: strin
 export async function fetchLots(): Promise<LotRow[]> {
   const { data, error } = await supabase
     .from('lots')
-    .select('id, code, product, total_kg, price_per_kg, state, created_at, produce_listings(count)')
+    .select('id, code, product, grade, total_kg, price_per_kg, state, created_at, produce_listings(count)')
     .order('created_at', { ascending: false });
   fail('Could not load lots.')(error);
   return (data ?? []).map((r: any) => ({
     id: r.id,
     code: r.code,
     product: r.product,
+    grade: r.grade ?? null,
     totalKg: Number(r.total_kg),
     pricePerKg: r.price_per_kg == null ? null : Number(r.price_per_kg),
     state: r.state,
@@ -396,7 +402,7 @@ export interface PlannedRoute {
   agentName: string;
   driverName: string;
   started: boolean;
-  stops: { pointName: string; locality: string; windowStart: string; windowEnd: string; arrived: boolean; departed: boolean }[];
+  stops: { pointName: string; locality: string; windowStart: string; windowEnd: string; arrived: boolean; departed: boolean; temperatureC: number | null }[];
   lots: { id: string; code: string; product: string; kg: number; buyer: string; location: string; windowStart: string; windowEnd: string; delivered: boolean }[];
 }
 
@@ -406,7 +412,7 @@ export async function fetchRoutes(): Promise<PlannedRoute[]> {
     .from('routes')
     .select(
       'id, service_date, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name),' +
-        ' route_stops(position, window_start, window_end, arrived_at, confirmed_at, departed_at, collection_points(name, locality)),' +
+        ' route_stops(position, window_start, window_end, arrived_at, confirmed_at, departed_at, temperature_c, collection_points(name, locality)),' +
         ' route_lots(window_start, window_end, delivered_at, lots(id, code, product, total_kg, orders(state, buyers(organization_name, delivery_location))))',
     )
     .gte('service_date', daysAgo(14))
@@ -428,6 +434,7 @@ export async function fetchRoutes(): Promise<PlannedRoute[]> {
         windowEnd: s.window_end,
         arrived: Boolean(s.arrived_at),
         departed: Boolean(s.departed_at),
+        temperatureC: s.temperature_c == null ? null : Number(s.temperature_c),
       })),
     lots: (r.route_lots ?? [])
       .slice()
@@ -521,7 +528,7 @@ export interface LotTrail {
   buyer: string;
   paidAt: string | null;
   captures: { farmer: string; product: string; listedKg: number; kg: number; grade: string; photoUrl: string | null }[];
-  route: { date: string; agent: string; driver: string; stops: { point: string; arrivedAt: string | null; departedAt: string | null }[] } | null;
+  route: { date: string; agent: string; driver: string; stops: { point: string; arrivedAt: string | null; departedAt: string | null; temperatureC: number | null }[] } | null;
   delivery: { at: string; receivedBy: string; photoUrl: string | null } | null;
 }
 
@@ -538,15 +545,17 @@ export async function fetchLotTrail(lotId: string): Promise<LotTrail> {
     .select(
       'id, orders(state, paid_at, buyers(organization_name)),' +
         ' produce_listings(weight_kg, product, farmers(profiles(display_name)), captures(recorded_kg, grade, photo_path)),' +
-        ' route_lots(delivered_at, received_by, delivery_photo_path, routes(service_date, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name), route_stops(position, arrived_at, departed_at, collection_points(name))))',
+        ' route_lots(delivered_at, received_by, delivery_photo_path, routes(service_date, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name), route_stops(position, arrived_at, departed_at, temperature_c, collection_points(name))))',
     )
     .eq('id', lotId)
     .single();
   fail('Could not load this lot’s trail.')(error);
   const d: any = data;
   const order = (d.orders ?? []).find((o: any) => o.state === 'paid');
-  const rl = d.route_lots?.[0];
-  const caps = (d.produce_listings ?? []).filter((l: any) => l.captures);
+  // One lot has at most one route_lots row (unique FK), so PostgREST returns an object, not an array.
+  const first = (x: any) => (Array.isArray(x) ? x[0] : x);
+  const rl = first(d.route_lots);
+  const caps = (d.produce_listings ?? []).map((l: any) => ({ ...l, captures: first(l.captures) })).filter((l: any) => l.captures);
   const [capUrls, delUrls] = await Promise.all([
     signed('captures', caps.map((l: any) => l.captures.photo_path)),
     signed('deliveries', rl?.delivery_photo_path ? [rl.delivery_photo_path] : []),
@@ -570,7 +579,7 @@ export async function fetchLotTrail(lotId: string): Promise<LotTrail> {
           stops: (rl.routes.route_stops ?? [])
             .slice()
             .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-            .map((s: any) => ({ point: s.collection_points?.name ?? 'Collection point', arrivedAt: s.arrived_at, departedAt: s.departed_at })),
+            .map((s: any) => ({ point: s.collection_points?.name ?? 'Collection point', arrivedAt: s.arrived_at, departedAt: s.departed_at, temperatureC: s.temperature_c == null ? null : Number(s.temperature_c) })),
         }
       : null,
     delivery: rl?.delivered_at

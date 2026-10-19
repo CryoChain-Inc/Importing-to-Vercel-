@@ -85,7 +85,7 @@ export function LotTrailView({ lotId }: { lotId: string }) {
             <Text style={s.meta}>{route.date} · agent {route.agent}{route.driver ? ` · driver ${route.driver}` : ''}</Text>
             {route.stops.map((st, i) => (
               <Text key={i} style={s.meta}>
-                {i + 1}. {st.point} · {st.departedAt ? `loaded ${when(st.departedAt)}` : st.arrivedAt ? `agent arrived ${when(st.arrivedAt)}` : 'not reached yet'}
+                {i + 1}. {st.point} · {st.departedAt ? `loaded ${when(st.departedAt)}` : st.arrivedAt ? `driver arrived ${when(st.arrivedAt)}` : 'not reached yet'}{st.temperatureC != null ? ` · ${st.temperatureC}°C logged` : ''}
               </Text>
             ))}
           </>

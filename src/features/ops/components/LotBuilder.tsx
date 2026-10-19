@@ -63,17 +63,21 @@ export function LotBuilder({ supply, products, prices, draft, onChange, onDone }
   const { busy, error, run } = useAction(onChange);
   const [picked, setPicked] = useState<string[]>([]);
   const [productName, setProductName] = useState(draft?.product ?? '');
+  const [gradeName, setGradeName] = useState('');
   const [price, setPrice] = useState(draft ? String(draft.price) : '');
   const [requirementId, setRequirementId] = useState<string | undefined>(draft?.requirementId);
 
   const pool = supply.filter((r) => !r.lotId);
   const names = draft ? [draft.product] : [...new Set(pool.map((r) => r.product))].sort();
   const product = names.includes(productName) ? productName : names[0];
-  const candidates = pool.filter((r) => r.product === product);
+  const ofProduct = pool.filter((r) => r.product === product);
+  const grades = [...new Set(ofProduct.map((r) => r.grade))].sort();
+  const grade = grades.includes(gradeName as 'A') ? gradeName : grades[0];
+  const candidates = ofProduct.filter((r) => r.grade === grade);
   const selected = candidates.filter((r) => picked.includes(r.id));
   const total = selected.reduce((a, r) => a + r.weightKg, 0);
   const target = draft?.wantedKg ?? LOT_MIN_KG;
-  const { rows: pageRows, more } = usePaged(candidates, product ?? '', 5);
+  const { rows: pageRows, more } = usePaged(candidates, `${product}|${grade}`, 5);
 
   // Listings carry no grade yet, so stop value is estimated at the Grade A price.
   const productId = products.find((p) => p.name === product)?.id;
@@ -106,17 +110,19 @@ export function LotBuilder({ supply, products, prices, draft, onChange, onDone }
   return (
     <Card style={s.form}>
       <Text style={s.title}>{draft ? 'Match this requirement' : 'Create lot'}</Text>
-      <Text style={s.meta}>One product per lot, up to {kg(LOT_MAX_KG)} (one truck). Aim for {kg(LOT_MIN_KG)}+ across 2–3 stops.</Text>
+      <Text style={s.meta}>One product and one grade per lot, up to {kg(LOT_MAX_KG)} (one truck). Aim for {kg(LOT_MIN_KG)}+ across 2–3 stops.</Text>
       {draft ? <Banner tone="info" text={`${draft.summary}. Creating the lot marks it matched.`} /> : null}
       {error ? <Banner text={error} /> : null}
       {names.length && candidates.length ? (
         <>
-          {draft ? null : <ChoiceChips label="Product" options={names} value={product} onChange={(n) => { setProductName(n); setPicked([]); setRequirementId(undefined); }} />}
+          {draft ? null : <ChoiceChips label="Product" options={names} value={product} onChange={(n) => { setProductName(n); setGradeName(''); setPicked([]); setRequirementId(undefined); }} />}
+          <ChoiceChips label="Grade" options={grades} value={grade} onChange={(g) => { setGradeName(g); setPicked([]); }} />
+          <Text style={s.meta}>A lot holds one grade. Other grades of {product} go in their own lot.</Text>
           <View style={s.row}>
             <Text style={s.value}>{kg(total)} of {kg(target)}{draft ? ' wanted' : ' target'}</Text>
             <Button label="Suggest listings" variant="outline" size="sm" onPress={autoPick} />
           </View>
-          <Text style={s.label}>Available {product} listings · {candidates.length}</Text>
+          <Text style={s.label}>Grade {grade} {product} listings · {candidates.length}</Text>
           {pageRows.map((r) => (
             <ListingPick key={r.id} r={r} on={picked.includes(r.id)} onToggle={() => setPicked(picked.includes(r.id) ? picked.filter((k) => k !== r.id) : [...picked, r.id])} />
           ))}

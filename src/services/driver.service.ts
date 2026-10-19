@@ -1,3 +1,4 @@
+import { photoBytes } from '../utils/photo';
 import { requireUserId, supabase } from './supabase';
 
 export interface DriverStop {
@@ -87,11 +88,58 @@ export const departStop = (stopId: string) => call('depart_stop', { p_stop_id: s
 export async function completeLotDelivery(routeId: string, lotId: string, receiver: string, photo: { uri: string; mime: string }): Promise<void> {
   const userId = await requireUserId();
   const path = `${userId}/${routeId}-${lotId}.jpg`;
-  const blob = await (await fetch(photo.uri)).blob();
-  const uploaded = await supabase.storage.from('deliveries').upload(path, blob, {
+  const uploaded = await supabase.storage.from('deliveries').upload(path, await photoBytes(photo.uri), {
     upsert: true,
     contentType: photo.mime || 'image/jpeg',
   });
   if (uploaded.error) throw new Error('Could not save the photograph.');
   await call('complete_lot_delivery', { p_route_id: routeId, p_lot_id: lotId, p_receiver: receiver.trim(), p_photo_path: path }, 'Could not complete the delivery.');
+}
+
+/** What the agent recorded for one farmer at a stop. */
+export interface StopCapture {
+  listingId: string;
+  farmer: string;
+  product: string;
+  listedKg: number;
+  listedGrade: string;
+  recordedKg: number | null;
+  grade: string | null;
+  photoUrl: string | null;
+}
+
+async function signed(bucket: 'captures' | 'deliveries', paths: string[]) {
+  const urls = new Map<string, string>();
+  if (!paths.length) return urls;
+  const res = await supabase.storage.from(bucket).createSignedUrls(paths, 60 * 30);
+  res.data?.forEach((i) => i.path && i.signedUrl && urls.set(i.path, i.signedUrl));
+  return urls;
+}
+
+export async function fetchStopCaptures(stopId: string): Promise<StopCapture[]> {
+  const { data, error } = await supabase.rpc('driver_stop_captures', { p_stop_id: stopId });
+  if (error) throw new Error('Could not load what the agent captured.');
+  const rows = (data ?? []) as any[];
+  const urls = await signed('captures', rows.map((r) => r.photo_path).filter(Boolean));
+  return rows.map((r) => ({
+    listingId: r.listing_id,
+    farmer: r.farmer,
+    product: r.product,
+    listedKg: Number(r.listed_kg),
+    listedGrade: r.grade,
+    recordedKg: r.recorded_kg == null ? null : Number(r.recorded_kg),
+    grade: r.captured_grade,
+    photoUrl: r.photo_path ? urls.get(r.photo_path) ?? null : null,
+  }));
+}
+
+/** Delivery proof the driver already saved, keyed by lot id. */
+export async function fetchDeliveryPhotos(routeId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.rpc('driver_delivery_photos', { p_route_id: routeId });
+  if (error) throw new Error('Could not load your delivery photos.');
+  const rows = (data ?? []) as { lot_id: string; photo_path: string | null }[];
+  const urls = await signed('deliveries', rows.map((r) => r.photo_path).filter(Boolean) as string[]);
+  const byLot = new Map<string, string>();
+  rows.forEach((r) => r.photo_path && urls.get(r.photo_path) && byLot.set(r.lot_id, urls.get(r.photo_path)!));
+  return byLot;
 }

@@ -1,4 +1,6 @@
 import { accraToday } from '../utils/format';
+import { photoBytes } from '../utils/photo';
+import { produceImageUrl } from './farmer.service';
 import { requireUserId, supabase } from './supabase';
 
 export type CaptureGrade = 'A' | 'B' | 'Reject';
@@ -16,6 +18,12 @@ export interface AgentFarmer {
   phone: string;
   product: string;
   listedKg: number;
+  /** Grade the farmer declared when listing. */
+  listedGrade: string;
+  /** Public URLs of the farmer's listing photos. */
+  photos: string[];
+  /** What the listing estimated the farmer would net. */
+  estNet: number | null;
   capture: AgentCapture | null;
   /** What the farmer will be paid for this capture, once the lot is delivered. */
   net: number | null;
@@ -54,6 +62,9 @@ interface ListingRow {
   id: string;
   product: string;
   weight_kg: number | string;
+  grade: string;
+  image_paths: string[] | null;
+  est_net: number | string | null;
   lot_id: string | null;
   collection_point_id: string | null;
   farmers: { profiles: ProfileEmbed | ProfileEmbed[] | null } | { profiles: ProfileEmbed | ProfileEmbed[] | null }[] | null;
@@ -89,7 +100,7 @@ export async function fetchTodayRoute(): Promise<AgentStop[]> {
   const lotIds = ((data?.route_lots ?? []) as { lot_id: string }[]).map((l) => l.lot_id);
   const { data: listingData, error: listingError } = await supabase
     .from('produce_listings')
-    .select('id, product, weight_kg, lot_id, collection_point_id, farmers(profiles(display_name, phone))')
+    .select('id, product, grade, image_paths, est_net, weight_kg, lot_id, collection_point_id, farmers(profiles(display_name, phone))')
     .in('lot_id', lotIds);
   if (listingError) fail('Could not load the farmers on this route.');
 
@@ -135,6 +146,9 @@ export async function fetchTodayRoute(): Promise<AgentStop[]> {
             phone: profile?.phone ?? '',
             product: l.product,
             listedKg: Number(l.weight_kg),
+            listedGrade: l.grade,
+            photos: (l.image_paths ?? []).map(produceImageUrl),
+            estNet: l.est_net == null ? null : Number(l.est_net),
             net: nets.get(l.id) ?? null,
             capture: saved
               ? {
@@ -160,8 +174,7 @@ export async function saveCapture(
   let path = input.existingPath ?? '';
   if (input.photo) {
     path = `${userId}/${listingId}.jpg`;
-    const blob = await (await fetch(input.photo.uri)).blob();
-    const uploaded = await supabase.storage.from('captures').upload(path, blob, {
+    const uploaded = await supabase.storage.from('captures').upload(path, await photoBytes(input.photo.uri), {
       upsert: true,
       contentType: input.photo.mime || 'image/jpeg',
     });
@@ -173,6 +186,7 @@ export async function saveCapture(
     { listing_id: listingId, agent_id: userId, recorded_kg: input.kg, grade: input.grade, photo_path: path },
     { onConflict: 'listing_id' },
   );
+  if (/row-level security/.test(error?.message ?? '')) fail('This stop is confirmed, so its captures can no longer change.');
   if (/locked/.test(error?.message ?? '')) fail('This lot has been delivered, so the capture can no longer change.');
   if (/no price for grade/.test(error?.message ?? '')) fail('There is no published price for that grade yet. Ask operations to set one.');
   if (error) fail('Could not save this capture.');
@@ -185,4 +199,20 @@ export async function confirmStop(stopId: string): Promise<void> {
   const msg = error.message ?? '';
   if (/capture every farmer/.test(msg)) throw new Error('Capture every farmer at this stop before confirming the lot.');
   throw new Error('Could not confirm this lot.');
+}
+
+export interface CaptureEstimate {
+  pricePerKg: number;
+  gross: number;
+  fee: number;
+  net: number;
+}
+
+/** What a farmer would be paid for this weight and grade, by the same formula the settlement uses. Null when no price is set. */
+export async function estimateCapture(product: string, kg: number, grade: CaptureGrade): Promise<CaptureEstimate | null> {
+  if (grade === 'Reject') return { pricePerKg: 0, gross: 0, fee: 0, net: 0 };
+  const { data, error } = await supabase.rpc('estimate_listing', { p_product: product, p_kg: kg, p_grade: grade });
+  if (error) fail('Could not work out the farmer\'s amount.');
+  const row = (data as { price_per_kg: number; gross: number; fee: number; net: number }[] | null)?.[0];
+  return row ? { pricePerKg: Number(row.price_per_kg), gross: Number(row.gross), fee: Number(row.fee), net: Number(row.net) } : null;
 }

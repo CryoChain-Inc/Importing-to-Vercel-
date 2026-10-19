@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
-import { Button, Card, HeroCard, Icon, type IconName } from '../../../components/common';
+import { Button, Card, Icon, type IconName } from '../../../components/common';
 import { Skeleton, SkeletonCard } from '../../../components/feedback';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
@@ -24,24 +24,7 @@ export function StatGrid({ children }: { children: React.ReactNode }) {
   return <View style={s.grid}>{children}</View>;
 }
 
-/** Green headline panel: one big figure and up to three supporting figures. */
-export function Hero({ label, value, cells }: { label: string; value: string; cells: { label: string; value: string }[] }) {
-  const s = useThemedStyles(styles);
-  return (
-    <HeroCard style={s.hero}>
-      <Text style={s.heroLabel}>{label}</Text>
-      <Text style={s.heroAmount} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      <View style={s.heroRow}>
-        {cells.map((c) => (
-          <View key={c.label} style={s.heroCell}>
-            <Text style={s.heroSub}>{c.label}</Text>
-            <Text style={s.heroVal} numberOfLines={1} adjustsFontSizeToFit>{c.value}</Text>
-          </View>
-        ))}
-      </View>
-    </HeroCard>
-  );
-}
+export { StatHero as Hero } from '../../../components/common';
 
 /** Segmented tabs with counts, for splitting a long page into a few short lists. */
 export function Segmented<K extends string>({ options, value, onChange }: { options: { key: K; label: string; count?: number }[]; value: K; onChange: (k: K) => void }) {
@@ -120,13 +103,6 @@ export function Photo({ uri, caption, size = 112 }: { uri: string | null; captio
 export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GH', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
 const styles = (c: Record<ColorToken, string>) => ({
-  hero: { gap: 6, padding: 22 },
-  heroLabel: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: 'rgba(255,255,255,0.78)' },
-  heroAmount: { fontFamily: fonts.heading, fontSize: 36, lineHeight: 48, letterSpacing: -1, color: '#ffffff', fontVariant: ['tabular-nums' as const] },
-  heroRow: { flexDirection: 'row' as const, gap: 12, marginTop: 14 },
-  heroCell: { flex: 1, gap: 2 },
-  heroSub: { fontFamily: fonts.sansMedium, fontSize: 12, color: 'rgba(255,255,255,0.7)' },
-  heroVal: { fontFamily: fonts.sansBold, fontSize: 17, color: '#ffffff', fontVariant: ['tabular-nums' as const] },
   seg: { flexDirection: 'row' as const, padding: 4, borderRadius: 14, backgroundColor: c.surfaceSunken },
   segBtn: { flex: 1, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 11, paddingHorizontal: 4 },
   segOn: { backgroundColor: c.surfaceCard, shadowColor: c.brand900, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 1 },
