@@ -1,7 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../theme';
-import { Gradient } from './Gradient';
+import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { type PressState, focusRing, fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Icon, type IconName } from './Icon';
 
 export interface ButtonProps {
@@ -28,8 +27,9 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const off = disabled || loading;
-  const textColor = off ? colors.inkMuted : colors[TEXT[variant]];
-  const fill = variant === 'primary' && !off;
+  const isPrimary = variant === 'primary';
+  const textColor = isPrimary ? '#ffffff' : off ? colors.inkMuted : (colors[TEXT[variant]] ?? colors.ink);
+  const fill = isPrimary;
 
   return (
     <Pressable
@@ -37,18 +37,21 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
       disabled={off}
       accessibilityRole="button"
       accessibilityState={{ disabled: off }}
-      style={({ pressed }) => [
+      style={({ pressed, hovered, focused }: PressState) => [
         s.base,
         size === 'sm' ? s.sm : size === 'lg' ? s.lg : s.md,
+        fill ? s.fill : null,
         variant === 'tonal' || variant === 'secondary' ? s.tonal : null,
         variant === 'outline' ? s.outline : null,
         variant === 'danger' ? s.danger : null,
-        off ? s.off : null,
+        off && !isPrimary ? s.off : null,
+        off && isPrimary ? s.primaryDisabled : null,
+        hovered && !off ? s.hovered : null,
         pressed && !off ? s.pressed : null,
+        focused ? focusRing(colors.focusRing) : null,
         style,
       ]}
     >
-      {fill ? <Gradient kind="primary" style={StyleSheet.absoluteFill} /> : null}
       <View style={s.row}>
         {loading ? (
           <ActivityIndicator size="small" color={textColor} />
@@ -68,11 +71,14 @@ const styles = (c: Record<ColorToken, string>) => ({
   sm: { minHeight: 36, paddingHorizontal: 14 },
   md: { minHeight: TOUCH, paddingHorizontal: 20 },
   lg: { minHeight: 56, paddingHorizontal: 24, borderRadius: 14 },
+  fill: { backgroundColor: c.brand600 },
+  primaryDisabled: { opacity: 0.5 },
   tonal: { backgroundColor: c.brandTint },
   outline: { borderWidth: 1.5, borderColor: c.borderStrong },
   danger: { backgroundColor: c.dangerFill },
   off: { backgroundColor: c.surfaceSunken, borderWidth: 1, borderColor: c.borderSubtle },
-  pressed: { opacity: 0.88 },
+  hovered: { opacity: 0.92, transform: [{ translateY: -1 }] },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
   row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
   text: { fontFamily: fonts.sansBold, fontSize: 15 },
   textSm: { fontSize: 13 },

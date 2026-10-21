@@ -7,6 +7,7 @@ export interface OrderRow {
   state: 'awaiting_payment' | 'paid' | 'cancelled';
   createdAt: string;
   paidAt: string | null;
+  buyerId: string;
   buyer: string;
   buyerPhone: string;
   lotCode: string;
@@ -35,7 +36,7 @@ const fail = (msg: string) => (error: unknown) => {
 export async function fetchOrders(): Promise<OrderRow[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, paid_at, buyers(organization_name, profiles(phone)), lots(code, product, total_kg)')
+    .select('id, code, amount, state, created_at, paid_at, buyer_id, buyers(organization_name, profiles(phone)), lots(code, product, total_kg)')
     .order('created_at', { ascending: false });
   fail('Could not load orders.')(error);
   return (data ?? []).map((r: any) => ({
@@ -45,6 +46,7 @@ export async function fetchOrders(): Promise<OrderRow[]> {
     state: r.state,
     createdAt: r.created_at,
     paidAt: r.paid_at,
+    buyerId: r.buyer_id,
     buyer: r.buyers?.organization_name ?? 'Unknown buyer',
     buyerPhone: r.buyers?.profiles?.phone ?? '',
     lotCode: r.lots?.code ?? '',

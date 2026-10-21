@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, Text, View } from 'react-native';
-import { Badge, ThemeToggle } from '../../../components/common';
+import { Badge, Button, ThemeToggle } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell, type TabDef } from '../../../components/layout';
 import { useNav } from '../../../navigation';
@@ -72,7 +72,7 @@ export function BuyerHome({ account }: { account: Account }) {
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
 
   return (
-    <TabShell tabs={TABS} tab={tab} onSelect={setTab} onSignOut={() => authService.signOut().finally(() => reset({ name: 'landing' }))}>
+    <TabShell tabs={TABS} tab={tab} onSelect={setTab}>
       <View style={s.header}>
         <View style={s.headerText}>
           <Text style={s.hello}>Hello, {account.name || 'buyer'}</Text>
@@ -86,7 +86,12 @@ export function BuyerHome({ account }: { account: Account }) {
           {tab === 'today' ? <TodayLots lots={data.lots} onRefresh={load} onOrdered={() => setTab('orders')} /> : null}
           {tab === 'orders' ? <Orders orders={data.orders} transfer={data.transfer} onRefresh={load} /> : null}
           {tab === 'requests' ? <Requirements requirements={data.requirements} products={data.products} location={data.details.location} onRefresh={load} /> : null}
-          {tab === 'account' ? <BuyerAccount details={data.details} onRefresh={load} /> : null}
+          {tab === 'account' ? (
+            <>
+              <BuyerAccount details={data.details} onRefresh={load} />
+              <Button label="Sign out" variant="ghost" icon="logOut" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} style={{ alignSelf: 'center' }} />
+            </>
+          ) : null}
         </>
       ) : null}
     </TabShell>

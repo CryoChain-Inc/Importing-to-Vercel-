@@ -8,7 +8,9 @@ import {
 } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { accraToday, fmtWindow } from '../../../utils/format';
+import { LotTrailView } from './LotTrail';
 import { MultiChips } from './MultiChips';
+import { Empty, SectionTitle, usePaged } from './OpsBits';
 import { useAction } from './useAction';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -22,6 +24,9 @@ export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; su
   const s = useThemedStyles(styles);
   const [routes, setRoutes] = useState<PlannedRoute[]>([]);
   const [paid, setPaid] = useState<PaidLot[]>([]);
+  const [shown, setShown] = useState<string | null>(null);
+  const routePage = usePaged(routes, 'routes', 4);
+  const [planning, setPlanning] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const reload = useCallback(async () => {
     try {
@@ -75,8 +80,8 @@ export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; su
   return (
     <View style={s.list}>
       {error || loadError ? <Banner text={error || loadError || ''} /> : null}
-      <Card style={s.form}>
-        <Text style={s.title}>Plan a route</Text>
+      {planning ? <Card style={s.form}>
+        <View style={s.top}><Text style={s.title}>Plan a route</Text><Button size="sm" variant="ghost" label="Close" onPress={() => setPlanning(false)} /></View>
         <Text style={s.meta}>Only paid lots can be routed. One truck can collect several lots and deliver each to its own buyer.</Text>
         {agents.length && drivers.length && paid.length ? (
           <>
@@ -117,6 +122,7 @@ export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; su
                   });
                   setPicked([]);
                   setWins({});
+                  setPlanning(false);
                 })
               }
             />
@@ -128,32 +134,44 @@ export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; su
               : 'No paid lots waiting. A lot appears here once its buyer has paid.'}
           </Text>
         )}
-      </Card>
+      </Card> : <Button label="Plan a route" icon="truck" onPress={() => setPlanning(true)} />}
 
+      <SectionTitle title="Routes" note="Last two weeks and upcoming. Open a delivery to see the agent's and driver's photos." />
       {routes.length === 0 ? (
-        <Text style={s.meta}>No routes planned.</Text>
+        <Empty icon="truck" title="No routes yet" hint="Plan a route for paid lots. You can then follow it stop by stop, with the agent's captures and the driver's proof of delivery." />
       ) : (
-        routes.map((route) => (
-          <Card key={route.id} style={s.item}>
-            <View style={s.top}>
-              <Text style={s.name}>{route.date} · {route.agentName}{route.driverName ? ` · ${route.driverName}` : ''}</Text>
-              <Badge label={`${route.lots.length} lot${route.lots.length === 1 ? '' : 's'}`} tone="info" />
-            </View>
-            <Text style={s.label}>Collect</Text>
-            {route.stops.map((st, i) => (
-              <Text key={i} style={s.meta}>
-                {i + 1}. {st.pointName}{st.locality ? ` · ${st.locality}` : ''} · {fmtWindow(st.windowStart, st.windowEnd)}{st.departed ? ' · loaded' : st.arrived ? ' · arrived' : ''}
-              </Text>
-            ))}
-            <Text style={s.label}>Deliver</Text>
-            {route.lots.map((l) => (
-              <Text key={l.code} style={s.meta}>
-                {l.code} · {l.product} {kg(l.kg)} → {l.buyer}{l.location ? `, ${l.location}` : ''} · {fmtWindow(l.windowStart, l.windowEnd)}{l.delivered ? ' · delivered' : ''}
-              </Text>
-            ))}
-            {!route.started ? <Button size="sm" variant="outline" label="Cancel route" loading={busy} onPress={() => run(() => cancelRoute(route.id))} /> : null}
-          </Card>
-        ))
+        <>{routePage.rows.map((route) => {
+          const done = route.lots.length > 0 && route.lots.every((l) => l.delivered);
+          const live = route.started && !done;
+          return (
+            <Card key={route.id} style={s.item}>
+              <View style={s.top}>
+                <Text style={s.name}>{route.date}</Text>
+                <Badge label={done ? 'Completed' : live ? 'In progress' : 'Planned'} tone={done ? 'success' : live ? 'warning' : 'neutral'} />
+              </View>
+              <Text style={s.meta}>Agent {route.agentName}{route.driverName ? ` · Driver ${route.driverName}` : ''} · {route.lots.length} lot{route.lots.length === 1 ? '' : 's'}</Text>
+              <Text style={s.label}>Collection stops</Text>
+              {route.stops.map((st, i) => (
+                <View key={i} style={s.line}>
+                  <Text style={[s.meta, s.grow]}>{i + 1}. {st.pointName}{st.locality ? ` · ${st.locality}` : ''} · {fmtWindow(st.windowStart, st.windowEnd)}{st.temperatureC != null ? ` · ${st.temperatureC}°C` : ''}</Text>
+                  <Badge label={st.departed ? 'Loaded' : st.arrived ? 'Driver there' : 'Waiting'} tone={st.departed ? 'success' : st.arrived ? 'warning' : 'neutral'} />
+                </View>
+              ))}
+              <Text style={s.label}>Deliveries</Text>
+              {route.lots.map((l) => (
+                <View key={l.code} style={s.lot}>
+                  <View style={s.line}>
+                    <Text style={[s.meta, s.grow]}>{l.code} · {l.product} {kg(l.kg)} → {l.buyer}{l.location ? `, ${l.location}` : ''} · {fmtWindow(l.windowStart, l.windowEnd)}</Text>
+                    <Badge label={l.delivered ? 'Delivered' : 'On route'} tone={l.delivered ? 'success' : 'neutral'} />
+                  </View>
+                  {l.id && !l.delivered ? <Button size="sm" variant="outline" icon="camera" label={shown === l.id ? 'Hide photos and records' : 'Agent and driver photos'} onPress={() => setShown(shown === l.id ? null : l.id)} /> : null}
+                  {l.id && (l.delivered || shown === l.id) ? <LotTrailView lotId={l.id} /> : null}
+                </View>
+              ))}
+              {!route.started ? <Button size="sm" variant="outline" label="Cancel route" loading={busy} onPress={() => run(() => cancelRoute(route.id))} /> : null}
+            </Card>
+          );
+        })}{routePage.more}</>
       )}
     </View>
   );
@@ -180,7 +198,10 @@ const styles = (c: Record<ColorToken, string>) => ({
   top: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8, alignSelf: 'stretch' as const },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, flexShrink: 1 },
-  label: { fontFamily: fonts.sansBold, fontSize: 13, color: c.ink, marginTop: 4 },
+  label: { fontFamily: fonts.sansBold, fontSize: 13, color: c.ink, marginTop: 6 },
+  line: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, alignSelf: 'stretch' as const },
+  grow: { flex: 1 },
+  lot: { gap: 6, alignSelf: 'stretch' as const, alignItems: 'flex-start' as const, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.borderSubtle },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   winRow: { gap: 4 },
   times: { flexDirection: 'row' as const, gap: 10 },

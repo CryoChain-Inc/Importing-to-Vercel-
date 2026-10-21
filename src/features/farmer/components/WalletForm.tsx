@@ -30,7 +30,7 @@ export function WalletForm({ value, onChange }: { value: Wallet; onChange: (patc
 
   return (
     <View style={s.wrap}>
-      <Text style={s.label}>Mobile money network</Text>
+      <Text style={s.label}>1. Mobile money network</Text>
       <View style={s.networks}>
         {PAYOUT_NETWORKS.map((n) => {
           const on = n === value.network;
@@ -41,9 +41,9 @@ export function WalletForm({ value, onChange }: { value: Wallet; onChange: (patc
           );
         })}
       </View>
-      <Input label="Wallet number" prefix="+233" value={value.number} onChangeText={(number) => edit({ number })} keyboardType="phone-pad" placeholder="24 000 0000" />
-      <Input label="Name on the wallet" value={value.name} onChangeText={(name) => onChange({ name })} hint="Exactly as registered with your network. A mismatch pauses payouts." />
-      <Button size="sm" variant="outline" label="Verify wallet" loading={checking} disabled={!value.network || value.number.replace(/\D/g, '').length < 9} onPress={check} />
+      <Input label="2. Wallet number" prefix="+233" value={value.number} onChangeText={(number) => edit({ number })} keyboardType="phone-pad" placeholder="24 000 0000" />
+      <Input label="3. Name on the wallet" value={value.name} onChangeText={(name) => onChange({ name })} hint="As registered with your network. A mismatch pauses payouts." />
+      <Button size="sm" variant="tonal" icon="check" label="Check name with network" loading={checking} disabled={!value.network || value.number.replace(/\D/g, '').length < 9} onPress={check} />
       {found === null ? <Text style={s.note}>We couldn’t verify this wallet. You can still save it; just check the number and name.</Text> : null}
       {found ? (
         <View style={s.note}>
@@ -65,8 +65,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   label: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.ink },
   note: { gap: 8, fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   ok: { fontFamily: fonts.sansBold, fontSize: 13, color: c.brandInk },
-  networks: { gap: 8 },
-  network: { minHeight: 52, justifyContent: 'center' as const, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1.5, borderColor: c.borderStrong, backgroundColor: c.surfaceCard },
+  networks: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  network: { flexGrow: 1, flexBasis: 120, minHeight: 52, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1.5, borderColor: c.borderStrong, backgroundColor: c.surfaceCard },
   networkOn: { borderColor: c.brand600, backgroundColor: c.brandTint },
   networkText: { fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
   networkTextOn: { fontFamily: fonts.sansBold, color: c.brandInk },

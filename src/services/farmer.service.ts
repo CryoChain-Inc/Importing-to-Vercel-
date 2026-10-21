@@ -73,6 +73,9 @@ export interface CollectionPoint {
 
 const FARMER_COLUMNS = 'address, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at';
 
+/** Profile stores the nearest collection point as this label (see DetailsForm). */
+export const pointLabel = (p: CollectionPoint) => (p.address ? `${p.name}, ${p.address}` : p.name);
+
 export const hasWallet = (f: Farmer | null) => Boolean(f?.momoNumber);
 export const detailsDone = (f: Farmer | null) => Boolean(f?.address);
 
@@ -243,6 +246,16 @@ export async function createListing(pointId: string, product: string, weightKg: 
     await supabase.storage.from(PRODUCE_BUCKET).remove(paths);
     throw new Error('Could not add the listing. Check your MoMo wallet, that the collection point is active and that the product has a published price.');
   }
+}
+
+export async function updateListing(id: string, product: string, weightKg: number, grade: string): Promise<void> {
+  const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_grade: grade, p_weight_kg: weightKg });
+  if (!error) return;
+  const msg = error.message ?? '';
+  if (msg.includes('already in a lot')) throw new Error('This listing is already in a collection lot, so it can no longer be edited.');
+  if (msg.includes('no published price')) throw new Error(`No published price for ${product} grade ${grade} yet.`);
+  if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
+  throw new Error('Could not save your changes.');
 }
 
 function removalError(error: { message?: string; code?: string }): Error {
