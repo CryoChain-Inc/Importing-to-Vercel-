@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LoadingScreen } from './components/feedback';
 import { LandingScreen } from './features/auth/screens/LandingScreen';
+import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
 import { OnboardingScreen } from './features/auth/screens/OnboardingScreen';
 import { RoleScreen } from './features/auth/screens/RoleScreen';
 import { VerifyScreen, afterSignIn } from './features/auth/screens/VerifyScreen';
@@ -22,6 +23,8 @@ function Routes() {
   switch (route.name) {
     case 'landing':
       return <LandingScreen />;
+    case 'ops':
+      return <OpsLoginScreen />;
     case 'verify':
       return <VerifyScreen route={route} />;
     case 'role':

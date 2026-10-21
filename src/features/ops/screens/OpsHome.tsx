@@ -93,7 +93,7 @@ export function OpsHome({ account }: { account: Account }) {
   const [title, sub] = TITLES[tab];
 
   return (
-    <OpsShell groups={groups} active={tab} onSelect={setTab} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'landing' }))}>
+    <OpsShell groups={groups} active={tab} onSelect={setTab} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}>
       <View style={s.header}>
         <Text style={s.title}>{title}</Text>
         <Text style={s.sub}>{sub}</Text>

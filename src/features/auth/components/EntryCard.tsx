@@ -1,71 +1,73 @@
 import React, { useState } from 'react';
-import { Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import { Button, Card, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { startSignIn, toAccount } from '../../../data/demoAuth';
-import { afterSignIn } from '../screens/VerifyScreen';
+import { DEFAULT_COUNTRY, isNationalNumber, toE164 } from '../../../data/countries';
+import { startSignIn } from '../../../data/demoAuth';
 import { useNav } from '../../../navigation';
-import { authService } from '../../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { isEmail, isPhone } from '../../../utils/format';
+import { isEmail } from '../../../utils/format';
 import { errorMessage } from '../errors';
+import { PhoneField } from './PhoneField';
 
-/** The single front door: one field (phone or email) and a code. Password is a link, not a tab. */
+/** The single front door: a phone number (with country code) or an email, then a one-time login code. */
 export function EntryCard() {
-  const { push, reset } = useNav();
+  const { push } = useNav();
   const s = useThemedStyles(styles);
-  const [value, setValue] = useState('');
-  const [password, setPassword] = useState('');
-  const [usePassword, setUsePassword] = useState(false);
+  const [viaEmail, setViaEmail] = useState(false);
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const valid = isPhone(value) || isEmail(value);
-  const ready = usePassword ? valid && password.length >= 8 : valid;
+  const ready = viaEmail ? isEmail(email) : isNationalNumber(country, phone);
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
-      if (usePassword) {
-        await authService.signInWithPassword(value, password);
-        const profile = await authService.getProfile();
-        // No profile or role yet: the code flow handles registration.
-        if (!profile || profile.role === 'pending') return setError('Sign in with a code to finish setting up your account.');
-        reset(afterSignIn(toAccount(profile)));
-      } else {
-        push({ name: 'verify', identifier: value.trim(), kind: await startSignIn(value) });
-      }
+      const identifier = viaEmail ? email.trim() : toE164(country, phone);
+      push({ name: 'verify', identifier, kind: await startSignIn(identifier) });
     } catch (e) {
-      setError(usePassword ? 'That password does not match this account.' : errorMessage(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
   };
 
+  const switchTo = (email: boolean) => {
+    setViaEmail(email);
+    setError(null);
+  };
+
   return (
     <Card style={s.card}>
       {error ? <Banner text={error} /> : null}
-      <Input label="Mobile number or email" value={value} onChangeText={setValue} autoCapitalize="none" autoComplete="username" keyboardType="email-address" placeholder="024 000 0000 or you@example.com" onSubmitEditing={() => ready && submit()} />
-      {usePassword ? (
-        <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" onSubmitEditing={() => ready && submit()} />
-      ) : null}
-      <Button label={usePassword ? 'Sign in' : 'Send code'} size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
-      <Button
-        label={usePassword ? 'Use a code instead' : 'Use password instead'}
-        variant="ghost"
-        onPress={() => {
-          setUsePassword((v) => !v);
-          setPassword('');
-          setError(null);
-        }}
-      />
-      <Text style={s.note}>{"We'll send a 6-digit code. A correct code signs you in, or sets up a new account."}</Text>
+      {viaEmail ? (
+        <Input label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" onSubmitEditing={() => ready && submit()} />
+      ) : (
+        <PhoneField country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
+      )}
+      <Button label={viaEmail ? 'Email me a login code' : 'Text me a login code'} size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
+      <TextLink label={viaEmail ? 'Use my phone number instead' : 'Use my email instead'} onPress={() => switchTo(!viaEmail)} />
+      <Text style={s.note}>{"We'll send a 6-digit code to type in on the next screen. No password needed, and new accounts are set up the same way."}</Text>
     </Card>
+  );
+}
+
+function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const s = useThemedStyles(styles);
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" hitSlop={8} style={({ pressed }) => [s.linkBox, pressed && { opacity: 0.6 }]}>
+      <Text style={s.link}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   card: { gap: 14, padding: 20 },
+  linkBox: { minHeight: 36, justifyContent: 'center' as const },
+  link: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.brandInk },
   note: { fontFamily: fonts.sansRegular, fontSize: 12, lineHeight: 17, color: c.inkMuted, textAlign: 'center' as const },
 });

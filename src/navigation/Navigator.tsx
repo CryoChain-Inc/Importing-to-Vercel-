@@ -4,6 +4,7 @@ import type { Account, Role } from '../types/auth';
 
 export type Route =
   | { name: 'landing' }
+  | { name: 'ops' }
   | { name: 'verify'; identifier: string; kind: 'otp' }
   | { name: 'role'; identifier: string }
   | { name: 'onboarding'; identifier: string; role: 'farmer' | 'buyer' }
@@ -21,7 +22,9 @@ interface Nav {
 
 const Ctx = createContext<Nav | null>(null);
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
-const PATH: Record<Route['name'], string> = { landing: '/', verify: '/verify', role: '/role', onboarding: '/onboarding', workspace: '/workspace', home: '/home' };
+// Params live in memory, so a deep link never lands signed in: /ops and /ops/* go to the ops login, anything else to the landing page.
+const START: Route = isWeb && /^\/ops(\/|$)/.test(window.location.pathname) ? { name: 'ops' } : { name: 'landing' };
+const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', verify: '/verify', role: '/role', onboarding: '/onboarding', workspace: '/workspace', home: '/home' };
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)
@@ -29,12 +32,12 @@ const PATH: Record<Route['name'], string> = { landing: '/', verify: '/verify', r
  * shortcut: params live in memory, so a reload on a deep URL returns to the landing page.
  */
 export function NavigatorProvider({ children }: { children: React.ReactNode }) {
-  const [stack, setStack] = useState<Route[]>([{ name: 'landing' }]);
+  const [stack, setStack] = useState<Route[]>([START]);
   const stackRef = useRef(stack);
   stackRef.current = stack;
 
   useEffect(() => {
-    if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH.landing);
+    if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH[START.name]);
   }, []);
 
   const push = useCallback((r: Route) => {
