@@ -50,12 +50,21 @@ export interface Requirement {
 export type NewRequirement = Omit<Requirement, 'id' | 'state' | 'createdAt'>;
 
 /** phone and email are read-only here: they change only through the verified flow in authService. */
+export interface BuyerAddress {
+  id: string;
+  label: string;
+  address: string;
+  isDefault: boolean;
+}
+
 export interface BuyerDetails {
   organization: string;
   name: string;
   phone: string;
   email: string;
+  /** The default address; empty until the buyer adds one. */
   location: string;
+  addresses: BuyerAddress[];
 }
 
 const fail = (msg: string) => (error: unknown) => {
@@ -205,27 +214,46 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
   const buyerId = await requireUserId();
   const { data, error } = await supabase
     .from('buyers')
-    .select('organization_name, delivery_location, profiles(display_name, phone, email)')
+    .select('organization_name, delivery_location, profiles(display_name, phone, email), buyer_addresses(id, label, address, is_default, created_at)')
     .eq('id', buyerId)
     .single();
   fail('Could not load your account.')(error);
   const p = (data as any).profiles;
+  const rows: { id: string; label: string; address: string; is_default: boolean; created_at: string }[] = (data as any).buyer_addresses ?? [];
+  const addresses = rows
+    .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.created_at.localeCompare(b.created_at))
+    .map((a) => ({ id: a.id, label: a.label, address: a.address, isDefault: a.is_default }));
   return {
     organization: data!.organization_name,
     name: p?.display_name ?? '',
     phone: p?.phone ?? '',
     email: p?.email ?? '',
     location: data!.delivery_location,
+    addresses,
   };
 }
 
-export async function saveBuyerDetails(b: Pick<BuyerDetails, 'organization' | 'name' | 'location'>): Promise<void> {
-  const { error } = await supabase.rpc('update_buyer_details', {
-    p_organization: b.organization,
-    p_name: b.name,
-    p_location: b.location,
-  });
+export async function saveBuyerDetails(b: Pick<BuyerDetails, 'organization' | 'name'>): Promise<void> {
+  const { error } = await supabase.rpc('update_buyer_details', { p_organization: b.organization, p_name: b.name });
   fail('Could not save your details.')(error);
+}
+
+export const ADDRESS_MAX = 5;
+
+/** id null adds a new address (the first one becomes the default). */
+export async function saveAddress(id: string | null, label: string, address: string): Promise<void> {
+  const { error } = await supabase.rpc('save_buyer_address', { p_id: id, p_label: label, p_address: address });
+  rpcError(error, { 'address limit': `You can keep up to ${ADDRESS_MAX} addresses.` }, 'Could not save that address.');
+}
+
+export async function setDefaultAddress(id: string): Promise<void> {
+  const { error } = await supabase.rpc('set_default_buyer_address', { p_id: id });
+  fail('Could not change your default address.')(error);
+}
+
+export async function deleteAddress(id: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_buyer_address', { p_id: id });
+  fail('Could not remove that address.')(error);
 }
 
 /** Status shown to the buyer: payment first, then the lot's journey once it is funded. */
