@@ -7,7 +7,6 @@ export type Route =
   | { name: 'ops' }
   | { name: 'verify'; identifier: string; kind: 'otp' }
   | { name: 'role'; identifier: string }
-  | { name: 'onboarding'; identifier: string; role: 'farmer' | 'buyer' }
   | { name: 'workspace'; account: Account }
   | { name: 'home'; account: Account; role: Role };
 
@@ -24,7 +23,7 @@ const Ctx = createContext<Nav | null>(null);
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 // Params live in memory, so a deep link never lands signed in: /ops and /ops/* go to the ops login, anything else to the landing page.
 const START: Route = isWeb && /^\/ops(\/|$)/.test(window.location.pathname) ? { name: 'ops' } : { name: 'landing' };
-const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', verify: '/verify', role: '/role', onboarding: '/onboarding', workspace: '/workspace', home: '/home' };
+const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', verify: '/verify', role: '/role', workspace: '/workspace', home: '/home' };
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)

@@ -46,13 +46,9 @@ export const authService = {
     return data as UserProfile | null;
   },
 
-  /** Sets the buyer role on profiles and creates the buyers row in one step. */
-  async completeBuyerOnboarding(b: { organization: string; name: string; location: string }) {
-    const { error } = await supabase.rpc('complete_buyer_onboarding', {
-      p_organization: b.organization,
-      p_name: b.name,
-      p_location: b.location,
-    });
+  /** Sets the buyer role and creates the empty buyers row; details are filled in from the app. */
+  async completeBuyerOnboarding() {
+    const { error } = await supabase.rpc('complete_buyer_onboarding');
     if (error) throw error;
   },
 

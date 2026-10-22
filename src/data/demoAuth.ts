@@ -1,5 +1,5 @@
 import { authService, type UserProfile, type UserRole } from '../services/auth.service';
-import type { Account, BuyerForm, Role } from '../types/auth';
+import type { Account, Role } from '../types/auth';
 import { normalizePhone } from '../utils/format';
 
 // Auth runs on Supabase (services/auth.service.ts). Payout and review are still demo stand-ins.
@@ -42,14 +42,6 @@ export const verifySignIn = (identifier: string, code: string) =>
     const profile = await authService.getProfile();
     if (!profile || profile.role === 'pending') return { status: 'unknown' };
     return { status: 'ok', account: toAccount(profile) };
-  });
-
-type Registered = { account: Account } | { duplicate: true };
-
-export const registerBuyer = (f: BuyerForm) =>
-  net(async (): Promise<Registered> => {
-    await authService.completeBuyerOnboarding(f);
-    return { account: toAccount((await authService.getProfile())!) };
   });
 
 export const requestReview = () => net(() => `RV-${Math.floor(1000 + Math.random() * 9000)}`);

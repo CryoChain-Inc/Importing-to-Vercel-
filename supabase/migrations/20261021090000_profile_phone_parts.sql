@@ -35,10 +35,10 @@ begin
 end;
 $$;
 
-update public.profiles p
-   set country_code = s.country_code, national_number = s.national_number
-  from public.split_phone(p.phone) s
- where p.phone is not null;
+update public.profiles
+   set (country_code, national_number) =
+       (select s.country_code, s.national_number from public.split_phone(profiles.phone) s)
+ where phone is not null;
 
 alter table public.profiles
   add constraint profiles_phone_parts check ((country_code is null) = (national_number is null));

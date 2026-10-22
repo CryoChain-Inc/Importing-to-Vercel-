@@ -5,7 +5,6 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LoadingScreen } from './components/feedback';
 import { LandingScreen } from './features/auth/screens/LandingScreen';
 import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
-import { OnboardingScreen } from './features/auth/screens/OnboardingScreen';
 import { RoleScreen } from './features/auth/screens/RoleScreen';
 import { VerifyScreen, afterSignIn } from './features/auth/screens/VerifyScreen';
 import { WorkspaceScreen } from './features/auth/screens/WorkspaceScreen';
@@ -13,7 +12,6 @@ import { HomeScreen } from './features/home/HomeScreen';
 import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
 import { authService } from './services/auth.service';
-import { fetchFarmer } from './services/farmer.service';
 import { isSupabaseConfigured } from './services/supabase';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
 
@@ -28,9 +26,7 @@ function Routes() {
     case 'verify':
       return <VerifyScreen route={route} />;
     case 'role':
-      return <RoleScreen identifier={route.identifier} />;
-    case 'onboarding':
-      return <OnboardingScreen identifier={route.identifier} role={route.role} />;
+      return <RoleScreen />;
     case 'workspace':
       return <WorkspaceScreen account={route.account} />;
     case 'home':
@@ -48,14 +44,9 @@ function Shell() {
     if (!isSupabaseConfigured) return;
     authService
       .getProfile()
-      .then(async (p) => {
+      .then((p) => {
         if (!p) return;
         if (p.role === 'pending') return;
-        // A farmer who left onboarding early resumes at the wizard.
-        if (p.role === 'farmer' && !(await fetchFarmer())?.address) {
-          reset({ name: 'onboarding', identifier: p.email ?? p.phone ?? '', role: 'farmer' });
-          return;
-        }
         reset(afterSignIn(toAccount(p)));
       })
       .catch(() => undefined)
