@@ -1,10 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
 import type { Account, Role } from '../types/auth';
+import { verifyLinkStatus } from '../utils/verifyLink';
 
 export type Route =
   | { name: 'landing' }
   | { name: 'ops' }
+  | { name: 'emailVerified'; ok: boolean }
   | { name: 'verify'; identifier: string; kind: 'otp' }
   | { name: 'role'; identifier: string }
   | { name: 'workspace'; account: Account }
@@ -22,8 +24,14 @@ interface Nav {
 const Ctx = createContext<Nav | null>(null);
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 // Params live in memory, so a deep link never lands signed in: /ops and /ops/* go to the ops login, anything else to the landing page.
-const START: Route = isWeb && /^\/ops(\/|$)/.test(window.location.pathname) ? { name: 'ops' } : { name: 'landing' };
-const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', verify: '/verify', role: '/role', workspace: '/workspace', home: '/home' };
+const START: Route = !isWeb
+  ? { name: 'landing' }
+  : /^\/ops(\/|$)/.test(window.location.pathname)
+    ? { name: 'ops' }
+    : window.location.pathname === '/email-verified' && verifyLinkStatus(window.location.href)
+      ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
+      : { name: 'landing' };
+const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', emailVerified: '/email-verified', verify: '/verify', role: '/role', workspace: '/workspace', home: '/home' };
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)

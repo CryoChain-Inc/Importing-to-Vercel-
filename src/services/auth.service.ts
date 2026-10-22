@@ -52,9 +52,10 @@ export const authService = {
     if (error) throw error;
   },
 
-  /** Starts adding or changing the signed-in user's email/phone; a code goes to the new address. */
-  async requestContactChange(identifier: string) {
-    const { error } = await supabase.auth.updateUser(target(identifier));
+  /** Starts adding or changing the signed-in user's email/phone. A code goes to the new phone; pass `redirectTo` to email a confirmation link instead. */
+  async requestContactChange(identifier: string, redirectTo?: string) {
+    const attrs = target(identifier);
+    const { error } = redirectTo ? await supabase.auth.updateUser(attrs, { emailRedirectTo: redirectTo }) : await supabase.auth.updateUser(attrs);
     if (!error) return;
     if (error.code === 'email_exists' || error.code === 'phone_exists')
       throw new Error(`That ${isEmail(identifier) ? 'email' : 'phone number'} belongs to another account.`);
@@ -68,6 +69,12 @@ export const authService = {
       'email' in t ? { ...t, token, type: 'email_change' } : { ...t, token, type: 'phone_change' },
     );
     return !error;
+  },
+
+  /** Pulls the latest auth user, e.g. after an emailed confirmation link was opened. */
+  async refreshSession() {
+    const { error } = await supabase.auth.refreshSession();
+    if (error) throw error;
   },
 
   signOut: () => supabase.auth.signOut(),

@@ -6,6 +6,7 @@ import { saveBuyerDetails, type BuyerDetails } from '../../../services/buyer.ser
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { BUYER_NAME_MAX, formatPhone } from '../../../utils/format';
 import { ChangeContact } from '../../auth/components/ChangeContact';
+import { PhoneChange } from '../../auth/components/PhoneChange';
 import { useAction } from '../../ops/components/useAction';
 import { BuyerAddresses } from './BuyerAddresses';
 
@@ -20,7 +21,7 @@ export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; on
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const { busy, error, run } = useAction(onRefresh);
-  const [editing, setEditing] = useState<'business' | 'email' | null>(null);
+  const [editing, setEditing] = useState<'business' | 'email' | 'phone' | null>(null);
   const [adding, setAdding] = useState(false);
   const scrollTo = useScrollTo();
   const businessRef = useRef<View>(null);
@@ -90,27 +91,30 @@ export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; on
 
       <Card style={s.card}>
         <Text style={s.title}>Sign-in</Text>
+        <Text style={s.contactHint}>Your phone number is what you sign in with.</Text>
         <View style={s.contact}>
           <View style={s.contactIcon}><Icon name="phone" size={18} color={colors.brandInk} /></View>
           <View style={s.contactText}>
-            <Text style={s.contactValue}>{details.phone ? formatPhone(details.phone) : 'No phone number'}</Text>
-            <Text style={s.contactHint}>Your sign-in number. It can&apos;t be changed here.</Text>
+            <Text style={s.contactValue} numberOfLines={1}>{details.phone ? formatPhone(details.phone) : 'No phone number'}</Text>
+            {details.phone ? <View style={s.badge}><Badge label="Verified" tone="success" /></View> : null}
           </View>
+          {editing === 'phone' ? null : <Button label={details.phone ? 'Change' : 'Add'} variant="ghost" size="sm" onPress={() => setEditing('phone')} />}
         </View>
+        {editing === 'phone' ? (
+          <PhoneChange current={details.phone} onDone={async () => { setEditing(null); await onRefresh(); }} onCancel={() => setEditing(null)} />
+        ) : null}
         <View style={s.contact}>
           <View style={s.contactIcon}><Icon name="mail" size={18} color={colors.brandInk} /></View>
           <View style={s.contactText}>
-            <Text style={s.contactValue}>{details.email || 'No email yet'}</Text>
-            <Text style={s.contactHint}>{details.email ? 'Verified' : 'Add one for receipts and order updates.'}</Text>
+            <Text style={s.contactValue} numberOfLines={1} ellipsizeMode="middle">{details.email || 'No email yet'}</Text>
+            {details.email ? <View style={s.badge}><Badge label="Verified" tone="success" /></View> : null}
           </View>
-          {details.email ? <Badge label="Verified" tone="success" /> : null}
+          {editing === 'email' ? null : <Button label={details.email ? 'Change' : 'Add'} variant="ghost" size="sm" onPress={() => setEditing('email')} />}
         </View>
         {editing === 'email' ? (
-          <ChangeContact kind="email" current={details.email}
+          <ChangeContact current={details.email}
             onDone={async () => { setEditing(null); await onRefresh(); }} onCancel={() => setEditing(null)} />
-        ) : (
-          <Button label={details.email ? 'Change email' : 'Add email'} variant={details.email ? 'ghost' : 'tonal'} icon="mail" onPress={() => setEditing('email')} />
-        )}
+        ) : null}
       </Card>
     </View>
   );
@@ -146,8 +150,9 @@ const styles = (c: Record<ColorToken, string>) => ({
   value: { flex: 1, textAlign: 'right' as const, fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
   valueEmpty: { color: c.inkMuted },
   contact: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
-  contactText: { flex: 1, gap: 1 },
+  contactIcon: { flexShrink: 0, width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
+  contactText: { flex: 1, minWidth: 0, gap: 4 },
+  badge: { alignSelf: 'flex-start' as const },
   contactValue: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },
   contactHint: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

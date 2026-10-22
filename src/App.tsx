@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { Linking } from 'react-native';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LoadingScreen } from './components/feedback';
+import { EmailVerifiedScreen } from './features/auth/screens/EmailVerifiedScreen';
 import { LandingScreen } from './features/auth/screens/LandingScreen';
 import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
 import { RoleScreen } from './features/auth/screens/RoleScreen';
@@ -13,6 +15,7 @@ import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
 import { authService } from './services/auth.service';
 import { isSupabaseConfigured } from './services/supabase';
+import { verifyLinkStatus } from './utils/verifyLink';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
 
 // Auth is Supabase (services/auth.service.ts); payout and review are still demo data.
@@ -23,6 +26,8 @@ function Routes() {
       return <LandingScreen />;
     case 'ops':
       return <OpsLoginScreen />;
+    case 'emailVerified':
+      return <EmailVerifiedScreen ok={route.ok} />;
     case 'verify':
       return <VerifyScreen route={route} />;
     case 'role':
@@ -36,22 +41,29 @@ function Routes() {
 
 function Shell() {
   const { colors, isDark } = useTheme();
-  const { reset } = useNav();
+  const { route, reset } = useNav();
   const [restoring, setRestoring] = useState(isSupabaseConfigured);
+  const [startedOnVerified] = useState(route.name === 'emailVerified');
 
   // Resume a saved session so a reload doesn't send a signed-in user back to the login page.
+  // The emailed confirmation link (web path or app deep link) shows its own screen instead.
   useEffect(() => {
+    const resume = async () => {
+      const link = await Linking.getInitialURL();
+      if (startedOnVerified) return;
+      const status = verifyLinkStatus(link);
+      if (status) return reset({ name: 'emailVerified', ok: status === 'ok' });
+      const p = await authService.getProfile();
+      if (p && p.role !== 'pending') reset(afterSignIn(toAccount(p)));
+    };
     if (!isSupabaseConfigured) return;
-    authService
-      .getProfile()
-      .then((p) => {
-        if (!p) return;
-        if (p.role === 'pending') return;
-        reset(afterSignIn(toAccount(p)));
-      })
-      .catch(() => undefined)
-      .finally(() => setRestoring(false));
-  }, [reset]);
+    resume().catch(() => undefined).finally(() => setRestoring(false));
+    const sub = Linking.addEventListener('url', (e) => {
+      const status = verifyLinkStatus(e.url);
+      if (status) reset({ name: 'emailVerified', ok: status === 'ok' });
+    });
+    return () => sub.remove();
+  }, [reset, startedOnVerified]);
 
   if (restoring) return <LoadingScreen message="Loading CryoChain..." />;
   return (
