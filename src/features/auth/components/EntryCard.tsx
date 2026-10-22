@@ -49,7 +49,7 @@ export function EntryCard() {
       ) : (
         <PhoneField country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
       )}
-      <Button label={viaEmail ? 'Email me a login code' : 'Text me a login code'} size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
+      <Button label={viaEmail ? 'Continue' : 'Continue'} size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
       <TextLink label={viaEmail ? 'Use my phone number instead' : 'Use my email instead'} onPress={() => switchTo(!viaEmail)} />
       <Text style={s.note}>{"We'll send a 6-digit code to type in on the next screen. No password needed, and new accounts are set up the same way."}</Text>
     </Card>

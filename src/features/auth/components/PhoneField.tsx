@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Icon } from '../../../components/common';
 import { useIsWide } from '../../../components/layout';
 import { COUNTRIES, type Country } from '../../../data/countries';
@@ -60,7 +60,7 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
       </View>
 
       <Modal visible={open} transparent animationType={wide ? 'fade' : 'slide'} onRequestClose={close}>
-        <KeyboardAvoidingView style={[s.overlay, wide && s.overlayWide]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={[s.overlay, wide && s.overlayWide]} behavior="padding">
           <Pressable style={s.backdrop} onPress={close} accessibilityLabel="Close country list" />
           <View style={[s.sheet, wide && s.sheetWide]}>
             {wide ? null : <View style={s.grabber} />}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, View } from 'react-native';
 import { Badge, Button, ThemeToggle } from '../common';
 import { Skeleton, SkeletonCard } from '../feedback';
 import { useNav } from '../../navigation';
@@ -11,7 +11,7 @@ export function FieldShell({ name, role, children }: { name: string; role: strin
   const { reset } = useNav();
   const s = useThemedStyles(styles);
   return (
-    <View style={s.root}>
+    <KeyboardAvoidingView behavior="padding" style={s.root}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.content}>
           <View style={s.header}>
@@ -25,7 +25,7 @@ export function FieldShell({ name, role, children }: { name: string; role: strin
           <Button label="Sign out" variant="ghost" size="sm" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} />
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

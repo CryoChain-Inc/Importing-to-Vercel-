@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, View } from 'react-native';
 import { type PressState, focusRing, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Brand } from '../common/Brand';
 import { Button } from '../common/Button';
@@ -36,7 +36,7 @@ export function OpsShell({ groups, active, onSelect, name, onSignOut, children }
   };
 
   return (
-    <View style={[s.root, wide && s.rootWide]}>
+    <KeyboardAvoidingView behavior="padding" style={[s.root, wide && s.rootWide]}>
       {wide ? (
         <View style={s.rail}>
           <Brand />
@@ -75,7 +75,7 @@ export function OpsShell({ groups, active, onSelect, name, onSignOut, children }
         <View style={s.content}>{children}</View>
         {wide ? null : <Button label="Sign out" icon="logOut" variant="ghost" size="sm" onPress={onSignOut} />}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

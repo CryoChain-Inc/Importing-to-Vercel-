@@ -100,7 +100,7 @@ export function LandingScreen() {
   );
 
   return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={s.root} behavior="padding">
       <ScrollView
         style={s.root}
         contentContainerStyle={s.scroll}

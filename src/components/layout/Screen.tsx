@@ -1,5 +1,5 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useThemedStyles, type ColorToken } from '../../theme';
 import { Gradient } from '../common/Gradient';
 import { TopBar } from './TopBar';
@@ -21,7 +21,7 @@ export function Screen({ children, topRight, hero, maxWidth = 1200 }: ScreenProp
   const wide = useIsWide();
   const pad = wide ? 40 : 16;
   return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={s.root} behavior="padding">
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {hero ? <Gradient kind="tint" style={s.backdrop} /> : null}
         <View style={[s.col, { maxWidth, paddingHorizontal: pad, gap: wide ? 40 : 24 }]}>

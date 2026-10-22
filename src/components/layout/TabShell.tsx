@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, View } from 'react-native';
 import { type PressState, focusRing, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Brand } from '../common/Brand';
 import { Icon, type IconName } from '../common/Icon';
@@ -43,7 +43,7 @@ export function TabShell<K extends string>({ tabs, tab, onSelect, children }: {
   };
 
   return (
-    <View style={[s.root, wide && s.rootWide]}>
+    <KeyboardAvoidingView behavior="padding" style={[s.root, wide && s.rootWide]}>
       {wide ? (
         <View style={s.rail}>
           <Brand />
@@ -58,7 +58,7 @@ export function TabShell<K extends string>({ tabs, tab, onSelect, children }: {
         <View style={s.content}>{children}</View>
       </ScrollView>
       {wide ? null : <View style={s.bar} accessibilityRole="tablist">{tabs.map((t) => button(t))}</View>}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
