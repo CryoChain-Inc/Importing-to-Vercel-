@@ -416,3 +416,9 @@ enabled = true
 
 [functions.paystack-webhook]
 verify_jwt = false
+
+[functions.truck-pay]
+verify_jwt = true
+
+[functions.truck-pay-verify]
+verify_jwt = true

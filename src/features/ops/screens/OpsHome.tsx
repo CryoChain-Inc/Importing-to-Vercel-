@@ -23,6 +23,7 @@ import { RequirementsPanel } from '../components/RequirementsPanel';
 import { RoutesPanel } from '../components/RoutesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
+import { TrucksPanel } from '../components/TrucksPanel';
 import { PanelSkeleton } from '../components/OpsBits';
 import type { OpsData } from '../data';
 
@@ -36,6 +37,7 @@ const TITLES: Record<string, [string, string]> = {
   payments: ['Payments', 'Money received from buyers.'],
   payouts: ['Payouts', 'Money sent to farmers.'],
   routes: ['Routes', 'Collection and delivery runs with photo records.'],
+  trucks: ['Cold trucks', 'Bookings, the price per kilometre, and the driver assigned to each trip.'],
   prices: ['Catalogue and prices', 'Categories, products, images and farm-gate prices.'],
   points: ['Collection points', 'Where agents collect produce.'],
   team: ['Team', 'Field agents, drivers and operations staff.'],
@@ -86,7 +88,11 @@ export function OpsHome({ account }: { account: Account }) {
       { key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments },
       { key: 'payouts', label: 'Payouts out', icon: 'arrowUpRight', badge: n.payouts },
     ] },
-    { title: 'Logistics', items: [{ key: 'routes', label: 'Routes', icon: 'truck' }, { key: 'points', label: 'Collection points', icon: 'pin' }] },
+    { title: 'Logistics', items: [
+      { key: 'routes', label: 'Routes', icon: 'truck' },
+      { key: 'trucks', label: 'Cold trucks', icon: 'truck' },
+      { key: 'points', label: 'Collection points', icon: 'pin' },
+    ] },
     { title: 'Catalogue', items: [{ key: 'prices', label: 'Prices and products', icon: 'tag' }] },
     { title: 'Admin', items: [{ key: 'team', label: 'Team', icon: 'shield' }, { key: 'settings', label: 'Settings', icon: 'sliders' }] },
   ];
@@ -115,6 +121,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
           {tab === 'payouts' ? <PayoutsPanel settlements={data.settlements} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
           {tab === 'routes' ? <RoutesPanel team={data.team} supply={data.supply} onChange={load} /> : null}
+          {tab === 'trucks' ? <TrucksPanel /> : null}
           {tab === 'prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
           {tab === 'points' ? <PointsPanel points={data.points} onChange={load} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}

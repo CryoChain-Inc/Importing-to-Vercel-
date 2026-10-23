@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.cryochain.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#F4F6F4",
         "foregroundImage": "./assets/android-icon-foreground.png",

@@ -6,18 +6,21 @@ import { TabShell, type TabDef } from '../../../components/layout';
 import { useNav } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import * as buyer from '../../../services/buyer.service';
+import { verifyTruckPayment } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { BuyerAccount } from '../components/BuyerAccount';
 import { Orders } from '../components/Orders';
 import { Requirements } from '../components/Requirements';
 import { TodayLots } from '../components/TodayLots';
+import { TruckBooking } from '../components/TruckBooking';
 
-type Tab = 'today' | 'orders' | 'requests' | 'account';
+type Tab = 'today' | 'orders' | 'requests' | 'truck' | 'account';
 
 const TABS: TabDef<Tab>[] = [
   { key: 'today', label: 'Today', icon: 'package' },
   { key: 'orders', label: 'Orders', icon: 'wallet' },
+  { key: 'truck', label: 'Truck', icon: 'truck' },
   { key: 'requests', label: 'Requests', icon: 'message' },
   { key: 'account', label: 'Account', icon: 'user' },
 ];
@@ -60,8 +63,9 @@ export function BuyerHome({ account }: { account: Account }) {
     const check = async (url: string | null) => {
       const ref = buyer.paymentReference(url);
       if (!ref) return;
-      await buyer.verifyPayment(ref);
-      setTab('orders');
+      if (ref.startsWith('TRK')) await verifyTruckPayment(ref);
+      else await buyer.verifyPayment(ref);
+      setTab(ref.startsWith('TRK') ? 'truck' : 'orders');
       await load();
     };
     Linking.getInitialURL().then(check);
@@ -85,6 +89,7 @@ export function BuyerHome({ account }: { account: Account }) {
         <>
           {tab === 'today' ? <TodayLots lots={data.lots} onRefresh={load} onOrdered={() => setTab('orders')} /> : null}
           {tab === 'orders' ? <Orders orders={data.orders} transfer={data.transfer} onRefresh={load} /> : null}
+          {tab === 'truck' ? <TruckBooking transfer={data.transfer} /> : null}
           {tab === 'requests' ? <Requirements requirements={data.requirements} products={data.products} location={data.details.location} onRefresh={load} /> : null}
           {tab === 'account' ? (
             <>

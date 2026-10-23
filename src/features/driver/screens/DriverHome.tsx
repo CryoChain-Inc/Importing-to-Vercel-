@@ -11,6 +11,7 @@ import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../them
 import type { Account } from '../../../types/auth';
 import { fmtWindow } from '../../../utils/format';
 import { takePhoto, type Photo } from '../../../utils/photo';
+import { TruckJobs } from '../components/TruckJobs';
 
 type Screen = { name: 'route' } | { name: 'stop'; stopId: string } | { name: 'delivery'; lotId: string };
 
@@ -67,7 +68,10 @@ export function DriverHome({ account }: { account: Account }) {
       {route === undefined && !error ? <FieldSkeleton /> : null}
 
       {screen.name === 'route' && route !== undefined ? (
-        <Manifest route={route} proofs={proofs} onOpen={(stopId) => setScreen({ name: 'stop', stopId })} onDeliver={(lotId) => setScreen({ name: 'delivery', lotId })} />
+        <>
+          <TruckJobs />
+          <Manifest route={route} proofs={proofs} onOpen={(stopId) => setScreen({ name: 'stop', stopId })} onDeliver={(lotId) => setScreen({ name: 'delivery', lotId })} />
+        </>
       ) : null}
 
       {screen.name === 'stop' && stop && route ? <StopVisit stop={stop} onBack={() => setScreen({ name: 'route' })} onRun={run} /> : null}

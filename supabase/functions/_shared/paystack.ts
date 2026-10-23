@@ -29,16 +29,19 @@ export async function paystack(path: string, init?: RequestInit) {
   };
 }
 
-/** Applies a /transaction/verify result (or a webhook charge.success payload) to our payment row. */
+/** Applies a Paystack result to a lot payment, or to a truck booking when the reference starts with TRK. */
 export async function applyTransaction(tx: { reference: string; status: string; amount: number; currency: string; channel?: string; gateway_response?: string }) {
   const db = admin();
+  const truck = tx.reference.startsWith('TRK');
+  const settle = truck ? 'settle_truck_payment' : 'settle_paystack_payment';
+  const fail = truck ? 'fail_truck_payment' : 'fail_paystack_payment';
   if (tx.status === 'success') {
-    const { error } = await db.rpc('settle_paystack_payment', {
+    const { error } = await db.rpc(settle, {
       p_reference: tx.reference, p_paid_pesewas: tx.amount, p_currency: tx.currency, p_channel: tx.channel ?? null,
     });
     if (error) throw new Error(error.message);
   } else if (tx.status === 'failed' || tx.status === 'abandoned') {
-    await db.rpc('fail_paystack_payment', { p_reference: tx.reference, p_status: tx.status, p_message: tx.gateway_response ?? '' });
+    await db.rpc(fail, { p_reference: tx.reference, p_status: tx.status, p_message: tx.gateway_response ?? '' });
   }
 }
 
