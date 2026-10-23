@@ -11,7 +11,7 @@ export type VerifyResult =
   | { status: 'unknown' } // code was right, but no role yet: offer registration
   | { status: 'wrong' };
 
-const STAFF: UserRole[] = ['agent', 'driver', 'ops'];
+const STAFF: UserRole[] = ['driver', 'ops'];
 
 export const toAccount = (p: UserProfile): Account => ({
   id: p.id,

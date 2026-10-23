@@ -17,9 +17,7 @@ export function DashboardPanel({ data, onGo }: { data: OpsData; onGo: (tab: stri
   const sentOut = data.runs.flatMap((r) => r.transfers).filter((t) => t.status === 'succeeded').reduce((n, t) => n + t.amount, 0);
   const todo: { tab: string; icon: IconName; label: string; n: number }[] = [
     { tab: 'payments', icon: 'banknote', label: 'Orders awaiting payment', n: data.orders.filter((o) => o.state === 'awaiting_payment').length },
-    { tab: 'requirements', icon: 'clipboard', label: 'Open buyer requirements', n: data.requirements.filter((r) => r.state === 'open').length },
     { tab: 'payouts', icon: 'wallet', label: 'Farmer settlements ready to pay', n: data.settlements.filter((x) => x.status === 'payable' && !x.inRun).length },
-    { tab: 'routes', icon: 'truck', label: 'Lots in transit or collecting', n: data.lots.filter((l) => l.state === 'collecting' || l.state === 'in_transit').length },
   ];
 
   return (

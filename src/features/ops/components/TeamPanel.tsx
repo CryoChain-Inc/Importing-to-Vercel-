@@ -8,14 +8,14 @@ import { formatPhone, isEmail, isPhone } from '../../../utils/format';
 import { Empty, SectionTitle, Stat, StatGrid } from './OpsBits';
 import { useAction } from './useAction';
 
-const ROLES: StaffRole[] = ['agent', 'driver', 'ops'];
-const LABEL: Record<StaffRole, string> = { agent: 'Field agents', driver: 'Drivers', ops: 'Operations' };
+const ROLES: StaffRole[] = ['driver', 'ops'];
+const LABEL: Record<StaffRole, string> = { driver: 'Drivers', ops: 'Operations' };
 
 /** Roster grouped by role, with an invite form for new staff. */
 export function TeamPanel({ team, onChange }: { team: TeamMember[]; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onChange);
-  const [role, setRole] = useState<StaffRole>('agent');
+  const [role, setRole] = useState<StaffRole>('driver');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -48,7 +48,7 @@ export function TeamPanel({ team, onChange }: { team: TeamMember[]; onChange: ()
           })} />
       </Card>
 
-      {team.length === 0 ? <Empty icon="users" title="No team yet" hint="Invite a field agent and a driver to start planning routes." /> : null}
+      {team.length === 0 ? <Empty icon="users" title="No team yet" hint="Invite a driver or an operations user." /> : null}
       {ROLES.map((r) => {
         const members = team.filter((m) => m.role === r);
         if (!members.length) return null;

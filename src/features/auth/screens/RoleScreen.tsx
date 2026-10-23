@@ -16,7 +16,7 @@ const ROLES: { role: 'farmer' | 'buyer'; icon: IconName; title: string; copy: st
   { role: 'buyer', icon: 'package', title: 'Buyer', copy: 'Source fresh produce for your business.' },
 ];
 
-/** New accounts only. Agents, drivers and ops are invited by an administrator, so they aren't offered. */
+/** New accounts only. Drivers and ops are invited by an administrator, so they aren't offered. */
 export function RoleScreen() {
   const { reset } = useNav();
   const { colors } = useTheme();
@@ -60,7 +60,7 @@ export function RoleScreen() {
         })}
       </View>
       <Button label="Continue" size="lg" icon="arrowRight" loading={busy} disabled={!role} onPress={next} />
-      <Text style={s.note}>Agents, drivers and operations staff join by invitation from an administrator.</Text>
+      <Text style={s.note}>Drivers and operations staff join by invitation from an administrator.</Text>
     </AuthLayout>
   );
 }

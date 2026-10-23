@@ -114,7 +114,7 @@ export function ProductsSection({ categories, products, onChange }: { categories
   return (
     <View style={s.list}>
       {adding ? <ProductForm categories={categories} onSaved={onChange} onCancel={() => setAdding(false)} /> : <Button label="Add product" icon="tag" onPress={() => { setAdding(true); setEditing(null); }} />}
-      {products.length === 0 ? <Empty icon="leaf" title="No products yet" hint="Add the produce farmers can list, with a photo so agents and buyers recognise it." /> : (
+      {products.length === 0 ? <Empty icon="leaf" title="No products yet" hint="Add the produce farmers can list, with a photo so buyers recognise it." /> : (
         <Input label="Search products" value={q} onChangeText={setQ} placeholder="Name or category" />
       )}
       {products.length > 0 && filtered.length === 0 ? <Text style={s.meta}>No product matches.</Text> : null}

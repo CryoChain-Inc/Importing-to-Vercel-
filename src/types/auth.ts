@@ -1,4 +1,4 @@
-export type Role = 'farmer' | 'buyer' | 'agent' | 'driver' | 'ops';
+export type Role = 'farmer' | 'buyer' | 'driver' | 'ops';
 export type AccountStatus = 'active' | 'locked' | 'invite_expired';
 
 export interface Account {

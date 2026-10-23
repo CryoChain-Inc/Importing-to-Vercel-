@@ -14,33 +14,27 @@ import { BuyersPanel } from '../components/BuyersPanel';
 import { ConfigPanel } from '../components/ConfigPanel';
 import { DashboardPanel } from '../components/DashboardPanel';
 import { FarmersPanel } from '../components/FarmersPanel';
-import { LotsPanel } from '../components/LotsPanel';
 import { PaymentsPanel } from '../components/PaymentsPanel';
 import { PayoutsPanel } from '../components/PayoutsPanel';
-import { PointsPanel } from '../components/PointsPanel';
 import { PricesPanel } from '../components/PricesPanel';
-import { RequirementsPanel } from '../components/RequirementsPanel';
-import { RoutesPanel } from '../components/RoutesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
 import { TrucksPanel } from '../components/TrucksPanel';
-import { PanelSkeleton } from '../components/OpsBits';
+import { Empty, PanelSkeleton } from '../components/OpsBits';
 import type { OpsData } from '../data';
 
 const TITLES: Record<string, [string, string]> = {
   dashboard: ['Dashboard', 'Supply, money and what needs doing today.'],
-  supply: ['Supply', 'What farmers have listed, what is in lots and what has sold.'],
+  supply: ['Supply', 'What farmers have listed and what has sold.'],
   farmers: ['Farmers', 'Contact details, wallets and listings.'],
   buyers: ['Buyers', 'Who is buying, where it goes and what they have ordered.'],
-  requirements: ['Requirements', 'Buyer demand, matched against available supply.'],
-  lots: ['Lots', 'Build lots and follow each one to delivery.'],
+  orders: ['Orders', 'Buyer orders from request to delivery.'],
   payments: ['Payments', 'Money received from buyers.'],
   payouts: ['Payouts', 'Money sent to farmers.'],
-  routes: ['Routes', 'Collection and delivery runs with photo records.'],
+  routes: ['Routes', 'Planning collection and delivery runs.'],
   trucks: ['Cold trucks', 'Bookings, the price per kilometre, and the driver assigned to each trip.'],
-  prices: ['Catalogue and prices', 'Categories, products, images and farm-gate prices.'],
-  points: ['Collection points', 'Where agents collect produce.'],
-  team: ['Team', 'Field agents, drivers and operations staff.'],
+  prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
+  team: ['Team', 'Drivers and operations staff.'],
   settings: ['Settings', 'Temperature limits, payout rules and support contact.'],
 };
 
@@ -53,11 +47,11 @@ export function OpsHome({ account }: { account: Account }) {
 
   const load = useCallback(async () => {
     try {
-      const [farmers, buyerRows, supply, lots, orders, requirements, cat, points, team, config, settlements, runs] = await Promise.all([
-        ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchSupply(), ops.fetchLots(), buyers.fetchOrders(), buyers.fetchRequirements(),
-        ops.fetchCatalogue(), ops.fetchPoints(), ops.fetchTeam(), ops.fetchConfig(), payouts.fetchSettlements(), payouts.fetchPayoutRuns(),
+      const [farmers, buyerRows, supply, orders, cat, team, config, settlements, runs] = await Promise.all([
+        ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchSupply(), buyers.fetchOrders(),
+        ops.fetchCatalogue(), ops.fetchTeam(), ops.fetchConfig(), payouts.fetchSettlements(), payouts.fetchPayoutRuns(),
       ]);
-      setData({ farmers, buyers: buyerRows, supply, lots, orders, requirements, categories: cat.categories, products: cat.products, prices: cat.prices, points, team, config, settlements, runs });
+      setData({ farmers, buyers: buyerRows, supply, orders, categories: cat.categories, products: cat.products, prices: cat.prices, team, config, settlements, runs });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
@@ -71,7 +65,6 @@ export function OpsHome({ account }: { account: Account }) {
   const n = {
     payments: data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0,
     payouts: data?.settlements.filter((x) => x.status === 'payable' && !x.inRun).length ?? 0,
-    requirements: data?.requirements.filter((r) => r.state === 'open').length ?? 0,
   };
   const groups: NavGroup[] = [
     { title: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'grid' }] },
@@ -81,8 +74,7 @@ export function OpsHome({ account }: { account: Account }) {
     ] },
     { title: 'Sales', items: [
       { key: 'buyers', label: 'Buyers', icon: 'user' },
-      { key: 'requirements', label: 'Requirements', icon: 'clipboard', badge: n.requirements },
-      { key: 'lots', label: 'Lots', icon: 'package' },
+      { key: 'orders', label: 'Orders', icon: 'package' },
     ] },
     { title: 'Money', items: [
       { key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments },
@@ -91,7 +83,6 @@ export function OpsHome({ account }: { account: Account }) {
     { title: 'Logistics', items: [
       { key: 'routes', label: 'Routes', icon: 'truck' },
       { key: 'trucks', label: 'Cold trucks', icon: 'truck' },
-      { key: 'points', label: 'Collection points', icon: 'pin' },
     ] },
     { title: 'Catalogue', items: [{ key: 'prices', label: 'Prices and products', icon: 'tag' }] },
     { title: 'Admin', items: [{ key: 'team', label: 'Team', icon: 'shield' }, { key: 'settings', label: 'Settings', icon: 'sliders' }] },
@@ -116,14 +107,12 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'supply' ? <SupplyPanel supply={data.supply} /> : null}
           {tab === 'farmers' ? <FarmersPanel farmers={data.farmers} supply={data.supply} /> : null}
           {tab === 'buyers' ? <BuyersPanel buyers={data.buyers} orders={data.orders} /> : null}
-          {tab === 'requirements' ? <RequirementsPanel requirements={data.requirements} supply={data.supply} products={data.products} prices={data.prices} onChange={load} /> : null}
-          {tab === 'lots' ? <LotsPanel supply={data.supply} lots={data.lots} products={data.products} prices={data.prices} onChange={load} /> : null}
+          {tab === 'orders' ? <Empty icon="package" title="Orders are coming soon" hint="Buyer orders will be followed from request to delivery here." /> : null}
+          {tab === 'routes' ? <Empty icon="truck" title="Route planning is coming soon" hint="Collection and delivery runs will be planned here." /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
           {tab === 'payouts' ? <PayoutsPanel settlements={data.settlements} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
-          {tab === 'routes' ? <RoutesPanel team={data.team} supply={data.supply} onChange={load} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
           {tab === 'prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
-          {tab === 'points' ? <PointsPanel points={data.points} onChange={load} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}
           {tab === 'settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
         </>

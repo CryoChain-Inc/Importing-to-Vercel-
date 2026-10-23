@@ -7,13 +7,10 @@ export interface OpsData {
   farmers: ops.FarmerRow[];
   buyers: ops.BuyerRow[];
   supply: ops.SupplyRow[];
-  lots: ops.LotRow[];
   orders: buyers.OrderRow[];
-  requirements: buyers.RequirementRow[];
   categories: ops.Category[];
   products: ops.Product[];
   prices: ops.PriceRow[];
-  points: ops.PointRow[];
   team: ops.TeamMember[];
   config: ops.OpsConfig;
   settlements: payouts.SettlementRow[];

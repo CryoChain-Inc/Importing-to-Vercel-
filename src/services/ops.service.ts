@@ -36,23 +36,6 @@ export interface SupplyRow {
 const PAID = ['escrow_funded', 'collecting', 'in_transit', 'delivered', 'accepted', 'disputed'];
 export const isSold = (r: SupplyRow) => Boolean(r.lotId) && PAID.includes(r.lotState ?? '');
 
-export interface LotRow {
-  id: string;
-  code: string;
-  product: string;
-  /** Null on lots made before grades were enforced. */
-  grade: string | null;
-  totalKg: number;
-  pricePerKg: number | null;
-  state: string;
-  listings: number;
-  createdAt: string;
-}
-
-export const LOT_MAX_KG = 3000;
-export const LOT_MIN_KG = 2700;
-export const STOP_MIN_VALUE_GHS = 6200;
-
 export interface Category {
   id: string;
   name: string;
@@ -69,19 +52,15 @@ export interface Product {
   active: boolean;
 }
 
+export type PriceKind = 'farmer' | 'buyer';
+const PRICE_TABLE: Record<PriceKind, 'crop_prices' | 'buyer_prices'> = { farmer: 'crop_prices', buyer: 'buyer_prices' };
+
 export interface PriceRow {
+  kind: PriceKind;
   productId: string;
   grade: 'A' | 'B' | 'C';
   price: number;
   prevPrice: number | null;
-}
-
-export interface PointRow {
-  id: string;
-  name: string;
-  locality: string;
-  address: string;
-  active: boolean;
 }
 
 export interface OpsConfig {
@@ -140,12 +119,20 @@ export async function fetchSupply(): Promise<SupplyRow[]> {
 }
 
 export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
-  const [k, p, c] = await Promise.all([
+  const [k, p, c, b] = await Promise.all([
     supabase.from('categories').select('id, name, image_path, active').order('name'),
     supabase.from('products').select('id, name, category_id, image_path, active, categories(name)').order('name'),
     supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
+    supabase.from('buyer_prices').select('product_id, grade, price, prev_price'),
   ]);
-  fail('Could not load prices.')(k.error ?? p.error ?? c.error);
+  fail('Could not load prices.')(k.error ?? p.error ?? c.error ?? b.error);
+  const rows = (kind: PriceKind, d: typeof c.data): PriceRow[] => (d ?? []).map((r) => ({
+    kind,
+    productId: r.product_id,
+    grade: r.grade,
+    price: Number(r.price),
+    prevPrice: r.prev_price == null ? null : Number(r.prev_price),
+  }));
   return {
     categories: (k.data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active })),
     products: (p.data ?? []).map((r: any) => ({
@@ -156,12 +143,7 @@ export async function fetchCatalogue(): Promise<{ categories: Category[]; produc
       imagePath: r.image_path,
       active: r.active,
     })),
-    prices: (c.data ?? []).map((r) => ({
-      productId: r.product_id,
-      grade: r.grade,
-      price: Number(r.price),
-      prevPrice: r.prev_price == null ? null : Number(r.prev_price),
-    })),
+    prices: [...rows('farmer', c.data), ...rows('buyer', b.data)],
   };
 }
 
@@ -205,58 +187,16 @@ export const saveProduct = (p: ProductInput) =>
     'Could not save that product (is the name already used?).');
 
 /** prev_price is set by a database trigger when the price changes. */
-export async function setPrice(productId: string, grade: string, price: number): Promise<void> {
+export async function setPrice(kind: PriceKind, productId: string, grade: string, price: number): Promise<void> {
   const { error } = await supabase
-    .from('crop_prices')
+    .from(PRICE_TABLE[kind])
     .upsert({ product_id: productId, grade, price }, { onConflict: 'product_id,grade' });
   fail('Could not save the price.')(error);
 }
 
-export async function deletePrice(productId: string, grade: string): Promise<void> {
-  const { error } = await supabase.from('crop_prices').delete().eq('product_id', productId).eq('grade', grade);
+export async function deletePrice(kind: PriceKind, productId: string, grade: string): Promise<void> {
+  const { error } = await supabase.from(PRICE_TABLE[kind]).delete().eq('product_id', productId).eq('grade', grade);
   fail('Could not remove the price.')(error);
-}
-
-export async function fetchPoints(): Promise<PointRow[]> {
-  const { data, error } = await supabase
-    .from('collection_points')
-    .select('id, name, locality, address, active')
-    .order('created_at', { ascending: false });
-  fail('Could not load collection points.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.name,
-    locality: r.locality ?? '',
-    address: r.address ?? '',
-    active: r.active,
-  }));
-}
-
-export interface NewPoint {
-  name: string;
-  locality: string;
-  address: string;
-}
-
-const pointFields = (p: NewPoint) => ({
-  name: p.name.trim(),
-  locality: p.locality.trim() || null,
-  address: p.address.trim() || null,
-});
-
-export async function createPoint(p: NewPoint): Promise<void> {
-  const { error } = await supabase.from('collection_points').insert(pointFields(p));
-  fail('Could not create the collection point.')(error);
-}
-
-export async function updatePoint(id: string, p: NewPoint): Promise<void> {
-  const { error } = await supabase.from('collection_points').update(pointFields(p)).eq('id', id);
-  fail('Could not update the collection point.')(error);
-}
-
-export async function setPointActive(id: string, active: boolean): Promise<void> {
-  const { error } = await supabase.from('collection_points').update({ active }).eq('id', id);
-  fail('Could not update the collection point.')(error);
 }
 
 export async function fetchConfig(): Promise<OpsConfig> {
@@ -293,7 +233,7 @@ export async function saveConfig(c: OpsConfig): Promise<void> {
   fail('Could not save settings (min temp must be below max; account number is digits only).')(error);
 }
 
-export type StaffRole = 'agent' | 'driver' | 'ops';
+export type StaffRole = 'driver' | 'ops';
 
 export interface TeamMember {
   id: string;
@@ -308,8 +248,8 @@ export interface TeamMember {
 export async function fetchTeam(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, display_name, phone, email, created_at, agents(coverage_area), drivers(vehicle_type, plate_number)')
-    .in('role', ['agent', 'driver', 'ops'])
+    .select('id, role, display_name, phone, email, created_at, drivers(vehicle_type, plate_number)')
+    .in('role', ['driver', 'ops'])
     .order('created_at', { ascending: false });
   fail('Could not load the team.')(error);
   return (data ?? []).map((r: any) => ({
@@ -318,7 +258,7 @@ export async function fetchTeam(): Promise<TeamMember[]> {
     role: r.role,
     phone: r.phone ?? '',
     email: r.email ?? '',
-    detail: r.agents?.coverage_area ?? [r.drivers?.vehicle_type, r.drivers?.plate_number].filter(Boolean).join(' · '),
+    detail: [r.drivers?.vehicle_type, r.drivers?.plate_number].filter(Boolean).join(' · '),
     joinedAt: r.created_at,
   }));
 }
@@ -330,173 +270,6 @@ export async function inviteStaff(i: { name: string; phone: string; email: strin
   const res = (error as { context?: Response }).context;
   const msg = res ? (await res.json().catch(() => null))?.error : null;
   throw new Error(msg ?? 'Could not send the invite.');
-}
-
-export async function fetchLots(): Promise<LotRow[]> {
-  const { data, error } = await supabase
-    .from('lots')
-    .select('id, code, product, grade, total_kg, price_per_kg, state, created_at, produce_listings(count)')
-    .order('created_at', { ascending: false });
-  fail('Could not load lots.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    code: r.code,
-    product: r.product,
-    grade: r.grade ?? null,
-    totalKg: Number(r.total_kg),
-    pricePerKg: r.price_per_kg == null ? null : Number(r.price_per_kg),
-    state: r.state,
-    listings: r.produce_listings?.[0]?.count ?? 0,
-    createdAt: r.created_at,
-  }));
-}
-
-/** Atomic: the database locks the listings and re-checks one product, unallocated, and the 3,000 kg cap. */
-export async function createLot(listingIds: string[], pricePerKg: number, requirementId?: string): Promise<void> {
-  const { error } = await supabase.rpc('create_lot', { p_listing_ids: listingIds, p_price_per_kg: pricePerKg, p_requirement_id: requirementId ?? null });
-  if (error) {
-    throw new Error(/already in a lot/.test(error.message) ? 'Some of those listings were just allocated. Refresh and try again.' : 'Could not create the lot.');
-  }
-}
-
-export async function cancelLot(id: string): Promise<void> {
-  const { error } = await supabase.rpc('cancel_lot', { p_lot_id: id });
-  fail('Could not cancel that lot.')(error);
-}
-
-export interface PaidLot {
-  id: string;
-  code: string;
-  product: string;
-  totalKg: number;
-  buyer: string;
-  location: string;
-}
-
-/** Paid lots that are not on a route yet: the only lots a route can be planned for. */
-export async function fetchPaidLots(): Promise<PaidLot[]> {
-  const { data, error } = await supabase
-    .from('lots')
-    .select('id, code, product, total_kg, orders(state, buyers(organization_name, delivery_location))')
-    .eq('state', 'escrow_funded')
-    .order('created_at');
-  fail('Could not load paid lots.')(error);
-  return (data ?? []).map((r: any) => {
-    const buyer = (r.orders ?? []).find((o: any) => o.state === 'paid')?.buyers;
-    return {
-      id: r.id,
-      code: r.code,
-      product: r.product,
-      totalKg: Number(r.total_kg),
-      buyer: buyer?.organization_name ?? 'Unknown buyer',
-      location: buyer?.delivery_location ?? '',
-    };
-  });
-}
-
-const daysAgo = (n: number) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
-
-export interface PlannedRoute {
-  id: string;
-  date: string;
-  agentName: string;
-  driverName: string;
-  started: boolean;
-  stops: { pointName: string; locality: string; windowStart: string; windowEnd: string; arrived: boolean; departed: boolean; temperatureC: number | null }[];
-  lots: { id: string; code: string; product: string; kg: number; buyer: string; location: string; windowStart: string; windowEnd: string; delivered: boolean }[];
-}
-
-/** Routes from the last two weeks, newest first, so finished runs stay visible. */
-export async function fetchRoutes(): Promise<PlannedRoute[]> {
-  const { data, error } = await supabase
-    .from('routes')
-    .select(
-      'id, service_date, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name),' +
-        ' route_stops(position, window_start, window_end, arrived_at, confirmed_at, departed_at, temperature_c, collection_points(name, locality)),' +
-        ' route_lots(window_start, window_end, delivered_at, lots(id, code, product, total_kg, orders(state, buyers(organization_name, delivery_location))))',
-    )
-    .gte('service_date', daysAgo(14))
-    .order('service_date', { ascending: false });
-  fail('Could not load routes.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    date: r.service_date,
-    agentName: r.profiles?.display_name ?? 'Agent',
-    driverName: r.driver?.display_name ?? '',
-    started: (r.route_stops ?? []).some((s: any) => s.arrived_at || s.confirmed_at),
-    stops: (r.route_stops ?? [])
-      .slice()
-      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-      .map((s: any) => ({
-        pointName: s.collection_points?.name ?? 'Collection point',
-        locality: s.collection_points?.locality ?? '',
-        windowStart: s.window_start,
-        windowEnd: s.window_end,
-        arrived: Boolean(s.arrived_at),
-        departed: Boolean(s.departed_at),
-        temperatureC: s.temperature_c == null ? null : Number(s.temperature_c),
-      })),
-    lots: (r.route_lots ?? [])
-      .slice()
-      .sort((a: any, b: any) => a.window_start.localeCompare(b.window_start))
-      .map((l: any) => {
-        const buyer = (l.lots?.orders ?? []).find((o: any) => o.state === 'paid')?.buyers;
-        return {
-          id: l.lots?.id ?? '',
-          code: l.lots?.code ?? '',
-          product: l.lots?.product ?? '',
-          kg: Number(l.lots?.total_kg ?? 0),
-          buyer: buyer?.organization_name ?? 'Unknown buyer',
-          location: buyer?.delivery_location ?? '',
-          windowStart: l.window_start,
-          windowEnd: l.window_end,
-          delivered: Boolean(l.delivered_at),
-        };
-      }),
-  }));
-}
-
-export interface RoutePlan {
-  date: string;
-  agentId: string;
-  driverId: string;
-  /** Pickup windows as HH:MM in Ghana time. */
-  stops: { pointId: string; start: string; end: string }[];
-  /** Buyer arrival windows as HH:MM in Ghana time. */
-  lots: { lotId: string; start: string; end: string }[];
-}
-
-const PLAN_ERRORS: [RegExp, string][] = [
-  [/choose a date/, 'Choose today or a later date.'],
-  [/choose an agent/, 'Choose a field agent.'],
-  [/choose a driver/, 'Choose a driver.'],
-  [/already has a route/, 'That agent or driver already has a route on this date.'],
-  [/at least one lot/, 'Choose at least one paid lot.'],
-  [/paid and not yet/, 'One of those lots is not paid, or is already on a route. Refresh and try again.'],
-  [/no collection point/, 'A listing in these lots has no collection point.'],
-  [/stops must match/, 'The pickup stops no longer match the chosen lots. Refresh and try again.'],
-  [/HH:MM/, 'Enter times as HH:MM, for example 06:30.'],
-  [/end after it starts/, 'Each window must end after it starts.'],
-  [/after the last pickup/, 'Buyer arrival windows must start after the last pickup window ends.'],
-  [/ops only/, 'Only operations can plan a route.'],
-];
-
-export async function planRoute(plan: RoutePlan): Promise<void> {
-  const { error } = await supabase.rpc('plan_route', {
-    p_date: plan.date,
-    p_agent_id: plan.agentId,
-    p_driver_id: plan.driverId,
-    p_stops: plan.stops.map((s) => ({ collection_point_id: s.pointId, start: s.start, end: s.end })),
-    p_lots: plan.lots.map((l) => ({ lot_id: l.lotId, start: l.start, end: l.end })),
-  });
-  if (!error) return;
-  throw new Error(PLAN_ERRORS.find(([re]) => re.test(error.message ?? ''))?.[1] ?? 'Could not plan that route.');
-}
-
-/** Only a route nobody has started; its lots go back to paid and unrouted. */
-export async function cancelRoute(routeId: string): Promise<void> {
-  const { error } = await supabase.rpc('cancel_route', { p_route_id: routeId });
-  if (error) throw new Error(/cannot be cancelled/.test(error.message ?? '') ? 'This route has already started and cannot be cancelled.' : 'Could not cancel that route.');
 }
 
 export interface BuyerRow {
@@ -522,68 +295,4 @@ export async function fetchBuyers(): Promise<BuyerRow[]> {
     email: r.profiles?.email ?? '',
     joinedAt: r.created_at,
   }));
-}
-
-export interface LotTrail {
-  buyer: string;
-  paidAt: string | null;
-  captures: { farmer: string; product: string; listedKg: number; kg: number; grade: string; photoUrl: string | null }[];
-  route: { date: string; agent: string; driver: string; stops: { point: string; arrivedAt: string | null; departedAt: string | null; temperatureC: number | null }[] } | null;
-  delivery: { at: string; receivedBy: string; photoUrl: string | null } | null;
-}
-
-const signed = async (bucket: string, paths: string[]) => {
-  if (!paths.length) return new Map<string, string>();
-  const { data } = await supabase.storage.from(bucket).createSignedUrls(paths, 60 * 30);
-  return new Map((data ?? []).filter((d) => d.path && d.signedUrl).map((d) => [d.path as string, d.signedUrl]));
-};
-
-/** Everything the agent and driver recorded for one lot, with signed photo links (ops may read both buckets). */
-export async function fetchLotTrail(lotId: string): Promise<LotTrail> {
-  const { data, error } = await supabase
-    .from('lots')
-    .select(
-      'id, orders(state, paid_at, buyers(organization_name)),' +
-        ' produce_listings(weight_kg, product, farmers(profiles(display_name)), captures(recorded_kg, grade, photo_path)),' +
-        ' route_lots(delivered_at, received_by, delivery_photo_path, routes(service_date, profiles!routes_agent_id_fkey(display_name), driver:profiles!routes_driver_id_fkey(display_name), route_stops(position, arrived_at, departed_at, temperature_c, collection_points(name))))',
-    )
-    .eq('id', lotId)
-    .single();
-  fail('Could not load this lot’s trail.')(error);
-  const d: any = data;
-  const order = (d.orders ?? []).find((o: any) => o.state === 'paid');
-  // One lot has at most one route_lots row (unique FK), so PostgREST returns an object, not an array.
-  const first = (x: any) => (Array.isArray(x) ? x[0] : x);
-  const rl = first(d.route_lots);
-  const caps = (d.produce_listings ?? []).map((l: any) => ({ ...l, captures: first(l.captures) })).filter((l: any) => l.captures);
-  const [capUrls, delUrls] = await Promise.all([
-    signed('captures', caps.map((l: any) => l.captures.photo_path)),
-    signed('deliveries', rl?.delivery_photo_path ? [rl.delivery_photo_path] : []),
-  ]);
-  return {
-    buyer: order?.buyers?.organization_name ?? '',
-    paidAt: order?.paid_at ?? null,
-    captures: caps.map((l: any) => ({
-      farmer: l.farmers?.profiles?.display_name ?? 'Farmer',
-      product: l.product,
-      listedKg: Number(l.weight_kg),
-      kg: Number(l.captures.recorded_kg),
-      grade: l.captures.grade,
-      photoUrl: capUrls.get(l.captures.photo_path) ?? null,
-    })),
-    route: rl?.routes
-      ? {
-          date: rl.routes.service_date,
-          agent: rl.routes.profiles?.display_name ?? 'Agent',
-          driver: rl.routes.driver?.display_name ?? '',
-          stops: (rl.routes.route_stops ?? [])
-            .slice()
-            .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-            .map((s: any) => ({ point: s.collection_points?.name ?? 'Collection point', arrivedAt: s.arrived_at, departedAt: s.departed_at, temperatureC: s.temperature_c == null ? null : Number(s.temperature_c) })),
-        }
-      : null,
-    delivery: rl?.delivered_at
-      ? { at: rl.delivered_at, receivedBy: rl.received_by ?? '', photoUrl: delUrls.get(rl.delivery_photo_path) ?? null }
-      : null,
-  };
 }
