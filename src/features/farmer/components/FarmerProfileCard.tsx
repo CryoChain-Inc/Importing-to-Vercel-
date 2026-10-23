@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { detailsDone, hasWallet, saveDetails, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
+import { composeAddress } from '../../../services/maps.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
 import { detailsReady, walletReady } from '../validation';
@@ -33,6 +34,10 @@ export function FarmerProfileCard({
   const [details, setDetails] = useState<FarmerDetails>({
     name,
     address: farmer.address ?? '',
+    line1: farmer.line1 ?? '',
+    landmark: farmer.landmark ?? '',
+    city: farmer.city ?? '',
+    postcode: farmer.postcode ?? '',
     locality: farmer.locality ?? '',
     latitude: farmer.latitude,
     longitude: farmer.longitude,
@@ -89,7 +94,8 @@ export function FarmerProfileCard({
         ) : (
           <View style={s.rows}>
             <Row label="Name" value={name} />
-            <Row label="Address" value={farmer.address} />
+            <Row label="Address" value={farmer.address ? composeAddress({ line1: farmer.line1 ?? '', address: farmer.address }) : null} />
+            <Row label="Landmark" value={farmer.landmark} />
             <Row label="Location" value={farmer.latitude != null ? `${farmer.latitude.toFixed(5)}, ${farmer.longitude?.toFixed(5)}` : null} />
           </View>
         )}
