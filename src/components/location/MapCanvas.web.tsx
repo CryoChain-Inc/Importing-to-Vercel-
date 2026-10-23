@@ -10,11 +10,12 @@ let loader: Promise<any> | null = null;
 const loadMaps = () =>
   (loader ??= new Promise((resolve, reject) => {
     const w = window as any;
-    if (w.google?.maps) return resolve(w.google.maps);
+    if (w.google?.maps?.Map) return resolve(w.google.maps);
+    // `callback` fires once the API is fully ready, so no importLibrary (absent when a blocker stubs the loader).
+    w.__mapsReady = () => resolve(w.google.maps);
     const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${KEY}&v=weekly&loading=async`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${KEY}&v=weekly&callback=__mapsReady`;
     s.async = true;
-    s.onload = () => w.google.maps.importLibrary('maps').then(() => resolve(w.google.maps), reject);
     s.onerror = () => {
       loader = null;
       reject(new Error('Could not load the map.'));
