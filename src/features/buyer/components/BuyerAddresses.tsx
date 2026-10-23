@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Button, Card, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
+import { AddressFields } from '../../../components/location/AddressFields';
 import { ADDRESS_MAX, deleteAddress, saveAddress, setDefaultAddress, type BuyerAddress } from '../../../services/buyer.service';
+import { addressReady, composeAddress, emptyAddress, type AddressValue } from '../../../services/maps.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { useAction } from '../../ops/components/useAction';
 
@@ -19,15 +21,15 @@ export function BuyerAddresses({ addresses, adding, onAdding, onRefresh }: {
   const [editId, setEditId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState<AddressValue>(emptyAddress);
   const full = addresses.length >= ADDRESS_MAX;
-  const valid = label.trim().length >= 2 && address.trim().length >= 2;
+  const valid = label.trim().length >= 2 && addressReady(address);
 
   const open = (a: BuyerAddress | null) => {
     setRemoveId(null);
     setEditId(a?.id ?? null);
     setLabel(a?.label ?? '');
-    setAddress(a?.address ?? '');
+    setAddress(a ?? emptyAddress);
     onAdding(a === null);
   };
   const close = () => {
@@ -37,7 +39,7 @@ export function BuyerAddresses({ addresses, adding, onAdding, onRefresh }: {
   const form = (
     <View style={s.form}>
       <Input label="Name this place" value={label} onChangeText={setLabel} maxLength={30} placeholder="e.g. Kumasi warehouse" />
-      <Input label="Address" value={address} onChangeText={setAddress} maxLength={80} placeholder="Street, area, town" autoComplete="street-address" hint="Where our driver should deliver." />
+      <AddressFields value={address} onChange={(p) => setAddress({ ...address, ...p })} />
       <View style={s.actions}>
         <Button label="Cancel" variant="outline" onPress={close} style={s.action} />
         <Button label="Save address" loading={busy} disabled={!valid} style={s.action}
@@ -71,7 +73,8 @@ export function BuyerAddresses({ addresses, adding, onAdding, onRefresh }: {
                   <Text style={s.label} numberOfLines={1}>{a.label}</Text>
                   {a.isDefault ? <Badge label="Default" tone="success" /> : null}
                 </View>
-                <Text style={s.address}>{a.address}</Text>
+                <Text style={s.address}>{composeAddress(a)}</Text>
+                {a.landmark ? <Text style={s.address}>Near {a.landmark}</Text> : null}
               </View>
             </View>
             {removeId === a.id ? (

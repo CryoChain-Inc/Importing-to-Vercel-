@@ -1,4 +1,5 @@
 import { Linking, Platform } from 'react-native';
+import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
 
 export interface TodayLot {
@@ -50,10 +51,9 @@ export interface Requirement {
 export type NewRequirement = Omit<Requirement, 'id' | 'state' | 'createdAt'>;
 
 /** phone and email are read-only here: they change only through the verified flow in authService. */
-export interface BuyerAddress {
+export interface BuyerAddress extends AddressValue {
   id: string;
   label: string;
-  address: string;
   isDefault: boolean;
 }
 
@@ -214,15 +214,26 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
   const buyerId = await requireUserId();
   const { data, error } = await supabase
     .from('buyers')
-    .select('organization_name, delivery_location, profiles(display_name, phone, email), buyer_addresses(id, label, address, is_default, created_at)')
+    .select('organization_name, delivery_location, profiles(display_name, phone, email), buyer_addresses(id, label, address, line1, landmark, city, postcode, latitude, longitude, is_default, created_at)')
     .eq('id', buyerId)
     .single();
   fail('Could not load your account.')(error);
   const p = (data as any).profiles;
-  const rows: { id: string; label: string; address: string; is_default: boolean; created_at: string }[] = (data as any).buyer_addresses ?? [];
+  const rows: any[] = (data as any).buyer_addresses ?? [];
   const addresses = rows
     .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.created_at.localeCompare(b.created_at))
-    .map((a) => ({ id: a.id, label: a.label, address: a.address, isDefault: a.is_default }));
+    .map((a): BuyerAddress => ({
+      id: a.id,
+      label: a.label,
+      address: a.address,
+      line1: a.line1 ?? '',
+      landmark: a.landmark ?? '',
+      city: a.city ?? '',
+      postcode: a.postcode ?? '',
+      latitude: a.latitude,
+      longitude: a.longitude,
+      isDefault: a.is_default,
+    }));
   return {
     organization: data!.organization_name,
     name: p?.display_name ?? '',
@@ -241,8 +252,18 @@ export async function saveBuyerDetails(b: Pick<BuyerDetails, 'organization' | 'n
 export const ADDRESS_MAX = 5;
 
 /** id null adds a new address (the first one becomes the default). */
-export async function saveAddress(id: string | null, label: string, address: string): Promise<void> {
-  const { error } = await supabase.rpc('save_buyer_address', { p_id: id, p_label: label, p_address: address });
+export async function saveAddress(id: string | null, label: string, a: AddressValue): Promise<void> {
+  const { error } = await supabase.rpc('save_buyer_address', {
+    p_id: id,
+    p_label: label,
+    p_address: a.address,
+    p_line1: a.line1,
+    p_landmark: a.landmark,
+    p_city: a.city,
+    p_postcode: a.postcode,
+    p_latitude: a.latitude,
+    p_longitude: a.longitude,
+  });
   rpcError(error, { 'address limit': `You can keep up to ${ADDRESS_MAX} addresses.` }, 'Could not save that address.');
 }
 

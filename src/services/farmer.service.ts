@@ -1,9 +1,14 @@
 import { normalizePhone } from '../utils/format';
 import type { PickedImage } from './catalogueImage';
+import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
 
 export interface Farmer {
   address: string | null;
+  line1: string | null;
+  landmark: string | null;
+  city: string | null;
+  postcode: string | null;
   locality: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -13,12 +18,9 @@ export interface Farmer {
   walletVerified: boolean;
 }
 
-export interface FarmerDetails {
+export interface FarmerDetails extends AddressValue {
   name: string;
-  address: string;
   locality: string;
-  latitude: number | null;
-  longitude: number | null;
 }
 
 export interface Wallet {
@@ -71,7 +73,7 @@ export interface CollectionPoint {
   address: string | null;
 }
 
-const FARMER_COLUMNS = 'address, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at';
+const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at';
 
 /** Profile stores the nearest collection point as this label (see DetailsForm). */
 export const pointLabel = (p: CollectionPoint) => (p.address ? `${p.name}, ${p.address}` : p.name);
@@ -96,6 +98,10 @@ export async function fetchFarmer(): Promise<Farmer | null> {
   if (!data) return null;
   return {
     address: data.address,
+    line1: data.line1,
+    landmark: data.landmark,
+    city: data.city,
+    postcode: data.postcode,
     locality: data.locality,
     latitude: data.latitude,
     longitude: data.longitude,
@@ -113,6 +119,10 @@ export async function saveDetails(d: FarmerDetails): Promise<void> {
     p_locality: d.locality,
     p_latitude: d.latitude,
     p_longitude: d.longitude,
+    p_line1: d.line1,
+    p_landmark: d.landmark,
+    p_city: d.city,
+    p_postcode: d.postcode,
   });
   if (error) throw new Error('Could not save your details.');
 }
