@@ -22,11 +22,3 @@ export interface CropPrice {
   category: string;
   imageUrl: string | null;
 }
-
-export interface BuyerForm {
-  organization: string;
-  name: string;
-  /** The contact the user did not sign in with (phone if they used email, and vice versa); verified after sign-up. */
-  otherContact: string;
-  location: string;
-}

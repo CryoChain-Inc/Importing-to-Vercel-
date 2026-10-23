@@ -6,7 +6,7 @@ const hookSecret = (Deno.env.get('SEND_EMAIL_HOOK_SECRET') ?? '').replace('v1,wh
 
 type HookPayload = {
   user: { email?: string; new_email?: string; email_change?: string };
-  email_data: { token: string; token_new?: string; email_action_type?: string; new_email?: string };
+  email_data: { token: string; token_new?: string; token_hash?: string; redirect_to?: string; email_action_type?: string; new_email?: string };
 };
 
 Deno.serve(async (req) => {
@@ -28,7 +28,15 @@ Deno.serve(async (req) => {
   const change = email_data.email_action_type === 'email_change';
   const newEmail = user.new_email || user.email_change || email_data.new_email;
   const to = change ? newEmail || user.email : user.email;
-  const code = change ? email_data.token_new || email_data.token : email_data.token;
+  const code = email_data.token;
+  // With secure email change off, token_hash pairs with the new address (Supabase names the hashes the other way round).
+  const link = change && email_data.token_hash
+    ? `${Deno.env.get('SUPABASE_URL')}/auth/v1/verify?${new URLSearchParams({
+        token: email_data.token_hash,
+        type: 'email_change',
+        ...(email_data.redirect_to ? { redirect_to: email_data.redirect_to } : {}),
+      })}`
+    : null;
   if (!to) {
     console.error('no recipient', { user: Object.keys(user), email_data: Object.keys(email_data), type: email_data.email_action_type });
     return Response.json({ error: { http_code: 400, message: 'No email address to send to' } });
@@ -41,8 +49,10 @@ Deno.serve(async (req) => {
       from: { address: from, name: 'CryoChain' },
       to: [{ address: to }],
       content: {
-        subject: change ? 'Confirm your email for CryoChain' : 'Your CryoChain sign-in code',
-        html: `<p>Your ${change ? 'confirmation' : 'sign-in'} code is <strong style="font-size:20px">${code}</strong>.</p><p>It expires shortly. If you didn't request it, ignore this email.</p>`,
+        subject: change ? 'Confirm your CryoChain email' : 'Your CryoChain sign-in code',
+        html: link
+          ? `<p>Tap the button to confirm this email for your CryoChain account.</p><p><a href="${link}" clicktracking="off" style="display:inline-block;padding:12px 20px;background:#1f7a45;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Confirm email</a></p><p style="font-size:12px;color:#666">Button not working? Paste this into your browser:<br>${link}</p><p style="font-size:12px;color:#666">If you didn't request it, ignore this email.</p>`
+          : `<p>Your ${change ? 'confirmation' : 'sign-in'} code is <strong style="font-size:20px">${code}</strong>.</p><p>It expires shortly. If you didn't request it, ignore this email.</p>`,
       },
     }),
   });

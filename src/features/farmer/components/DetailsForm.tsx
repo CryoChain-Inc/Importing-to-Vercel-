@@ -1,23 +1,15 @@
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, ChoiceChips, Input } from '../../../components/common';
-import { fetchCollectionPoints, type FarmerDetails } from '../../../services/farmer.service';
+import { Button, Input } from '../../../components/common';
+import type { FarmerDetails } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
-/** Name, address, current location and nearest collection point. Shared by onboarding and the profile tab. */
+/** Name, address and current location. Shared by onboarding and the profile tab. */
 export function DetailsForm({ value, onChange }: { value: FarmerDetails; onChange: (patch: Partial<FarmerDetails>) => void }) {
   const s = useThemedStyles(styles);
-  const [towns, setTowns] = useState<string[]>([]);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchCollectionPoints().then(
-      (pts) => setTowns(pts.map((p) => (p.address ? `${p.name}, ${p.address}` : p.name))),
-      () => undefined,
-    );
-  }, []);
 
   const locate = async () => {
     setLocating(true);
@@ -45,7 +37,6 @@ export function DetailsForm({ value, onChange }: { value: FarmerDetails; onChang
         {locError ? <Text style={s.error}>{locError}</Text> : null}
         <Button label={has ? 'Update location' : 'Use my current location'} variant="outline" onPress={locate} loading={locating} />
       </View>
-      {towns.length ? <ChoiceChips label="Nearest collection point" options={towns} value={value.locality} onChange={(locality) => onChange({ locality })} /> : null}
     </View>
   );
 }

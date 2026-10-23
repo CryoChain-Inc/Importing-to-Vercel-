@@ -43,7 +43,7 @@ export function WalletForm({ value, onChange }: { value: Wallet; onChange: (patc
       </View>
       <Input label="2. Wallet number" prefix="+233" value={value.number} onChangeText={(number) => edit({ number })} keyboardType="phone-pad" placeholder="24 000 0000" />
       <Input label="3. Name on the wallet" value={value.name} onChangeText={(name) => onChange({ name })} hint="As registered with your network. A mismatch pauses payouts." />
-      <Button size="sm" variant="tonal" icon="check" label="Check name with network" loading={checking} disabled={!value.network || value.number.replace(/\D/g, '').length < 9} onPress={check} />
+      <Button size="sm" variant="tonal" icon="check" label={found ? 'Verify again' : 'Verify wallet'} loading={checking} disabled={!value.network || value.number.replace(/\D/g, '').length < 9} onPress={check} />
       {found === null ? <Text style={s.note}>We couldn’t verify this wallet. You can still save it; just check the number and name.</Text> : null}
       {found ? (
         <View style={s.note}>

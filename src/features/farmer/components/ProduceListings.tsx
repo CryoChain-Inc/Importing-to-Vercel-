@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { deleteListing, fetchCollectionPoints, pointLabel, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
+import { deleteListing, fetchCollectionPoints, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ListingCard } from './ListingCard';
 import { NewListing } from './NewListing';
@@ -15,13 +15,10 @@ const FILTERS = [
 ] as const;
 
 /** Listing form is locked until a wallet is saved (the database enforces this too). */
-export function ProduceListings({ listings, walletReady, locality, onAddWallet, onOpenProfile, onChange }: {
+export function ProduceListings({ listings, walletReady, onAddWallet, onChange }: {
   listings: ProduceListing[];
   walletReady: boolean;
-  /** Nearest collection point saved on the farmer's profile. */
-  locality: string | null;
   onAddWallet: () => void;
-  onOpenProfile: () => void;
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
@@ -30,7 +27,6 @@ export function ProduceListings({ listings, walletReady, locality, onAddWallet, 
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('available');
   const [shown, setShown] = useState(PAGE);
   const [error, setError] = useState<string | null>(null);
-  const point = points.find((p) => pointLabel(p) === locality) ?? null;
   const active = FILTERS.find((f) => f.key === filter)!;
   const rows = listings.filter((l) => (active.stages as readonly string[]).includes(l.stage));
 
@@ -52,7 +48,7 @@ export function ProduceListings({ listings, walletReady, locality, onAddWallet, 
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
       {walletReady ? (
-        <NewListing point={point} onOpenProfile={onOpenProfile} onCreated={onChange} />
+        <NewListing points={points} onCreated={onChange} />
       ) : (
         <Card tone="tint" style={s.locked}>
           <View style={s.lockIcon}><Icon name="lock" size={22} color={colors.brandInk} /></View>

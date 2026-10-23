@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey =
@@ -18,7 +17,8 @@ function createSupabase(): SupabaseClient {
       storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: Platform.OS === 'web',
+      // Sign-in is by code. The emailed confirm link carries tokens in its URL; adopting them would log that browser in.
+      detectSessionInUrl: false,
     },
   });
 }

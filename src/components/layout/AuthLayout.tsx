@@ -1,5 +1,5 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Gradient } from '../common/Gradient';
 import { Icon, type IconName } from '../common/Icon';
@@ -44,7 +44,7 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
   );
 
   return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={s.root} behavior="padding">
       {wide ? (
         <View style={s.split}>
           <Gradient kind="card" style={s.panel}>

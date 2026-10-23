@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
@@ -9,6 +9,12 @@ export function OtpInput({ value, onChange, hasError }: { value: string; onChang
   const ref = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   const s = useThemedStyles(styles);
+
+  // autoFocus opens the keyboard before KeyboardAvoidingView has measured its frame, so the form never lifts; focus once the screen has settled.
+  useEffect(() => {
+    const id = setTimeout(() => ref.current?.focus(), 350);
+    return () => clearTimeout(id);
+  }, []);
 
   return (
     <Pressable onPress={() => ref.current?.focus()} style={s.row} accessibilityLabel="6-digit verification code">
@@ -28,7 +34,6 @@ export function OtpInput({ value, onChange, hasError }: { value: string; onChang
         textContentType="oneTimeCode"
         autoComplete="sms-otp"
         maxLength={OTP_LENGTH}
-        autoFocus
         caretHidden
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

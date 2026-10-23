@@ -1,12 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
 import type { Account, Role } from '../types/auth';
+import { verifyLinkStatus } from '../utils/verifyLink';
 
 export type Route =
   | { name: 'landing' }
+  | { name: 'ops' }
+  | { name: 'emailVerified'; ok: boolean }
   | { name: 'verify'; identifier: string; kind: 'otp' }
   | { name: 'role'; identifier: string }
-  | { name: 'onboarding'; identifier: string; role: 'farmer' | 'buyer' }
   | { name: 'workspace'; account: Account }
   | { name: 'home'; account: Account; role: Role };
 
@@ -21,7 +23,15 @@ interface Nav {
 
 const Ctx = createContext<Nav | null>(null);
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
-const PATH: Record<Route['name'], string> = { landing: '/', verify: '/verify', role: '/role', onboarding: '/onboarding', workspace: '/workspace', home: '/home' };
+// Params live in memory, so a deep link never lands signed in: /ops and /ops/* go to the ops login, anything else to the landing page.
+const START: Route = !isWeb
+  ? { name: 'landing' }
+  : /^\/ops(\/|$)/.test(window.location.pathname)
+    ? { name: 'ops' }
+    : window.location.pathname === '/email-verified' && verifyLinkStatus(window.location.href)
+      ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
+      : { name: 'landing' };
+const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', emailVerified: '/email-verified', verify: '/verify', role: '/role', workspace: '/workspace', home: '/home' };
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)
@@ -29,12 +39,12 @@ const PATH: Record<Route['name'], string> = { landing: '/', verify: '/verify', r
  * shortcut: params live in memory, so a reload on a deep URL returns to the landing page.
  */
 export function NavigatorProvider({ children }: { children: React.ReactNode }) {
-  const [stack, setStack] = useState<Route[]>([{ name: 'landing' }]);
+  const [stack, setStack] = useState<Route[]>([START]);
   const stackRef = useRef(stack);
   stackRef.current = stack;
 
   useEffect(() => {
-    if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH.landing);
+    if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH[START.name]);
   }, []);
 
   const push = useCallback((r: Route) => {

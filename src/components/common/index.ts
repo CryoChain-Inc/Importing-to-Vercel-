@@ -11,3 +11,4 @@ export * from './Brand';
 export * from './ThemeToggle';
 export * from './HeroCard';
 export * from './StatHero';
+export * from './ProfileChecklist';

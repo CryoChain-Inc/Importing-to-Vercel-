@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, Text, View } from 'react-native';
-import { Badge, Button, ThemeToggle } from '../../../components/common';
+import { Badge, Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell, type TabDef } from '../../../components/layout';
 import { useNav } from '../../../navigation';
@@ -9,7 +9,7 @@ import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
-import { BuyerAccount } from '../components/BuyerAccount';
+import { BuyerAccount, buyerProfileComplete } from '../components/BuyerAccount';
 import { Orders } from '../components/Orders';
 import { Requirements } from '../components/Requirements';
 import { TodayLots } from '../components/TodayLots';
@@ -76,13 +76,12 @@ export function BuyerHome({ account }: { account: Account }) {
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
 
   return (
-    <TabShell tabs={TABS} tab={tab} onSelect={setTab}>
+    <TabShell tabs={TABS.map((t) => (t.key === 'account' && data && !buyerProfileComplete(data.details) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
       <View style={s.header}>
         <View style={s.headerText}>
           <Text style={s.hello}>Hello, {account.name || 'buyer'}</Text>
           {toPay ? <Badge label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`} tone="warning" /> : null}
         </View>
-        <ThemeToggle />
       </View>
       {error ? <Banner text={error} /> : null}
       {data ? (
