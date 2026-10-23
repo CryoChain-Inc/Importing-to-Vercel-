@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { hasWallet, saveDetails, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
+import { detailsDone, hasWallet, saveDetails, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
 import { detailsReady, walletReady } from '../validation';
@@ -60,6 +60,8 @@ export function FarmerProfileCard({
   };
 
   const saved = hasWallet(farmer);
+  const hasDetails = name.trim().length > 1 && detailsDone(farmer);
+  const complete = hasDetails && saved;
   return (
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
@@ -67,13 +69,14 @@ export function FarmerProfileCard({
         <View style={s.avatar}><Text style={s.initials}>{initials(name)}</Text></View>
         <View style={s.heroText}>
           <Text style={s.heroName} numberOfLines={1} adjustsFontSizeToFit>{name || 'Farmer'}</Text>
-          <Text style={s.heroMeta} numberOfLines={1}>{[farmer.locality, phone ? formatPhone(phone) : null].filter(Boolean).join(' · ') || 'Add your farm details'}</Text>
+          <Text style={s.heroMeta} numberOfLines={1}>{[phone ? formatPhone(phone) : null].filter(Boolean).join(' · ') || 'Add your farm details'}</Text>
         </View>
       </HeroCard>
+      <Badge label={complete ? 'Profile complete' : 'Profile incomplete'} tone={complete ? 'success' : 'warning'} />
       <Card>
         <View style={s.head}>
           <Text style={s.title}>Farm details</Text>
-          <Button label={editing === 'details' ? 'Cancel' : 'Edit'} variant="ghost" size="sm" onPress={() => onEdit(editing === 'details' ? null : 'details')} />
+          {editing === 'details' ? null : <Button label={hasDetails ? 'Edit' : 'Add'} variant="ghost" size="sm" onPress={() => onEdit('details')} />}
         </View>
         {editing === 'details' ? (
           <View style={s.form}>
@@ -87,7 +90,6 @@ export function FarmerProfileCard({
           <View style={s.rows}>
             <Row label="Name" value={name} />
             <Row label="Address" value={farmer.address} />
-            <Row label="Nearest town" value={farmer.locality} />
             <Row label="Location" value={farmer.latitude != null ? `${farmer.latitude.toFixed(5)}, ${farmer.longitude?.toFixed(5)}` : null} />
           </View>
         )}

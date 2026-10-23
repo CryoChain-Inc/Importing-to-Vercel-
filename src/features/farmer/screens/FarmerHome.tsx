@@ -68,11 +68,6 @@ export function FarmerHome({ account }: { account: Account }) {
     setTab('profile');
   };
 
-  const editDetails = () => {
-    setTab('profile');
-    setEditing('details');
-  };
-
   const select = (t: Tab) => {
     setTab(t);
     setEditing(null);
@@ -98,7 +93,7 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} walletReady={walletReady} locality={farmer.locality} onAddWallet={addWallet} onOpenProfile={editDetails} onChange={load} />
+              <ProduceListings listings={listings} walletReady={walletReady} onAddWallet={addWallet} onChange={load} />
             </>
           ) : null}
           {tab === 'messages' ? <MessagesPanel listings={listings} /> : null}
