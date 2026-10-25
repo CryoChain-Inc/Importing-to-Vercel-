@@ -17,6 +17,8 @@ export interface SupplyRow {
   id: string;
   product: string;
   weightKg: number;
+  /** Still unsold after buyers' payments and declined offers. */
+  remainingKg: number;
   farmer: string;
   farmerId: string;
   locality: string;
@@ -92,15 +94,20 @@ export async function fetchFarmers(): Promise<FarmerRow[]> {
 }
 
 export async function fetchSupply(): Promise<SupplyRow[]> {
-  const { data, error } = await supabase
-    .from('produce_listings')
-    .select('id, product, grade, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)')
-    .order('created_at', { ascending: false });
-  fail('Could not load supply.')(error);
+  const [{ data, error }, stock] = await Promise.all([
+    supabase
+      .from('produce_listings')
+      .select('id, product, grade, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)')
+      .order('created_at', { ascending: false }),
+    supabase.from('listing_stock').select('listing_id, remaining_kg'),
+  ]);
+  fail('Could not load supply.')(error ?? stock.error);
+  const left = new Map((stock.data ?? []).map((r) => [r.listing_id as string, Number(r.remaining_kg)]));
   return (data ?? []).map((r: any) => ({
     id: r.id,
     product: r.product,
     weightKg: Number(r.weight_kg),
+    remainingKg: left.get(r.id) ?? Number(r.weight_kg),
     farmer: r.farmers?.profiles?.display_name ?? 'Unnamed farmer',
     farmerId: r.farmer_id,
     locality: r.farmers?.locality ?? '',

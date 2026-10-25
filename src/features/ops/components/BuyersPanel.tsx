@@ -5,7 +5,7 @@ import type { OrderRow } from '../../../services/ops.buyers.service';
 import type { BuyerRow } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone, ghs } from '../../../utils/format';
-import { Empty, kg, usePaged } from './OpsBits';
+import { Empty, usePaged } from './OpsBits';
 
 const TONE = { awaiting_payment: 'warning', paid: 'success', cancelled: 'neutral' } as const;
 

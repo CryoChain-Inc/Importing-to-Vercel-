@@ -9,9 +9,8 @@ import { NewListing } from './NewListing';
 
 const PAGE = 4;
 const FILTERS = [
-  { key: 'available', label: 'Active', stages: ['available'], empty: 'No produce waiting for a buyer.' },
-  { key: 'sold', label: 'Sold', stages: ['sold', 'scheduled'], empty: 'Nothing sold yet.' },
-  { key: 'collected', label: 'Collected', stages: ['captured', 'loaded', 'delivered'], empty: 'Nothing has been collected yet.' },
+  { key: 'active', label: 'On sale', has: (l: ProduceListing) => l.remainingKg > 0, empty: 'Nothing on sale right now.' },
+  { key: 'sold', label: 'Sold out', has: (l: ProduceListing) => l.remainingKg <= 0, empty: 'Nothing has sold out yet.' },
 ] as const;
 
 /** Listing form is locked until a wallet is saved (the database enforces this too). */
@@ -24,11 +23,11 @@ export function ProduceListings({ listings, walletReady, onAddWallet, onChange }
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [points, setPoints] = useState<CollectionPoint[]>([]);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('available');
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active');
   const [shown, setShown] = useState(PAGE);
   const [error, setError] = useState<string | null>(null);
   const active = FILTERS.find((f) => f.key === filter)!;
-  const rows = listings.filter((l) => (active.stages as readonly string[]).includes(l.stage));
+  const rows = listings.filter(active.has);
 
   useEffect(() => {
     fetchCollectionPoints().then(setPoints, (e) => setError(e.message));
@@ -64,7 +63,7 @@ export function ProduceListings({ listings, walletReady, onAddWallet, onChange }
       </View>
       <View style={s.seg} accessibilityRole="tablist">
         {FILTERS.map((f) => {
-          const n = listings.filter((l) => (f.stages as readonly string[]).includes(l.stage)).length;
+          const n = listings.filter(f.has).length;
           const on = f.key === filter;
           return (
             <Pressable key={f.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { setFilter(f.key); setShown(PAGE); }} style={[s.segBtn, on && s.segOn]}>

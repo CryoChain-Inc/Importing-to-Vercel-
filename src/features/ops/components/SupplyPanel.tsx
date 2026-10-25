@@ -13,11 +13,11 @@ export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?
   return (
     <View style={s.gap}>
       <Card style={s.group}>
-        {rows.map(({ product, kg: listed }, i) => (
+        {rows.map(({ product, kg: listed, left }, i) => (
           <View key={product} style={[s.prod, i > 0 && s.divider]}>
             <View style={s.top}>
               <Text style={s.name} numberOfLines={1}>{product}</Text>
-              <Text style={s.left}>{kg(listed)}</Text>
+              <Text style={s.left}>{kg(left)} left of {kg(listed)}</Text>
             </View>
           </View>
         ))}
@@ -35,6 +35,7 @@ export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
   return (
     <View style={s.gap}>
       <Hero label="Listed by farmers" value={kg(supply.reduce((n, r) => n + r.weightKg, 0))} cells={[
+        { label: 'Left to sell', value: kg(supply.reduce((n, r) => n + r.remainingKg, 0)) },
         { label: 'Listings', value: String(supply.length) },
         { label: 'Products', value: String(supplyByProduct(supply).length) },
       ]} />
@@ -45,7 +46,7 @@ export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
       <SectionTitle title="Farmer listings" note={`${supply.length} listings`} />
       {rows.map((r) => (
         <Card key={r.id} style={s.item}>
-          <Text style={s.name} numberOfLines={1}>{r.product} · Grade {r.grade} · {kg(r.weightKg)}</Text>
+          <Text style={s.name} numberOfLines={1}>{r.product} · Grade {r.grade} · {kg(r.remainingKg)} left of {kg(r.weightKg)}</Text>
           <Text style={s.meta}>{[r.farmer, r.locality, r.point].filter(Boolean).join(' · ')}</Text>
           <Text style={s.meta}>Listed {new Date(r.createdAt).toLocaleDateString('en-GH')}</Text>
         </Card>

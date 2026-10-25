@@ -1,31 +1,20 @@
 import React, { useState } from 'react';
 import { Image, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
-import { produceImageUrl, type ListingStage, type ProduceListing } from '../../../services/farmer.service';
+import { produceImageUrl, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { fmtWindow, ghs } from '../../../utils/format';
+import { ghs } from '../../../utils/format';
 import { EditListing } from './EditListing';
 
-const STEPS = ['Listed', 'Sold', 'Collected', 'Delivered'];
-const STEP_OF: Record<ListingStage, number> = { available: 0, sold: 1, scheduled: 1, captured: 2, loaded: 2, delivered: 3 };
-const STAGE_LABEL: Record<ListingStage, string> = {
-  available: 'Waiting for a buyer',
-  sold: 'Sold, pickup date to follow',
-  scheduled: 'Pickup scheduled',
-  captured: 'Weighed and graded',
-  loaded: 'On the truck',
-  delivered: 'Delivered to the buyer',
-};
-const PAYOUT_LABEL = { pending: 'Pending delivery', payable: 'Ready to pay', paid: 'Paid' } as const;
 const kgText = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
 export function ListingCard({ listing: l, onRemove, onSaved }: { listing: ProduceListing; onRemove?: (id: string) => void; onSaved: () => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const step = STEP_OF[l.stage];
-  const kg = l.recordedKg ?? l.weightKg;
   const photo = l.imagePaths[0];
+  const pct = (kg: number) => `${Math.min(100, (kg / l.weightKg) * 100)}%` as const;
+  const soldOut = l.remainingKg <= 0;
   if (editing) return <Card style={s.card}><EditListing listing={l} onDone={() => setEditing(false)} onSaved={onSaved} /></Card>;
   return (
     <Card style={s.card}>
@@ -36,34 +25,34 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
         <View style={s.main}>
           <View style={s.titleRow}>
             <Text style={s.product} numberOfLines={1}>{l.product}</Text>
-            <Badge label={`Grade ${l.recordedGrade ?? l.grade}`} tone="success" />
+            <Badge label={`Grade ${l.grade}`} tone="success" />
           </View>
-          <Text style={s.meta}>
-            {kgText(kg)}{l.recordedKg != null ? ' recorded' : ''}{l.point ? ` · ${l.point}` : ''}
-          </Text>
-          {l.recordedKg != null && l.recordedKg !== l.weightKg ? <Text style={s.meta}>Listed as {kgText(l.weightKg)}</Text> : null}
+          <Text style={s.meta}>{kgText(l.weightKg)} listed{l.point ? ` · ${l.point}` : ''}</Text>
         </View>
       </View>
 
-      <View style={s.track} accessibilityLabel={`Progress: ${STEPS[step]}`}>
-        {STEPS.map((name, i) => (
-          <View key={name} style={s.seg}>
-            <View style={[s.bar, i <= step && s.barOn]} />
-            <Text style={[s.stepName, i === step && s.stepNameOn]}>{name}</Text>
-          </View>
-        ))}
+      <View style={s.track} accessibilityLabel={`${kgText(l.soldKg)} sold, ${kgText(l.remainingKg)} left of ${kgText(l.weightKg)}`}>
+        <View style={s.bar}>
+          <View style={[s.fill, s.fillDelivered, { width: pct(l.deliveredKg) }]} />
+          <View style={[s.fill, s.fillSold, { width: pct(l.soldKg - l.deliveredKg), left: pct(l.deliveredKg) }]} />
+        </View>
+        <View style={s.legend}>
+          <Stat label="Sold" value={kgText(l.soldKg)} s={s} />
+          <Stat label="Delivered" value={kgText(l.deliveredKg)} s={s} />
+          <Stat label="Left" value={kgText(l.remainingKg)} s={s} strong />
+        </View>
       </View>
+      {l.withdrawnKg > 0 ? <Text style={s.meta}>{kgText(l.withdrawnKg)} came off this listing after an offer was declined or lapsed.</Text> : null}
 
       <View style={s.foot}>
         <View style={s.footText}>
-          <Text style={s.status}>{STAGE_LABEL[l.stage]}</Text>
-          {l.stage === 'scheduled' && l.pickupStart ? <Text style={s.meta}>{fmtWindow(l.pickupStart, l.pickupEnd)}</Text> : null}
+          <Text style={s.status}>{soldOut ? 'Sold out' : l.soldKg > 0 ? 'Part sold' : 'Waiting for a buyer'}</Text>
         </View>
         <View style={s.money}>
-          {l.payoutNet != null ? (
+          {l.earned > 0 ? (
             <>
-              <Text style={s.amount}>{ghs(l.payoutNet)}</Text>
-              {l.payoutStatus ? <Text style={s.meta}>{PAYOUT_LABEL[l.payoutStatus]}</Text> : null}
+              <Text style={s.amount}>{ghs(l.earned)}</Text>
+              <Text style={s.meta}>{l.paidOut >= l.earned ? 'Paid' : `${ghs(l.paidOut)} paid`}</Text>
             </>
           ) : l.estNet != null ? (
             <>
@@ -74,15 +63,20 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
         </View>
       </View>
 
-      {!l.inLot && l.stage === 'available' ? (
-        <View style={s.actions}>
-          <Button label="Edit" variant="tonal" size="sm" icon="edit" onPress={() => setEditing(true)} />
-          {onRemove ? <Button label="Remove" variant="ghost" size="sm" onPress={() => onRemove(l.id)} /> : null}
-        </View>
-      ) : l.stage === 'available' ? (
-        <Text style={s.meta}>In a lot, so it can no longer be edited or removed.</Text>
-      ) : null}
+      <View style={s.actions}>
+        <Button label="Edit" variant="tonal" size="sm" icon="edit" onPress={() => setEditing(true)} />
+        {onRemove && l.soldKg + l.withdrawnKg === 0 ? <Button label="Remove" variant="ghost" size="sm" onPress={() => onRemove(l.id)} /> : null}
+      </View>
     </Card>
+  );
+}
+
+function Stat({ label, value, s, strong }: { label: string; value: string; s: ReturnType<typeof styles>; strong?: boolean }) {
+  return (
+    <View style={s.stat}>
+      <Text style={s.meta}>{label}</Text>
+      <Text style={[s.statVal, strong && s.statStrong]}>{value}</Text>
+    </View>
   );
 }
 
@@ -95,12 +89,15 @@ const styles = (c: Record<ColorToken, string>) => ({
   titleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
   product: { flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  track: { flexDirection: 'row' as const, gap: 6 },
-  seg: { flex: 1, gap: 6 },
-  bar: { height: 4, borderRadius: 2, backgroundColor: c.surfaceSunken },
-  barOn: { backgroundColor: c.brand500 },
-  stepName: { fontFamily: fonts.sansMedium, fontSize: 11, color: c.inkMuted },
-  stepNameOn: { fontFamily: fonts.sansBold, color: c.brandInk },
+  track: { gap: 10 },
+  bar: { height: 8, borderRadius: 4, overflow: 'hidden' as const, backgroundColor: c.surfaceSunken },
+  fill: { position: 'absolute' as const, top: 0, bottom: 0, left: 0 },
+  fillDelivered: { backgroundColor: c.brand500 },
+  fillSold: { backgroundColor: c.brand500, opacity: 0.45 },
+  legend: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 8 },
+  stat: { gap: 2 },
+  statVal: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  statStrong: { fontFamily: fonts.sansBold },
   foot: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 12, alignItems: 'flex-end' as const },
   footText: { flex: 1, gap: 2 },
   status: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink },

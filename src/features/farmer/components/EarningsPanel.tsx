@@ -1,41 +1,37 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard, Icon } from '../../../components/common';
-import type { Farmer, ProduceListing } from '../../../services/farmer.service';
+import type { Farmer, Sale } from '../../../services/farmer.service';
 import { hasWallet } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone, ghs } from '../../../utils/format';
 
 const STATUS = {
-  pending: { label: 'Pending delivery', tone: 'warning' },
-  payable: { label: 'Ready to pay', tone: 'info' },
+  awaiting_delivery: { label: 'Awaiting delivery', tone: 'warning' },
+  payable: { label: 'Delivered, payout due', tone: 'info' },
   paid: { label: 'Paid', tone: 'success' },
 } as const;
 
-/** Payments tab: what the farmer has earned, what is on its way, and where it is paid. */
-export function EarningsPanel({ listings, farmer, onWallet }: { listings: ProduceListing[]; farmer: Farmer | null; onWallet: () => void }) {
+/** Payments tab: what each delivered order earned, what is waiting on delivery, and where it is paid. */
+export function EarningsPanel({ sales, farmer, onWallet }: { sales: Sale[]; farmer: Farmer | null; onWallet: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const rows = listings.filter((l) => l.payoutNet != null && l.payoutStatus);
-  const sum = (st: string) => rows.filter((l) => l.payoutStatus === st).reduce((a, l) => a + (l.payoutNet ?? 0), 0);
-  const paid = sum('paid');
-  const coming = sum('pending') + sum('payable');
-  const expected = listings.filter((l) => l.payoutNet == null && l.estNet != null).reduce((a, l) => a + (l.estNet ?? 0), 0);
+  const sum = (st: Sale['status']) => sales.filter((x) => x.status === st).reduce((a, x) => a + x.amount, 0);
   const saved = hasWallet(farmer);
 
   return (
     <View style={s.wrap}>
       <HeroCard style={s.hero}>
-        <Text style={s.heroLabel}>Total earned</Text>
-        <Text style={s.heroAmount} numberOfLines={1} adjustsFontSizeToFit>{ghs(paid)}</Text>
+        <Text style={s.heroLabel}>Total paid</Text>
+        <Text style={s.heroAmount} numberOfLines={1} adjustsFontSizeToFit>{ghs(sum('paid'))}</Text>
         <View style={s.heroRow}>
           <View style={s.heroCell}>
-            <Text style={s.heroSub}>On its way</Text>
-            <Text style={s.heroVal} numberOfLines={1} adjustsFontSizeToFit>{ghs(coming)}</Text>
+            <Text style={s.heroSub}>Payout due</Text>
+            <Text style={s.heroVal} numberOfLines={1} adjustsFontSizeToFit>{ghs(sum('payable'))}</Text>
           </View>
           <View style={s.heroCell}>
-            <Text style={s.heroSub}>Expected</Text>
-            <Text style={s.heroVal} numberOfLines={1} adjustsFontSizeToFit>{ghs(expected)}</Text>
+            <Text style={s.heroSub}>Awaiting delivery</Text>
+            <Text style={s.heroVal} numberOfLines={1} adjustsFontSizeToFit>{ghs(sum('awaiting_delivery'))}</Text>
           </View>
         </View>
       </HeroCard>
@@ -49,23 +45,26 @@ export function EarningsPanel({ listings, farmer, onWallet }: { listings: Produc
         {saved ? <Badge label={farmer?.walletVerified ? 'Verified' : 'Saved'} tone={farmer?.walletVerified ? 'success' : 'info'} /> : <Button label="Add" size="sm" onPress={onWallet} />}
       </Card>
 
-      <Text style={s.section}>Payout history</Text>
-      {rows.length === 0 ? (
+      <Text style={s.section}>Your sales</Text>
+      {sales.length === 0 ? (
         <Card style={s.empty}>
-          <Text style={s.emptyTitle}>No payouts yet</Text>
-          <Text style={s.meta}>Each consignment is paid once it has been weighed, graded and delivered to the buyer.</Text>
+          <Text style={s.emptyTitle}>No sales yet</Text>
+          <Text style={s.meta}>When a buyer pays for your produce, it shows here. You are paid for each order once it is delivered.</Text>
         </Card>
       ) : (
-        rows.map((l) => {
-          const st = STATUS[l.payoutStatus!];
+        sales.map((x) => {
+          const st = STATUS[x.status];
           return (
-            <Card key={l.id} style={s.row}>
+            <Card key={x.id} style={s.row}>
               <View style={s.rowText}>
-                <Text style={s.product}>{l.product} · Grade {l.recordedGrade ?? l.grade}</Text>
-                <Text style={s.meta}>{(l.recordedKg ?? l.weightKg).toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg{l.point ? ` · ${l.point}` : ''}</Text>
+                <Text style={s.product}>{x.product} · Grade {x.grade}</Text>
+                <Text style={s.meta}>{x.kg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg at {ghs(x.pricePerKg)}/kg</Text>
+                <Text style={s.meta}>
+                  {x.status === 'paid' && x.paidAt ? `Paid ${new Date(x.paidAt).toLocaleDateString('en-GH')}` : x.deliveredAt ? `Delivered ${new Date(x.deliveredAt).toLocaleDateString('en-GH')}` : `Ordered ${new Date(x.createdAt).toLocaleDateString('en-GH')}`}
+                </Text>
               </View>
               <View style={s.rowEnd}>
-                <Text style={s.amount}>{ghs(l.payoutNet!)}</Text>
+                <Text style={s.amount}>{ghs(x.amount)}</Text>
                 <Badge label={st.label} tone={st.tone} />
               </View>
             </Card>
