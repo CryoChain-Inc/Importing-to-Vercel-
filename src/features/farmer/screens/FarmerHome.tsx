@@ -5,11 +5,12 @@ import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
-import { fetchFarmer, fetchListings, hasWallet, type Farmer, type ProduceListing } from '../../../services/farmer.service';
+import { fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { EarningsPanel } from '../components/EarningsPanel';
 import { MessagesPanel } from '../components/MessagesPanel';
+import { Offers } from '../components/Offers';
 import { FarmerProfileCard } from '../components/FarmerProfileCard';
 import { PriceBoard } from '../components/PriceBoard';
 import { ProduceListings } from '../components/ProduceListings';
@@ -31,14 +32,16 @@ export function FarmerHome({ account }: { account: Account }) {
   const [editing, setEditing] = useState<'details' | 'wallet' | null>(null);
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [listings, setListings] = useState<ProduceListing[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [f, l] = await Promise.all([fetchFarmer(), fetchListings()]);
+      const [f, l, sold] = await Promise.all([fetchFarmer(), fetchListings(), fetchSales()]);
       setFarmer(f);
       setListings(l);
+      setSales(sold);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your farm.');
@@ -96,8 +99,8 @@ export function FarmerHome({ account }: { account: Account }) {
               <ProduceListings listings={listings} walletReady={walletReady} onAddWallet={addWallet} onChange={load} />
             </>
           ) : null}
-          {tab === 'messages' ? <MessagesPanel listings={listings} /> : null}
-          {tab === 'payments' ? <EarningsPanel listings={listings} farmer={farmer} onWallet={addWallet} /> : null}
+          {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
+          {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={addWallet} /> : null}
           {tab === 'profile' ? <FarmerProfileCard name={account.name} phone={account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} /> : null}
         </>
       )}

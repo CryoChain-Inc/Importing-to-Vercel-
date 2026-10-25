@@ -7,7 +7,7 @@ import { googleKeyAccepted, labelFor } from './places';
 import { roadRoute } from './route';
 
 const ACCRA = { lat: 5.6037, lng: -0.187 };
-const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY;
 
 function loadScript(id: string, src: string): Promise<void> {
   return new Promise((resolve, reject) => {

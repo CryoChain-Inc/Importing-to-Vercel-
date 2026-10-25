@@ -2,16 +2,14 @@ import { Linking, Platform } from 'react-native';
 import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
 
-export interface TodayLot {
-  id: string;
-  code: string;
-  product: string;
-  totalKg: number;
-  pricePerKg: number;
-  amount: number;
-}
-
 export type OrderState = 'awaiting_payment' | 'paid' | 'cancelled';
+
+export interface OrderItem {
+  name: string;
+  grade: string;
+  kg: number;
+  lineTotal: number;
+}
 
 export interface Order {
   id: string;
@@ -19,10 +17,8 @@ export interface Order {
   amount: number;
   state: OrderState;
   createdAt: string;
-  lotCode: string;
-  product: string;
-  totalKg: number;
-  lotState: string;
+  items: OrderItem[];
+  deliveryAddress: string;
   /** Status of the latest Paystack attempt, if any; failed/abandoned means the buyer can retry. */
   payment: 'pending' | 'success' | 'failed' | 'abandoned' | 'mismatch' | 'orphaned' | null;
 }
@@ -33,22 +29,6 @@ export interface TransferDetails {
   accountNumber: string;
   supportPhone: string;
 }
-
-export type Period = 'once' | 'daily' | 'weekly';
-
-export interface Requirement {
-  id: string;
-  product: string;
-  grade: 'A' | 'B';
-  quantityKg: number;
-  period: Period;
-  maxPricePerKg: number;
-  destination: string;
-  state: 'open' | 'matched' | 'closed';
-  createdAt: string;
-}
-
-export type NewRequirement = Omit<Requirement, 'id' | 'state' | 'createdAt'>;
 
 /** phone and email are read-only here: they change only through the verified flow in authService. */
 export interface BuyerAddress extends AddressValue {
@@ -77,37 +57,74 @@ const rpcError = (error: { message: string } | null, known: Record<string, strin
   throw new Error(hit ? known[hit] : fallback);
 };
 
-/** Lot "days" follow Ghana time, matching lots.sale_date. */
-const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Accra' });
-
-/** RLS also exposes a buyer's own ordered lots, so filter to what is still on sale today. */
-export async function fetchTodayLots(): Promise<TodayLot[]> {
-  const { data, error } = await supabase
-    .from('lots')
-    .select('id, code, product, total_kg, price_per_kg')
-    .eq('state', 'listed')
-    .eq('sale_date', today())
-    .not('price_per_kg', 'is', null)
-    .order('created_at', { ascending: false });
-  fail('Could not load today\'s lots.')(error);
-  return (data ?? []).map((r) => {
-    const totalKg = Number(r.total_kg);
-    const pricePerKg = Number(r.price_per_kg);
-    return { id: r.id, code: r.code, product: r.product, totalKg, pricePerKg, amount: Math.round(totalKg * pricePerKg * 100) / 100 };
-  });
+/** One shop row per product and grade that has a buyer price and stock. */
+export interface CatalogueItem {
+  productId: string;
+  name: string;
+  image: string | null;
+  /** Extra gallery photos after the cover. */
+  images: string[];
+  description: string;
+  categoryId: string;
+  category: string;
+  categoryImage: string | null;
+  grade: 'A' | 'B' | 'C';
+  price: number;
+  availableKg: number;
 }
 
-/** Atomic: reserves the lot and snapshots the amount, so two buyers can't take the same lot. */
-export async function placeOrder(lotId: string): Promise<string> {
-  const { data, error } = await supabase.rpc('place_order', { p_lot_id: lotId });
-  rpcError(error, { 'no longer available': 'Someone just took that lot. Pick another.' }, 'Could not place the order.');
-  return data as string;
+export async function fetchCatalogue(): Promise<CatalogueItem[]> {
+  const { data, error } = await supabase.rpc('buyer_catalogue');
+  fail('Could not load the shop.')(error);
+  return (data ?? []).map((r: any) => ({
+    productId: r.product_id,
+    name: r.product_name,
+    image: r.product_image,
+    images: r.product_images ?? [],
+    description: r.product_description ?? '',
+    categoryId: r.category_id,
+    category: r.category_name,
+    categoryImage: r.category_image,
+    grade: r.grade,
+    price: Number(r.price),
+    availableKg: Number(r.available_kg),
+  }));
+}
+
+export interface CartLine {
+  productId: string;
+  grade: CatalogueItem['grade'];
+  kg: number;
+}
+
+export interface Shortfall {
+  productId: string;
+  grade: string;
+  requestedKg: number;
+  availableKg: number;
+}
+
+export type CheckoutResult = { ok: true; orderId: string } | { ok: false; shortfalls: Shortfall[] };
+
+/** Checks every line against live supply and holds the kg for 30 minutes. Nothing is held unless the whole cart fits. */
+export async function checkoutCart(lines: CartLine[], addressId: string): Promise<CheckoutResult> {
+  const items = lines.map((l) => ({ product_id: l.productId, grade: l.grade, kg: l.kg }));
+  const { data, error } = await supabase.rpc('checkout_cart', { p_items: items, p_address_id: addressId });
+  rpcError(error, {
+    'choose a delivery address': 'Choose a delivery address.',
+    'pin your delivery address': 'Pin your delivery address on the map first (Account tab).',
+    'not for sale': 'An item in your cart is no longer for sale. Remove it and try again.',
+  }, 'Could not check out. Please try again.');
+  if (!data.ok) {
+    return { ok: false, shortfalls: data.shortfalls.map((r: any) => ({ productId: r.product_id, grade: r.grade, requestedKg: Number(r.requested_kg), availableKg: Number(r.available_kg) })) };
+  }
+  return { ok: true, orderId: data.order_id };
 }
 
 export async function fetchOrders(): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, lots(code, product, total_kg, state), payments(status, created_at)')
+    .select('id, code, amount, state, created_at, delivery_address, order_items(grade, kg, line_total, products(name)), payments(status, created_at)')
     .order('created_at', { ascending: false });
   fail('Could not load your orders.')(error);
   return (data ?? []).map((r: any) => ({
@@ -116,15 +133,13 @@ export async function fetchOrders(): Promise<Order[]> {
     amount: Number(r.amount),
     state: r.state,
     createdAt: r.created_at,
-    lotCode: r.lots?.code ?? '',
-    product: r.lots?.product ?? '',
-    totalKg: Number(r.lots?.total_kg ?? 0),
-    lotState: r.lots?.state ?? '',
+    items: (r.order_items ?? []).map((i: any) => ({ name: i.products?.name ?? '', grade: i.grade, kg: Number(i.kg), lineTotal: Number(i.line_total) })),
+    deliveryAddress: r.delivery_address ?? '',
     payment: [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]?.status ?? null,
   }));
 }
 
-/** Cancels an unpaid order and returns its lot to today's marketplace. */
+/** Cancels an unpaid order; its held stock goes back on sale. */
 export async function cancelOrder(id: string): Promise<void> {
   await requireUserId();
   const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
@@ -135,16 +150,20 @@ export async function cancelOrder(id: string): Promise<void> {
   }, 'Could not cancel that order.');
 }
 
-/** Opens Paystack checkout for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
-export async function payOnline(orderId: string): Promise<void> {
+/** Asks Paystack for a checkout URL for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
+export async function startPayment(orderId: string): Promise<{ url: string; reference: string }> {
   const { data, error } = await supabase.functions.invoke('paystack-init', { body: { order_id: orderId } });
   if (error || !data?.url) {
     // Non-2xx responses hide the body inside error.context; surface our message when there is one.
     const body = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
     throw new Error(body?.error ?? data?.error ?? 'Could not start the payment. Please try again.');
   }
-  if (Platform.OS === 'web') window.location.assign(data.url);
-  else await Linking.openURL(data.url);
+  return { url: data.url, reference: data.reference };
+}
+
+export async function openPayment(url: string): Promise<void> {
+  if (Platform.OS === 'web') window.location.assign(url);
+  else await Linking.openURL(url);
 }
 
 /** Returning from Paystack: pull the reference out of the callback URL and confirm it server-side. */
@@ -164,50 +183,6 @@ export async function fetchTransferDetails(): Promise<TransferDetails | null> {
   const r = data?.[0];
   if (!r?.account_number) return null;
   return { bankName: r.bank_name ?? '', accountName: r.account_name ?? '', accountNumber: r.account_number, supportPhone: r.support_phone ?? '' };
-}
-
-export async function fetchProductNames(): Promise<string[]> {
-  const { data, error } = await supabase.from('products').select('name').eq('active', true).order('name');
-  fail('Could not load products.')(error);
-  return (data ?? []).map((p) => p.name);
-}
-
-export async function fetchRequirements(): Promise<Requirement[]> {
-  const { data, error } = await supabase
-    .from('requirements')
-    .select('id, product, grade, quantity_kg, period, max_price_per_kg, destination, state, created_at')
-    .order('created_at', { ascending: false });
-  fail('Could not load your requirements.')(error);
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    product: r.product,
-    grade: r.grade,
-    quantityKg: Number(r.quantity_kg),
-    period: r.period,
-    maxPricePerKg: Number(r.max_price_per_kg),
-    destination: r.destination,
-    state: r.state,
-    createdAt: r.created_at,
-  }));
-}
-
-export async function createRequirement(r: NewRequirement): Promise<void> {
-  const buyerId = await requireUserId();
-  const { error } = await supabase.from('requirements').insert({
-    buyer_id: buyerId,
-    product: r.product,
-    grade: r.grade,
-    quantity_kg: r.quantityKg,
-    period: r.period,
-    max_price_per_kg: r.maxPricePerKg,
-    destination: r.destination.trim(),
-  });
-  fail('Could not post the requirement.')(error);
-}
-
-export async function closeRequirement(id: string): Promise<void> {
-  const { error } = await supabase.from('requirements').update({ state: 'closed' }).eq('id', id);
-  fail('Could not close that requirement.')(error);
 }
 
 export async function fetchBuyerDetails(): Promise<BuyerDetails> {
@@ -277,58 +252,9 @@ export async function deleteAddress(id: string): Promise<void> {
   fail('Could not remove that address.')(error);
 }
 
-/** Status shown to the buyer: payment first, then the lot's journey once it is funded. */
-export function orderStatus(o: Pick<Order, 'state' | 'lotState'>): { label: string; tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' } {
+/** What the buyer sees: just the order, not who farmed or hauled it. */
+export function orderStatus(o: Pick<Order, 'state'>): { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' } {
   if (o.state === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
   if (o.state === 'awaiting_payment') return { label: 'Awaiting payment', tone: 'warning' };
-  const journey: Record<string, string> = {
-    escrow_funded: 'Payment confirmed',
-    collecting: 'Collecting from farms',
-    in_transit: 'In transit',
-    delivered: 'Delivered',
-    accepted: 'Accepted',
-    disputed: 'In dispute',
-  };
-  return { label: journey[o.lotState] ?? 'Paid', tone: o.lotState === 'disputed' ? 'danger' : 'success' };
-}
-
-export interface OrderTracking {
-  orderId: string;
-  lotState: string;
-  expectedKg: number;
-  farmers: number;
-  captured: number;
-  capturedKg: number;
-  captures: { kg: number; grade: string; url: string | null }[];
-  pickupStart: string | null;
-  pickupEnd: string | null;
-  deliveryStart: string | null;
-  deliveryEnd: string | null;
-  deliveredAt: string | null;
-}
-
-/** Progress of each paid order from route planning to delivery, with the agent's capture photographs (signed, private). */
-export async function fetchTracking(): Promise<Record<string, OrderTracking>> {
-  const { data, error } = await supabase.rpc('buyer_tracking');
-  fail('Could not load order tracking.')(error);
-  const rows = (data ?? []) as any[];
-  const paths = rows.flatMap((r) => (r.captures ?? []).map((c: any) => c.path as string));
-  const urls = new Map<string, string>();
-  if (paths.length) {
-    const signed = await supabase.storage.from('captures').createSignedUrls(paths, 60 * 30);
-    signed.data?.forEach((item) => item.path && item.signedUrl && urls.set(item.path, item.signedUrl));
-  }
-  return Object.fromEntries(
-    rows.map((r) => [
-      r.orderId,
-      {
-        ...r,
-        expectedKg: Number(r.expectedKg),
-        farmers: Number(r.farmers),
-        captured: Number(r.captured),
-        capturedKg: Number(r.capturedKg),
-        captures: (r.captures ?? []).map((c: any) => ({ kg: Number(c.kg), grade: c.grade, url: urls.get(c.path) ?? null })),
-      } as OrderTracking,
-    ]),
-  );
+  return { label: 'Paid', tone: 'success' };
 }

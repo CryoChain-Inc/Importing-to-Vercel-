@@ -6,7 +6,7 @@ import { useNav } from '../../../navigation';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account, Role } from '../../../types/auth';
 
-const LABEL: Record<Role, string> = { farmer: 'Farmer', buyer: 'Buyer', agent: 'Agent', driver: 'Driver', ops: 'Operations' };
+const LABEL: Record<Role, string> = { farmer: 'Farmer', buyer: 'Buyer', driver: 'Driver', ops: 'Operations' };
 
 /** Lists only roles the server assigned; picking one never grants anything new. */
 export function WorkspaceScreen({ account }: { account: Account }) {

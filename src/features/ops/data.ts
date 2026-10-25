@@ -1,32 +1,32 @@
 import type * as buyers from '../../services/ops.buyers.service';
-import type * as ops from '../../services/ops.service';
+import type * as fulfil from '../../services/ops.fulfilment.service';
 import type * as payouts from '../../services/ops.payouts.service';
+import type * as ops from '../../services/ops.service';
 
 /** Everything the ops sections read, loaded together so tabs never fetch on switch. */
 export interface OpsData {
   farmers: ops.FarmerRow[];
   buyers: ops.BuyerRow[];
   supply: ops.SupplyRow[];
-  lots: ops.LotRow[];
   orders: buyers.OrderRow[];
-  requirements: buyers.RequirementRow[];
+  board: fulfil.BoardOrder[];
+  drivers: fulfil.DriverRoute[];
+  decisions: fulfil.Decision[];
   categories: ops.Category[];
   products: ops.Product[];
   prices: ops.PriceRow[];
-  points: ops.PointRow[];
   team: ops.TeamMember[];
   config: ops.OpsConfig;
-  settlements: payouts.SettlementRow[];
+  payables: payouts.PayableRow[];
   runs: payouts.PayoutRun[];
 }
 
-/** Supply split: not yet in a lot, in an unpaid lot, or sold (paid). `left` is what can still be sold. */
-export function supplySplit(supply: ops.SupplyRow[], isSold: (r: ops.SupplyRow) => boolean) {
-  let available = 0, reserved = 0, sold = 0;
-  for (const r of supply) {
-    if (!r.lotId) available += r.weightKg;
-    else if (isSold(r)) sold += r.weightKg;
-    else reserved += r.weightKg;
-  }
-  return { available, reserved, sold, left: available + reserved, total: available + reserved + sold };
+/** Kilos listed by farmers and kilos still unsold, per product, largest first. */
+export function supplyByProduct(supply: ops.SupplyRow[]) {
+  const totals = new Map<string, { kg: number; left: number }>();
+  supply.forEach((r) => {
+    const t = totals.get(r.product) ?? { kg: 0, left: 0 };
+    totals.set(r.product, { kg: t.kg + r.weightKg, left: t.left + r.remainingKg });
+  });
+  return [...totals].map(([product, t]) => ({ product, ...t })).sort((a, b) => b.kg - a.kg);
 }

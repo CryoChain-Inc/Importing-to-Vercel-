@@ -1,36 +1,30 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Icon, type IconName } from '../../../components/common';
-import { isSold } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-import { supplySplit, type OpsData } from '../data';
+import { supplyByProduct, type OpsData } from '../data';
 import { Empty, Hero, kg, SectionTitle, Stat, StatGrid } from './OpsBits';
 import { ProductSupply } from './SupplyPanel';
 
-/** Overview: supply left to sell, money in and out, and what needs doing next. */
+/** Overview: supply listed, money in, and what needs doing next. */
 export function DashboardPanel({ data, onGo }: { data: OpsData; onGo: (tab: string) => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const split = supplySplit(data.supply, isSold);
+  const listed = data.supply.reduce((n, r) => n + r.weightKg, 0);
   const received = data.orders.filter((o) => o.state === 'paid').reduce((n, o) => n + o.amount, 0);
-  const sentOut = data.runs.flatMap((r) => r.transfers).filter((t) => t.status === 'succeeded').reduce((n, t) => n + t.amount, 0);
   const todo: { tab: string; icon: IconName; label: string; n: number }[] = [
     { tab: 'payments', icon: 'banknote', label: 'Orders awaiting payment', n: data.orders.filter((o) => o.state === 'awaiting_payment').length },
-    { tab: 'requirements', icon: 'clipboard', label: 'Open buyer requirements', n: data.requirements.filter((r) => r.state === 'open').length },
-    { tab: 'payouts', icon: 'wallet', label: 'Farmer settlements ready to pay', n: data.settlements.filter((x) => x.status === 'payable' && !x.inRun).length },
-    { tab: 'routes', icon: 'truck', label: 'Lots in transit or collecting', n: data.lots.filter((l) => l.state === 'collecting' || l.state === 'in_transit').length },
   ];
 
   return (
     <View style={s.wrap}>
-      <Hero label="Left to sell" value={kg(split.left)} cells={[
-        { label: 'Estimated', value: kg(split.total) },
-        { label: 'Sold (paid)', value: kg(split.sold) },
+      <Hero label="Listed by farmers" value={kg(listed)} cells={[
+        { label: 'Products', value: String(supplyByProduct(data.supply).length) },
+        { label: 'Listings', value: String(data.supply.length) },
       ]} />
       <StatGrid>
-        <Stat label="Received from buyers" value={ghs(received)} tone="brand" note="Confirmed bank transfers" />
-        <Stat label="Paid to farmers" value={ghs(sentOut)} note="Mobile money transfers that landed" />
+        <Stat label="Received from buyers" value={ghs(received)} tone="brand" note="Paid through Paystack" />
       </StatGrid>
 
       <SectionTitle title="Needs attention" />
@@ -45,9 +39,9 @@ export function DashboardPanel({ data, onGo }: { data: OpsData; onGo: (tab: stri
         ))}
       </View>
 
-      <SectionTitle title="Supply by product" note="Estimated kilos listed by farmers, less lots a buyer has paid for." />
+      <SectionTitle title="Supply by product" note="Kilos listed by farmers." />
       {data.supply.length === 0 ? (
-        <Empty icon="leaf" title="No produce listed yet" hint="When farmers list produce, the stock shows up here, split into left to sell and sold." />
+        <Empty icon="leaf" title="No produce listed yet" hint="When farmers list produce, the stock shows up here." />
       ) : <ProductSupply supply={data.supply} page={4} />}
     </View>
   );

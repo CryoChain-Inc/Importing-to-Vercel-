@@ -29,11 +29,10 @@ export interface Wallet {
   name: string;
 }
 
-export type ListingStage = 'available' | 'sold' | 'scheduled' | 'captured' | 'loaded' | 'delivered';
-
 export interface ProduceListing {
   id: string;
   product: string;
+  /** Kg the farmer listed. */
   weightKg: number;
   createdAt: string;
   point: string;
@@ -41,16 +40,15 @@ export interface ProduceListing {
   imagePaths: string[];
   estNet: number | null;
   estFee: number | null;
-  recordedKg: number | null;
-  stage: ListingStage;
-  inLot: boolean;
-  lotCode: string | null;
-  recordedGrade: string | null;
-  pickupStart: string | null;
-  pickupEnd: string | null;
-  /** Owed for the captured weight and grade, after the fee. Payable once the lot is delivered. */
-  payoutNet: number | null;
-  payoutStatus: 'pending' | 'payable' | 'paid' | null;
+  /** Paid for by buyers and allocated to this listing (offered, accepted or collected). */
+  soldKg: number;
+  deliveredKg: number;
+  /** Declined or lapsed offers: no longer available from this listing. */
+  withdrawnKg: number;
+  remainingKg: number;
+  /** What CryoChain owes for the sold kg, and how much of it has been paid out. */
+  earned: number;
+  paidOut: number;
 }
 
 export interface Estimate {
@@ -142,45 +140,72 @@ export async function saveWallet(w: Wallet): Promise<void> {
   if (error) throw new Error('Could not save your wallet.');
 }
 
-const STAGES: ListingStage[] = ['available', 'sold', 'scheduled', 'captured', 'loaded', 'delivered'];
-
-function toListing(row: any, stage: ListingStage = 'available'): ProduceListing {
-  const recorded = stage === 'available' ? null : row.recorded_kg;
-  return {
-    id: row.id,
-    product: row.product,
-    weightKg: Number(row.weight_kg),
-    createdAt: row.created_at,
-    point: row.point ?? row.collection_points?.name ?? '',
-    grade: row.grade,
-    imagePaths: row.image_paths ?? [],
-    estNet: row.est_net == null ? null : Number(row.est_net),
-    estFee: row.est_fee == null ? null : Number(row.est_fee),
-    recordedKg: recorded == null ? null : Number(recorded),
-    stage: STAGES.includes(stage) ? stage : 'available',
-    inLot: typeof row.in_lot === 'boolean' ? row.in_lot : row.lot_id != null,
-    lotCode: row.lot_code ?? null,
-    recordedGrade: row.recorded_grade ?? null,
-    pickupStart: row.pickup_start ?? null,
-    pickupEnd: row.pickup_end ?? null,
-    payoutNet: row.settlement_net == null ? null : Number(row.settlement_net),
-    payoutStatus: row.settlement_status ?? null,
-  };
+export async function fetchListings(): Promise<ProduceListing[]> {
+  const [listed, stock] = await Promise.all([
+    supabase
+      .from('produce_listings')
+      .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee, collection_points(name)')
+      .order('created_at', { ascending: false }),
+    supabase.from('listing_stock').select('listing_id, sold_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out'),
+  ]);
+  if (listed.error || stock.error) throw new Error('Could not load your listings.');
+  const byId = new Map((stock.data ?? []).map((r) => [r.listing_id as string, r]));
+  return (listed.data ?? []).map((row: any) => {
+    const st = byId.get(row.id);
+    return {
+      id: row.id,
+      product: row.product,
+      weightKg: Number(row.weight_kg),
+      createdAt: row.created_at,
+      point: row.collection_points?.name ?? '',
+      grade: row.grade,
+      imagePaths: row.image_paths ?? [],
+      estNet: row.est_net == null ? null : Number(row.est_net),
+      estFee: row.est_fee == null ? null : Number(row.est_fee),
+      soldKg: Number(st?.sold_kg ?? 0),
+      deliveredKg: Number(st?.delivered_kg ?? 0),
+      withdrawnKg: Number(st?.withdrawn_kg ?? 0),
+      remainingKg: Number(st?.remaining_kg ?? row.weight_kg),
+      earned: Number(st?.earned ?? 0),
+      paidOut: Number(st?.paid_out ?? 0),
+    };
+  });
 }
 
-export async function fetchListings(): Promise<ProduceListing[]> {
-  const listed = await supabase.rpc('farmer_listings');
-  const missing = listed.error?.code === 'PGRST202' || (listed.error?.message ?? '').includes('Could not find the function');
-  if (!missing) {
-    if (listed.error) throw new Error('Could not load your listings.');
-    return (listed.data ?? []).map((row: any) => toListing(row, STAGES.includes(row.stage) ? row.stage : 'available'));
-  }
+export interface Sale {
+  id: string;
+  product: string;
+  grade: string;
+  kg: number;
+  pricePerKg: number;
+  amount: number;
+  /** Delivered to the buyer: the money is then payable, and later paid. */
+  status: 'awaiting_delivery' | 'payable' | 'paid';
+  createdAt: string;
+  deliveredAt: string | null;
+  paidAt: string | null;
+}
+
+/** What buyers' payments have allocated to this farmer, with where each payout stands. Declined offers are left out. */
+export async function fetchSales(): Promise<Sale[]> {
   const { data, error } = await supabase
-    .from('produce_listings')
-    .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee, lot_id, collection_points(name)')
+    .from('order_allocations')
+    .select('id, grade, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
+    .in('status', ['accepted', 'collected', 'offered'])
     .order('created_at', { ascending: false });
-  if (error) throw new Error('Could not load your listings.');
-  return (data ?? []).map((row) => toListing(row));
+  if (error) throw new Error('Could not load your sales.');
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    product: r.products?.name ?? '',
+    grade: r.grade,
+    kg: Number(r.kg),
+    pricePerKg: Number(r.farmer_price),
+    amount: Number(r.amount),
+    status: r.payout_status === 'pending' ? 'awaiting_delivery' : r.payout_status,
+    createdAt: r.created_at,
+    deliveredAt: r.delivered_at,
+    paidAt: r.paid_at,
+  }));
 }
 
 export async function fetchCollectionPoints(): Promise<CollectionPoint[]> {
@@ -262,7 +287,7 @@ export async function updateListing(id: string, product: string, weightKg: numbe
   const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_grade: grade, p_weight_kg: weightKg });
   if (!error) return;
   const msg = error.message ?? '';
-  if (msg.includes('already in a lot')) throw new Error('This listing is already in a collection lot, so it can no longer be edited.');
+  if (msg.includes('already in a lot')) throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
   if (msg.includes('no published price')) throw new Error(`No published price for ${product} grade ${grade} yet.`);
   if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
   throw new Error('Could not save your changes.');
@@ -270,7 +295,7 @@ export async function updateListing(id: string, product: string, weightKg: numbe
 
 function removalError(error: { message?: string; code?: string }): Error {
   const msg = error.message ?? '';
-  if (msg.includes('already in a lot')) return new Error('This listing is already in a collection lot, so it can no longer be removed.');
+  if (msg.includes('already in a lot')) return new Error('This listing is already being fulfilled, so it can no longer be removed.');
   if (msg.includes('listing not found')) return new Error('That listing is no longer on your account.');
   return new Error('Could not remove that listing.');
 }
@@ -291,7 +316,7 @@ export async function deleteListing(id: string): Promise<void> {
 /** Used when the withdraw function is not on the database yet. Confirms a row actually went. */
 async function deleteListingDirect(id: string): Promise<string[]> {
   const { data: row } = await supabase.from('produce_listings').select('image_paths, lot_id').eq('id', id).maybeSingle();
-  if (row?.lot_id) throw new Error('This listing is already in a collection lot, so it can no longer be removed.');
+  if (row?.lot_id) throw new Error('This listing is already being fulfilled, so it can no longer be removed.');
   const { data, error } = await supabase.from('produce_listings').delete().eq('id', id).select('id');
   if (error) throw removalError(error);
   if (!data?.length) throw new Error('Could not remove that listing.');
@@ -310,4 +335,39 @@ export async function fetchNotices(): Promise<Notice[]> {
   const { data, error } = await supabase.from('notifications').select('id, title, body, created_at').order('created_at', { ascending: false }).limit(10);
   if (error) throw new Error('Could not load your updates.');
   return (data ?? []).map((r) => ({ id: r.id, title: r.title, body: r.body, createdAt: r.created_at }));
+}
+
+export interface Offer {
+  id: string;
+  product: string;
+  grade: string;
+  kg: number;
+  /** What CryoChain pays this farmer for the allocation. */
+  amount: number;
+  status: 'offered' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'collected';
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** Orders CryoChain wants to buy from this farmer. The buyer is never shown. */
+export async function fetchOffers(): Promise<Offer[]> {
+  const { data, error } = await supabase
+    .from('order_allocations')
+    .select('id, grade, kg, amount, status, expires_at, created_at, products(name)')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw new Error('Could not load your orders.');
+  return (data ?? []).map((r: any) => ({
+    id: r.id, product: r.products?.name ?? '', grade: r.grade, kg: Number(r.kg), amount: Number(r.amount),
+    status: r.status, expiresAt: r.expires_at, createdAt: r.created_at,
+  }));
+}
+
+export async function respondToOffer(id: string, accept: boolean): Promise<void> {
+  const { error } = await supabase.rpc('respond_allocation', { p_id: id, p_accept: accept });
+  if (error?.message.includes('offer expired')) throw new Error('This offer has expired.');
+  if (error?.message.includes('offer not available')) throw new Error('This offer is no longer open.');
+  if (error) throw new Error('Could not send your answer. Please try again.');
+  // A decline re-allocates to another farmer, who needs their SMS now.
+  if (!accept) await supabase.functions.invoke('dispatch-sms').catch(() => undefined);
 }

@@ -40,6 +40,7 @@ const PATHS = {
   locate: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v3M12 19v3M2 12h3M19 12h3',
   chevronDown: 'm6 9 6 6 6-6',
   edit: 'M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z',
+  cart: 'M2 2h2l2.7 12.4a2 2 0 0 0 2 1.6h9.6a2 2 0 0 0 2-1.6L22 7H5.1',
   logOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
 } as const;
 
@@ -49,6 +50,7 @@ export function Icon({ name, size = 20, color = '#000', strokeWidth = 2 }: { nam
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       {name === 'sun' ? <Circle cx={12} cy={12} r={4} /> : null}
+      {name === 'cart' ? <><Circle cx={9} cy={20} r={1.5} /><Circle cx={18} cy={20} r={1.5} /></> : null}
       {name === 'user' ? <Circle cx={12} cy={7} r={4} /> : null}
       {name === 'eye' ? <Circle cx={12} cy={12} r={3} /> : null}
       {name === 'lock' ? <Rect x={3} y={11} width={18} height={11} rx={2} /> : null}

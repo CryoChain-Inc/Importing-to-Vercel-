@@ -1,6 +1,6 @@
 import type { Place } from '../../../services/truck.service';
 
-const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY;
 let googleOff = false;
 
 /** Google rejected this key, so search and the map stay on OpenStreetMap. */

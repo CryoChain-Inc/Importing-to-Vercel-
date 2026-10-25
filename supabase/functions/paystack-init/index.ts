@@ -20,6 +20,9 @@ Deno.serve(async (req) => {
   if (order.state !== 'awaiting_payment') return json({ error: 'This order is not awaiting payment.' }, 409);
 
   const db = admin();
+  // Cart orders: if the supply hold lapsed the order is cancelled rather than charged for stock that may be gone.
+  const { data: ready } = await db.rpc('cart_order_ready', { p_order_id: order.id });
+  if (ready === false) return json({ error: 'This order expired. Add the items to your cart again.' }, 409);
   // Idempotency: one live attempt per order (unique partial index). Reuse it rather than open a second chargeable checkout.
   const findPending = () =>
     db.from('payments').select('reference, authorization_url, created_at').eq('order_id', order.id).eq('status', 'pending').maybeSingle();

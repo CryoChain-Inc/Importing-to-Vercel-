@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { flushSms } from './sms.ts';
 
 export { validSignature } from './signature.ts';
 
@@ -40,6 +41,8 @@ export async function applyTransaction(tx: { reference: string; status: string; 
       p_reference: tx.reference, p_paid_pesewas: tx.amount, p_currency: tx.currency, p_channel: tx.channel ?? null,
     });
     if (error) throw new Error(error.message);
+    // A paid cart order is allocated to farmers inside settle_*; tell them by SMS now. A failure here is retried later.
+    if (!truck) await flushSms().catch((e) => console.error('sms flush failed', e));
   } else if (tx.status === 'failed' || tx.status === 'abandoned') {
     await db.rpc(fail, { p_reference: tx.reference, p_status: tx.status, p_message: tx.gateway_response ?? '' });
   }

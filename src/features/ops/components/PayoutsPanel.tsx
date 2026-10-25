@@ -13,9 +13,9 @@ const RUN_TONE = { review: 'warning', released: 'info', partial: 'danger', compl
 const TRANSFER_TONE = { queued: 'neutral', sent: 'info', succeeded: 'success', failed: 'danger', cancelled: 'neutral' } as const;
 type Tab = 'pay' | 'runs' | 'sent' | 'waiting';
 
-/** Settlements -> payout runs. A run is reviewed, preflighted, approved by a second ops user when large, then released. */
-export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
-  settlements: svc.SettlementRow[];
+/** Delivered orders -> payout runs. A run is reviewed, preflighted, approved by a second ops user when large, then released. */
+export function PayoutsPanel({ payables, runs, farmers, onChange }: {
+  payables: svc.PayableRow[];
   runs: svc.PayoutRun[];
   farmers: FarmerRow[];
   onChange: () => Promise<void>;
@@ -24,12 +24,12 @@ export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
   const { busy, error, run } = useAction(onChange);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const hasWallet = new Set(farmers.filter((f) => f.walletReady).map((f) => f.id));
-  const eligible = settlements.filter((x) => x.status === 'payable' && !x.inRun && hasWallet.has(x.farmerId));
-  const sum = (rows: svc.SettlementRow[]) => rows.reduce((n, x) => n + x.net, 0);
+  const eligible = payables.filter((x) => x.status === 'payable' && !x.inRun && hasWallet.has(x.farmerId));
+  const sum = (rows: svc.PayableRow[]) => rows.reduce((n, x) => n + x.net, 0);
   const chosen = eligible.filter((x) => picked.has(x.id));
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); if (!n.delete(id)) n.add(id); return n; });
   const moved = (st: svc.TransferStatus) => runs.flatMap((r) => r.transfers).filter((x) => x.status === st).reduce((n, x) => n + x.amount, 0);
-  const by = (st: svc.SettlementRow['status']) => settlements.filter((x) => x.status === st);
+  const by = (st: svc.PayableRow['status']) => payables.filter((x) => x.status === st);
 
   const [tab, setTab] = useState<Tab>(eligible.length ? 'pay' : 'runs');
   const toPay = usePaged(by('payable'), 'pay');
@@ -55,7 +55,7 @@ export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
 
       {tab === 'pay' ? (
         <>
-          {by('payable').length === 0 ? <Empty icon="wallet" title="Nothing ready to pay" hint="A settlement becomes payable once a lot is collected. Payable ones can be grouped into a payout run here." /> : null}
+          {by('payable').length === 0 ? <Empty icon="wallet" title="Nothing ready to pay" hint="A farmer’s share becomes payable once the order has been delivered to the buyer. Group payable ones into a payout run here." /> : null}
           {toPay.rows.map((x) => {
             const canPick = !x.inRun && hasWallet.has(x.farmerId);
             return (
@@ -64,7 +64,7 @@ export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
                   <Text style={s.name} numberOfLines={1}>{x.farmer}</Text>
                   <Text style={s.amount}>{ghs(x.net)}</Text>
                 </View>
-                <Text style={s.meta}>{x.product} · lot {x.lotCode} · {new Date(x.createdAt).toLocaleDateString('en-GH')}</Text>
+                <Text style={s.meta}>{x.product} · {x.kg} kg · order {x.orderCode}{x.deliveredAt ? ` · delivered ${new Date(x.deliveredAt).toLocaleDateString('en-GH')}` : ''}</Text>
                 {x.inRun ? <Badge label="in a run" tone="info" /> : null}
                 {!x.inRun && !hasWallet.has(x.farmerId) ? <Text style={s.meta}>No MoMo wallet saved, so this cannot be paid yet.</Text> : null}
                 {canPick ? <Button size="sm" variant={picked.has(x.id) ? 'tonal' : 'outline'} label={picked.has(x.id) ? 'Selected' : 'Select'} onPress={() => toggle(x.id)} /> : null}
@@ -84,7 +84,7 @@ export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
 
       {tab === 'runs' ? (
         <>
-          {runs.length === 0 ? <Empty icon="arrowUpRight" title="No payout runs yet" hint="Select payable settlements in To pay to create a run, then release the funds to the farmers’ mobile money wallets." /> : null}
+          {runs.length === 0 ? <Empty icon="arrowUpRight" title="No payout runs yet" hint="Select payable orders in To pay to create a run, then release the funds to the farmers’ mobile money wallets." /> : null}
           {runPage.rows.map((r) => <RunCard key={r.id} r={r} busy={busy} run={run} />)}
           {runPage.more}
         </>
@@ -92,16 +92,16 @@ export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
 
       {tab === 'sent' ? (
         <>
-          {by('paid').length === 0 ? <Empty icon="arrowUpRight" title="Nothing sent yet" hint="Settlements show here once the farmer has been paid." /> : null}
-          {sent.rows.map((x) => <SettlementLine key={x.id} x={x} note={`Paid ${x.paidAt ? new Date(x.paidAt).toLocaleString('en-GH') : ''}`} />)}
+          {by('paid').length === 0 ? <Empty icon="arrowUpRight" title="Nothing sent yet" hint="Payouts show here once the farmer has been paid." /> : null}
+          {sent.rows.map((x) => <PayableLine key={x.id} x={x} note={`Paid ${x.paidAt ? new Date(x.paidAt).toLocaleString('en-GH') : ''}`} />)}
           {sent.more}
         </>
       ) : null}
 
       {tab === 'waiting' ? (
         <>
-          {by('pending').length === 0 ? <Empty icon="truck" title="Nothing waiting" hint="Settlements wait here until the lot has been collected and delivered." /> : null}
-          {waiting.rows.map((x) => <SettlementLine key={x.id} x={x} note="Waiting for collection and delivery" />)}
+          {by('pending').length === 0 ? <Empty icon="truck" title="Nothing waiting" hint="Farmer shares wait here until the order has been delivered." /> : null}
+          {waiting.rows.map((x) => <PayableLine key={x.id} x={x} note="Waiting for collection and delivery" />)}
           {waiting.more}
         </>
       ) : null}
@@ -109,7 +109,7 @@ export function PayoutsPanel({ settlements, runs, farmers, onChange }: {
   );
 }
 
-function SettlementLine({ x, note }: { x: svc.SettlementRow; note: string }) {
+function PayableLine({ x, note }: { x: svc.PayableRow; note: string }) {
   const s = useThemedStyles(styles);
   return (
     <Card style={s.item}>
@@ -117,7 +117,7 @@ function SettlementLine({ x, note }: { x: svc.SettlementRow; note: string }) {
         <Text style={s.name} numberOfLines={1}>{x.farmer}</Text>
         <Text style={s.amount}>{ghs(x.net)}</Text>
       </View>
-      <Text style={s.meta}>{x.product} · lot {x.lotCode}</Text>
+      <Text style={s.meta}>{x.product} · {x.kg} kg · order {x.orderCode}</Text>
       <Text style={s.meta}>{note}</Text>
     </Card>
   );

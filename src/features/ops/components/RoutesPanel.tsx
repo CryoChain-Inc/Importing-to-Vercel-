@@ -1,209 +1,62 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/common';
+import { Badge, Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import {
-  cancelRoute, fetchPaidLots, fetchRoutes, planRoute,
-  type PaidLot, type PlannedRoute, type SupplyRow, type TeamMember,
-} from '../../../services/ops.service';
+import { replanRoutes, type DriverRoute } from '../../../services/ops.fulfilment.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { accraToday, fmtWindow } from '../../../utils/format';
-import { LotTrailView } from './LotTrail';
-import { MultiChips } from './MultiChips';
-import { Empty, SectionTitle, usePaged } from './OpsBits';
+import { Empty, Hero, SectionTitle, when } from './OpsBits';
 import { useAction } from './useAction';
 
-const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-type Win = { start: string; end: string };
-const PICKUP: Win = { start: '06:00', end: '10:00' };
-const ARRIVAL: Win = { start: '12:00', end: '16:00' };
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 0 })} kg`;
+const FRESH_MS = 30 * 60 * 1000;
+const online = (d: DriverRoute) => Boolean(d.seenAt) && Date.now() - new Date(d.seenAt!).getTime() < FRESH_MS;
 
-/** Plan a route for paid lots: pickup windows per collection point, an arrival window per buyer. */
-export function RoutesPanel({ team, supply, onChange }: { team: TeamMember[]; supply: SupplyRow[]; onChange: () => Promise<void> }) {
+/** Each driver's last reported position and their route, built and re-sequenced by the system as orders change. */
+export function RoutesPanel({ drivers, onChange }: { drivers: DriverRoute[]; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
-  const [routes, setRoutes] = useState<PlannedRoute[]>([]);
-  const [paid, setPaid] = useState<PaidLot[]>([]);
-  const [shown, setShown] = useState<string | null>(null);
-  const routePage = usePaged(routes, 'routes', 4);
-  const [planning, setPlanning] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const reload = useCallback(async () => {
-    try {
-      setRoutes(await fetchRoutes());
-      setPaid(await fetchPaidLots());
-      setLoadError(null);
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Could not load routes.');
-    }
-  }, []);
-  const refresh = useCallback(async () => {
-    await onChange();
-    await reload();
-  }, [onChange, reload]);
-  const { busy, error, run } = useAction(refresh);
-  useEffect(() => {
-    Promise.all([fetchRoutes(), fetchPaidLots()]).then(
-      ([r, p]) => {
-        setRoutes(r);
-        setPaid(p);
-      },
-      (e) => setLoadError(e instanceof Error ? e.message : 'Could not load routes.'),
-    );
-  }, []);
+  const { busy, error, run } = useAction(onChange);
+  const live = drivers.filter(online);
+  const pending = drivers.reduce((n, d) => n + d.stops.filter((x) => x.state === 'pending').length, 0);
 
-  const agents = team.filter((m) => m.role === 'agent');
-  const drivers = team.filter((m) => m.role === 'driver');
-  const agentLabels = agents.map((a) => a.name || 'Unnamed agent');
-  const driverLabels = drivers.map((d) => d.name || 'Unnamed driver');
-  const [agentLabel, setAgentLabel] = useState('');
-  const [driverLabel, setDriverLabel] = useState('');
-  const [date, setDate] = useState(accraToday());
-  const [picked, setPicked] = useState<string[]>([]);
-  const [wins, setWins] = useState<Record<string, Win>>({});
-  const agent = agents.find((a) => (a.name || 'Unnamed agent') === agentLabel) ?? agents[0];
-  const driver = drivers.find((d) => (d.name || 'Unnamed driver') === driverLabel) ?? drivers[0];
-
-  const chosen = paid.filter((l) => picked.includes(l.id));
-  const stops = new Map<string, { name: string; farmers: number; kg: number }>();
-  supply.filter((r) => r.lotId && picked.includes(r.lotId) && r.pointId).forEach((r) => {
-    const cur = stops.get(r.pointId!) ?? { name: r.point, farmers: 0, kg: 0 };
-    stops.set(r.pointId!, { name: cur.name, farmers: cur.farmers + 1, kg: cur.kg + r.weightKg });
-  });
-  const win = (key: string, fallback: Win): Win => wins[key] ?? fallback;
-  const setWin = (key: string, fallback: Win, patch: Partial<Win>) => setWins({ ...wins, [key]: { ...win(key, fallback), ...patch } });
-  const validWin = (w: Win) => TIME.test(w.start) && TIME.test(w.end) && w.end > w.start;
-  const ready =
-    Boolean(agent && driver) && /^\d{4}-\d{2}-\d{2}$/.test(date) && chosen.length > 0 && stops.size > 0 &&
-    [...stops.keys()].every((id) => validWin(win(id, PICKUP))) && chosen.every((l) => validWin(win(l.id, ARRIVAL)));
-
+  if (drivers.length === 0) return <Empty icon="truck" title="No drivers yet" hint="Invite drivers from Team. Once they open the app and share their location, orders are routed to them automatically." />;
   return (
     <View style={s.list}>
-      {error || loadError ? <Banner text={error || loadError || ''} /> : null}
-      {planning ? <Card style={s.form}>
-        <View style={s.top}><Text style={s.title}>Plan a route</Text><Button size="sm" variant="ghost" label="Close" onPress={() => setPlanning(false)} /></View>
-        <Text style={s.meta}>Only paid lots can be routed. One truck can collect several lots and deliver each to its own buyer.</Text>
-        {agents.length && drivers.length && paid.length ? (
-          <>
-            <Input label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} placeholder={accraToday()} />
-            <ChoiceChips label="Field agent" options={agentLabels} value={agent?.name || agentLabel} onChange={setAgentLabel} />
-            <ChoiceChips label="Driver" options={driverLabels} value={driver?.name || driverLabel} onChange={setDriverLabel} />
-            <MultiChips
-              label="Paid lots"
-              options={paid.map((l) => ({ key: l.id, label: `${l.code} · ${l.product} · ${kg(l.totalKg)} → ${l.buyer}` }))}
-              value={picked}
-              onChange={setPicked}
-            />
-            {stops.size ? (
-              <View style={s.group}>
-                <Text style={s.name}>Pickup windows (sent to the farmers)</Text>
-                {[...stops].map(([id, st]) => (
-                  <WindowFields key={id} label={`${st.name} · ${st.farmers} farmer${st.farmers === 1 ? '' : 's'}, ${kg(st.kg)}`} value={win(id, PICKUP)} onChange={(p) => setWin(id, PICKUP, p)} />
-                ))}
-                <Text style={s.name}>Buyer arrival windows</Text>
-                {chosen.map((l) => (
-                  <WindowFields key={l.id} label={`${l.code} → ${l.buyer}${l.location ? `, ${l.location}` : ''}`} value={win(l.id, ARRIVAL)} onChange={(p) => setWin(l.id, ARRIVAL, p)} />
-                ))}
-                <Text style={s.meta}>Times are Ghana time, 24-hour. Stops run in the order of their pickup windows.</Text>
+      {error ? <Banner text={error} /> : null}
+      <Hero label="Drivers reporting" value={`${live.length} of ${drivers.length}`} cells={[{ label: 'Stops pending', value: String(pending) }]} />
+      <Button size="sm" variant="outline" label="Re-plan all routes" loading={busy} onPress={() => run(replanRoutes)} />
+      {drivers.map((d) => {
+        const todo = d.stops.filter((x) => x.state === 'pending');
+        return (
+          <Card key={d.id} style={s.item}>
+            <View style={s.top}>
+              <View style={s.grow}>
+                <Text style={s.name}>{d.name}</Text>
+                <Text style={s.meta}>{[d.vehicle, d.phone].filter(Boolean).join(' · ') || 'No vehicle details'}</Text>
               </View>
-            ) : null}
-            <Button
-              label="Plan route"
-              loading={busy}
-              disabled={!ready}
-              onPress={() =>
-                run(async () => {
-                  await planRoute({
-                    date,
-                    agentId: agent!.id,
-                    driverId: driver!.id,
-                    stops: [...stops.keys()].map((pointId) => ({ pointId, ...win(pointId, PICKUP) })),
-                    lots: chosen.map((l) => ({ lotId: l.id, ...win(l.id, ARRIVAL) })),
-                  });
-                  setPicked([]);
-                  setWins({});
-                  setPlanning(false);
-                })
-              }
-            />
-          </>
-        ) : (
-          <Text style={s.meta}>
-            {!agents.length || !drivers.length
-              ? 'Invite a field agent and a driver from Team before planning a route.'
-              : 'No paid lots waiting. A lot appears here once its buyer has paid.'}
-          </Text>
-        )}
-      </Card> : <Button label="Plan a route" icon="truck" onPress={() => setPlanning(true)} />}
-
-      <SectionTitle title="Routes" note="Last two weeks and upcoming. Open a delivery to see the agent's and driver's photos." />
-      {routes.length === 0 ? (
-        <Empty icon="truck" title="No routes yet" hint="Plan a route for paid lots. You can then follow it stop by stop, with the agent's captures and the driver's proof of delivery." />
-      ) : (
-        <>{routePage.rows.map((route) => {
-          const done = route.lots.length > 0 && route.lots.every((l) => l.delivered);
-          const live = route.started && !done;
-          return (
-            <Card key={route.id} style={s.item}>
-              <View style={s.top}>
-                <Text style={s.name}>{route.date}</Text>
-                <Badge label={done ? 'Completed' : live ? 'In progress' : 'Planned'} tone={done ? 'success' : live ? 'warning' : 'neutral'} />
+              <Badge label={online(d) ? 'Reporting' : d.seenAt ? 'Offline' : 'Never seen'} tone={online(d) ? 'success' : 'neutral'} />
+            </View>
+            <Text style={s.meta}>{d.lat != null ? `Last seen ${when(d.seenAt)} · ${d.lat.toFixed(4)}, ${d.lng!.toFixed(4)}` : 'Has not shared a location.'}</Text>
+            <SectionTitle title="Route" note={`${todo.length} pending`} />
+            {d.stops.length === 0 ? <Text style={s.meta}>No stops. New orders are assigned automatically.</Text> : d.stops.map((x) => (
+              <View key={x.id} style={s.row}>
+                <Text style={[s.stop, x.state === 'done' && s.done]} numberOfLines={2}>{x.seq ? `${x.seq}. ` : ''}{x.label} · {x.order}</Text>
+                <Badge label={x.state === 'done' ? 'Done' : x.kind} tone={x.state === 'done' ? 'success' : 'neutral'} />
               </View>
-              <Text style={s.meta}>Agent {route.agentName}{route.driverName ? ` · Driver ${route.driverName}` : ''} · {route.lots.length} lot{route.lots.length === 1 ? '' : 's'}</Text>
-              <Text style={s.label}>Collection stops</Text>
-              {route.stops.map((st, i) => (
-                <View key={i} style={s.line}>
-                  <Text style={[s.meta, s.grow]}>{i + 1}. {st.pointName}{st.locality ? ` · ${st.locality}` : ''} · {fmtWindow(st.windowStart, st.windowEnd)}{st.temperatureC != null ? ` · ${st.temperatureC}°C` : ''}</Text>
-                  <Badge label={st.departed ? 'Loaded' : st.arrived ? 'Driver there' : 'Waiting'} tone={st.departed ? 'success' : st.arrived ? 'warning' : 'neutral'} />
-                </View>
-              ))}
-              <Text style={s.label}>Deliveries</Text>
-              {route.lots.map((l) => (
-                <View key={l.code} style={s.lot}>
-                  <View style={s.line}>
-                    <Text style={[s.meta, s.grow]}>{l.code} · {l.product} {kg(l.kg)} → {l.buyer}{l.location ? `, ${l.location}` : ''} · {fmtWindow(l.windowStart, l.windowEnd)}</Text>
-                    <Badge label={l.delivered ? 'Delivered' : 'On route'} tone={l.delivered ? 'success' : 'neutral'} />
-                  </View>
-                  {l.id && !l.delivered ? <Button size="sm" variant="outline" icon="camera" label={shown === l.id ? 'Hide photos and records' : 'Agent and driver photos'} onPress={() => setShown(shown === l.id ? null : l.id)} /> : null}
-                  {l.id && (l.delivered || shown === l.id) ? <LotTrailView lotId={l.id} /> : null}
-                </View>
-              ))}
-              {!route.started ? <Button size="sm" variant="outline" label="Cancel route" loading={busy} onPress={() => run(() => cancelRoute(route.id))} /> : null}
-            </Card>
-          );
-        })}{routePage.more}</>
-      )}
-    </View>
-  );
-}
-
-function WindowFields({ label, value, onChange }: { label: string; value: Win; onChange: (patch: Partial<Win>) => void }) {
-  const s = useThemedStyles(styles);
-  return (
-    <View style={s.winRow}>
-      <Text style={s.meta}>{label}</Text>
-      <View style={s.times}>
-        <View style={s.time}><Input label="From" value={value.start} onChangeText={(v) => onChange({ start: v })} placeholder="06:00" /></View>
-        <View style={s.time}><Input label="To" value={value.end} onChangeText={(v) => onChange({ end: v })} placeholder="10:00" /></View>
-      </View>
+            ))}
+          </Card>
+        );
+      })}
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  list: { gap: 10 },
-  form: { gap: 12 },
-  group: { gap: 10 },
-  item: { gap: 6, alignItems: 'flex-start' as const },
-  top: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8, alignSelf: 'stretch' as const },
-  title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
-  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, flexShrink: 1 },
-  label: { fontFamily: fonts.sansBold, fontSize: 13, color: c.ink, marginTop: 6 },
-  line: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, alignSelf: 'stretch' as const },
-  grow: { flex: 1 },
-  lot: { gap: 6, alignSelf: 'stretch' as const, alignItems: 'flex-start' as const, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.borderSubtle },
+  list: { gap: 12 },
+  item: { gap: 8, padding: 16 },
+  top: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 10 },
+  grow: { flex: 1, gap: 2 },
+  row: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 10 },
+  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
+  stop: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink },
+  done: { color: c.inkMuted, textDecorationLine: 'line-through' as const },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  winRow: { gap: 4 },
-  times: { flexDirection: 'row' as const, gap: 10 },
-  time: { flex: 1 },
 });

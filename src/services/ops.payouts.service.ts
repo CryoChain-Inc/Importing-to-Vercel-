@@ -1,14 +1,17 @@
 import { requireUserId, supabase } from './supabase';
 
-export interface SettlementRow {
+export interface PayableRow {
+  /** order_allocations id */
   id: string;
   farmerId: string;
   farmer: string;
-  lotCode: string;
+  orderCode: string;
   product: string;
+  grade: string;
+  kg: number;
   net: number;
   status: 'pending' | 'payable' | 'paid';
-  createdAt: string;
+  deliveredAt: string | null;
   paidAt: string | null;
   /** Already part of a live payout run. */
   inRun: boolean;
@@ -48,27 +51,31 @@ const fail = (msg: string) => (error: unknown) => {
   if (error) throw new Error(msg);
 };
 
-export async function fetchSettlements(): Promise<SettlementRow[]> {
+/** One row per farmer share of a paid order. It turns payable when the order is delivered. */
+export async function fetchPayables(): Promise<PayableRow[]> {
   const [{ data, error }, live] = await Promise.all([
     supabase
-      .from('settlements')
-      .select('listing_id, farmer_id, net, status, created_at, paid_at, profiles(display_name), lots(code), produce_listings(product)')
+      .from('order_allocations')
+      .select('id, farmer_id, grade, kg, amount, payout_status, delivered_at, paid_at, orders(code), products(name), profiles:farmer_id(display_name)')
+      .in('status', ['offered', 'accepted', 'collected'])
       .order('created_at', { ascending: false }),
-    supabase.from('payout_transfers').select('settlement_id').neq('status', 'cancelled'),
+    supabase.from('payout_transfers').select('allocation_id').neq('status', 'cancelled').not('allocation_id', 'is', null),
   ]);
-  fail('Could not load settlements.')(error ?? live.error);
-  const inRun = new Set((live.data ?? []).map((t) => t.settlement_id as string));
+  fail('Could not load payouts.')(error ?? live.error);
+  const inRun = new Set((live.data ?? []).map((t) => t.allocation_id as string));
   return (data ?? []).map((r: any) => ({
-    id: r.listing_id,
+    id: r.id,
     farmerId: r.farmer_id,
     farmer: r.profiles?.display_name || 'Farmer',
-    lotCode: r.lots?.code ?? '',
-    product: r.produce_listings?.product ?? '',
-    net: Number(r.net),
-    status: r.status,
-    createdAt: r.created_at,
+    orderCode: r.orders?.code ?? '',
+    product: r.products?.name ?? '',
+    grade: r.grade,
+    kg: Number(r.kg),
+    net: Number(r.amount),
+    status: r.payout_status,
+    deliveredAt: r.delivered_at,
     paidAt: r.paid_at,
-    inRun: inRun.has(r.listing_id),
+    inRun: inRun.has(r.id),
   }));
 }
 
@@ -107,9 +114,9 @@ export async function fetchPayoutRuns(): Promise<PayoutRun[]> {
   }));
 }
 
-export async function createPayoutRun(settlementIds: string[]): Promise<void> {
-  const { error } = await supabase.rpc('create_payout_run', { p_settlements: settlementIds });
-  fail('Could not create the payout run. Check each settlement is payable and the farmer has a wallet.')(error);
+export async function createPayoutRun(allocationIds: string[]): Promise<void> {
+  const { error } = await supabase.rpc('create_payout_run', { p_allocations: allocationIds });
+  fail('Could not create the payout run. Check each payout is for a delivered order and the farmer has a wallet.')(error);
 }
 
 export async function approvePayoutRun(id: string): Promise<void> {
