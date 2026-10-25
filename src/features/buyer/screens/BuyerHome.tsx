@@ -9,45 +9,50 @@ import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
+import { CartProvider, useCart } from '../cart/CartProvider';
 import { BuyerAccount, buyerProfileComplete } from '../components/BuyerAccount';
+import { Cart } from '../components/Cart';
 import { Orders } from '../components/Orders';
-import { Requirements } from '../components/Requirements';
-import { TodayLots } from '../components/TodayLots';
+import { Payment } from '../components/Payment';
+import { Shop, ShopSkeleton } from '../components/Shop';
 import { TruckBooking } from '../components/TruckBooking';
 
-type Tab = 'today' | 'orders' | 'requests' | 'truck' | 'account';
+type Tab = 'shop' | 'cart' | 'orders' | 'truck' | 'account';
 
 const TABS: TabDef<Tab>[] = [
-  { key: 'today', label: 'Today', icon: 'package' },
-  { key: 'orders', label: 'Orders', icon: 'wallet' },
+  { key: 'shop', label: 'Shop', icon: 'leaf' },
+  { key: 'cart', label: 'Cart', icon: 'cart' },
+  { key: 'orders', label: 'Orders', icon: 'package' },
   { key: 'truck', label: 'Truck', icon: 'truck' },
-  { key: 'requests', label: 'Requests', icon: 'message' },
   { key: 'account', label: 'Account', icon: 'user' },
 ];
 
 interface Data {
-  lots: buyer.TodayLot[];
+  catalogue: buyer.CatalogueItem[];
   orders: buyer.Order[];
   transfer: buyer.TransferDetails | null;
-  requirements: buyer.Requirement[];
-  products: string[];
   details: buyer.BuyerDetails;
 }
 
 export function BuyerHome({ account }: { account: Account }) {
+  return <CartProvider><BuyerShell account={account} /></CartProvider>;
+}
+
+function BuyerShell({ account }: { account: Account }) {
   const { reset } = useNav();
   const s = useThemedStyles(styles);
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('shop');
+  // The order being paid. While set, the payment page replaces the tabs' content.
+  const [paying, setPaying] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [lots, orders, transfer, requirements, products, details] = await Promise.all([
-        buyer.fetchTodayLots(), buyer.fetchOrders(), buyer.fetchTransferDetails(),
-        buyer.fetchRequirements(), buyer.fetchProductNames(), buyer.fetchBuyerDetails(),
+      const [catalogue, orders, transfer, details] = await Promise.all([
+        buyer.fetchCatalogue(), buyer.fetchOrders(), buyer.fetchTransferDetails(), buyer.fetchBuyerDetails(),
       ]);
-      setData({ lots, orders, transfer, requirements, products, details });
+      setData({ catalogue, orders, transfer, details });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your marketplace.');
@@ -73,10 +78,13 @@ export function BuyerHome({ account }: { account: Account }) {
     return () => sub.remove();
   }, [load]);
 
+  const { lines } = useCart();
+  const donePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load]);
+  const leavePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load]);
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
 
   return (
-    <TabShell tabs={TABS.map((t) => (t.key === 'account' && data && !buyerProfileComplete(data.details) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
+    <TabShell tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
       <View style={s.header}>
         <View style={s.headerText}>
           <Text style={s.hello}>Hello, {account.name || 'buyer'}</Text>
@@ -85,11 +93,15 @@ export function BuyerHome({ account }: { account: Account }) {
       </View>
       {error ? <Banner text={error} /> : null}
       {data ? (
-        <>
-          {tab === 'today' ? <TodayLots lots={data.lots} onRefresh={load} onOrdered={() => setTab('orders')} /> : null}
-          {tab === 'orders' ? <Orders orders={data.orders} transfer={data.transfer} onRefresh={load} /> : null}
+        paying ? <Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} /> : <>
+          {tab === 'shop' ? (
+            <Shop items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
+          ) : null}
+          {tab === 'cart' ? (
+            <Cart items={data.catalogue} addresses={data.details.addresses} onRefresh={load} onOrdered={setPaying} onShop={() => setTab('shop')} onAddAddress={() => setTab('account')} />
+          ) : null}
+          {tab === 'orders' ? <Orders orders={data.orders} onPay={setPaying} onRefresh={load} /> : null}
           {tab === 'truck' ? <TruckBooking transfer={data.transfer} /> : null}
-          {tab === 'requests' ? <Requirements requirements={data.requirements} products={data.products} location={data.details.location} onRefresh={load} /> : null}
           {tab === 'account' ? (
             <>
               <BuyerAccount details={data.details} onRefresh={load} />
@@ -97,7 +109,7 @@ export function BuyerHome({ account }: { account: Account }) {
             </>
           ) : null}
         </>
-      ) : null}
+      ) : tab === 'shop' || tab === 'cart' ? <ShopSkeleton /> : null}
     </TabShell>
   );
 }

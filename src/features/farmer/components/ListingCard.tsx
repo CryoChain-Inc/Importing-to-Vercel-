@@ -58,7 +58,6 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
         <View style={s.footText}>
           <Text style={s.status}>{STAGE_LABEL[l.stage]}</Text>
           {l.stage === 'scheduled' && l.pickupStart ? <Text style={s.meta}>{fmtWindow(l.pickupStart, l.pickupEnd)}</Text> : null}
-          {l.inLot && l.lotCode ? <Text style={s.meta}>Lot {l.lotCode}</Text> : null}
         </View>
         <View style={s.money}>
           {l.payoutNet != null ? (

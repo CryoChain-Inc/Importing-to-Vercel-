@@ -5,6 +5,7 @@ import { Banner } from '../../../components/feedback';
 import { imageUrl, type PickedImage } from '../../../services/catalogueImage';
 import { saveCategory, saveProduct, type Category, type Product } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { GalleryField } from './GalleryField';
 import { ImageField } from './ImageField';
 import { Empty, usePaged } from './OpsBits';
 import { useAction } from './useAction';
@@ -44,6 +45,8 @@ function ProductForm({ categories, product, onSaved, onCancel }: { categories: C
   const [active, setActive] = useState(product?.active ?? true);
   const [image, setImage] = useState<PickedImage>();
   const [removed, setRemoved] = useState(false);
+  const [description, setDescription] = useState(product?.description ?? '');
+  const [gallery, setGallery] = useState({ saved: product?.imagePaths ?? [], picked: [] as PickedImage[] });
   const options = categories.filter((c) => c.active || c.id === product?.categoryId);
   const current = options.find((c) => c.id === categoryId);
   return (
@@ -56,11 +59,16 @@ function ProductForm({ categories, product, onSaved, onCancel }: { categories: C
           <ChoiceChips label="Category" options={options.map((c) => c.name)} value={current?.name ?? ''}
             onChange={(n) => setCategoryId(options.find((c) => c.name === n)!.id)} />
           <ImageField label="Product image" currentUrl={imageUrl(product?.imagePath)} picked={image} removed={removed} onPick={(i) => { setImage(i); setRemoved(false); }} onRemove={() => { setImage(undefined); setRemoved(true); }} />
+          <GalleryField {...gallery} onChange={setGallery} />
+          <Input label="Description" value={description} onChangeText={setDescription} multiline maxLength={600} placeholder="Origin, taste, how it is graded and packed" />
           {product ? <ChoiceChips label="Visibility" options={STATES} value={active ? 'Active' : 'Hidden'} onChange={(v) => setActive(v === 'Active')} /> : null}
           <Button label={product ? 'Save product' : 'Add product'} loading={busy} disabled={name.trim().length < 2 || !current}
             onPress={() => run(async () => {
-              await saveProduct({ id: product?.id, name, categoryId, active, image, oldImagePath: product?.imagePath, removeImage: removed });
-              if (product) onCancel?.(); else { setName(''); setImage(undefined); setRemoved(false); onCancel?.(); }
+              await saveProduct({
+                id: product?.id, name, categoryId, active, image, oldImagePath: product?.imagePath, removeImage: removed, description,
+                gallery: { keep: gallery.saved, dropped: (product?.imagePaths ?? []).filter((p) => !gallery.saved.includes(p)), added: gallery.picked },
+              });
+              onCancel?.();
             })} />
         </>
       ) : <Text style={s.meta}>Add a category first.</Text>}

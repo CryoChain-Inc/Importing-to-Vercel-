@@ -49,7 +49,7 @@ export function BuyersPanel({ buyers, orders }: { buyers: BuyerRow[]; orders: Or
                   <View key={o.id} style={s.order}>
                     <View style={s.grow}>
                       <Text style={s.value}>{o.code} · {ghs(o.amount)}</Text>
-                      <Text style={s.meta}>{o.lotCode} · {o.product} · {kg(o.totalKg)}</Text>
+                      <Text style={s.meta}>{o.items.join(', ') || 'No items'}</Text>
                     </View>
                     <Badge label={o.state.replace('_', ' ')} tone={TONE[o.state]} />
                   </View>

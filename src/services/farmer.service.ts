@@ -44,7 +44,6 @@ export interface ProduceListing {
   recordedKg: number | null;
   stage: ListingStage;
   inLot: boolean;
-  lotCode: string | null;
   recordedGrade: string | null;
   pickupStart: string | null;
   pickupEnd: string | null;
@@ -159,7 +158,6 @@ function toListing(row: any, stage: ListingStage = 'available'): ProduceListing 
     recordedKg: recorded == null ? null : Number(recorded),
     stage: STAGES.includes(stage) ? stage : 'available',
     inLot: typeof row.in_lot === 'boolean' ? row.in_lot : row.lot_id != null,
-    lotCode: row.lot_code ?? null,
     recordedGrade: row.recorded_grade ?? null,
     pickupStart: row.pickup_start ?? null,
     pickupEnd: row.pickup_end ?? null,
@@ -262,7 +260,7 @@ export async function updateListing(id: string, product: string, weightKg: numbe
   const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_grade: grade, p_weight_kg: weightKg });
   if (!error) return;
   const msg = error.message ?? '';
-  if (msg.includes('already in a lot')) throw new Error('This listing is already in a collection lot, so it can no longer be edited.');
+  if (msg.includes('already in a lot')) throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
   if (msg.includes('no published price')) throw new Error(`No published price for ${product} grade ${grade} yet.`);
   if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
   throw new Error('Could not save your changes.');
@@ -270,7 +268,7 @@ export async function updateListing(id: string, product: string, weightKg: numbe
 
 function removalError(error: { message?: string; code?: string }): Error {
   const msg = error.message ?? '';
-  if (msg.includes('already in a lot')) return new Error('This listing is already in a collection lot, so it can no longer be removed.');
+  if (msg.includes('already in a lot')) return new Error('This listing is already being fulfilled, so it can no longer be removed.');
   if (msg.includes('listing not found')) return new Error('That listing is no longer on your account.');
   return new Error('Could not remove that listing.');
 }
@@ -291,7 +289,7 @@ export async function deleteListing(id: string): Promise<void> {
 /** Used when the withdraw function is not on the database yet. Confirms a row actually went. */
 async function deleteListingDirect(id: string): Promise<string[]> {
   const { data: row } = await supabase.from('produce_listings').select('image_paths, lot_id').eq('id', id).maybeSingle();
-  if (row?.lot_id) throw new Error('This listing is already in a collection lot, so it can no longer be removed.');
+  if (row?.lot_id) throw new Error('This listing is already being fulfilled, so it can no longer be removed.');
   const { data, error } = await supabase.from('produce_listings').delete().eq('id', id).select('id');
   if (error) throw removalError(error);
   if (!data?.length) throw new Error('Could not remove that listing.');

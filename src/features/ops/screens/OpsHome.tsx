@@ -6,7 +6,6 @@ import { OpsShell, type NavGroup } from '../../../components/layout/OpsShell';
 import { useNav } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import * as buyers from '../../../services/ops.buyers.service';
-import * as payouts from '../../../services/ops.payouts.service';
 import * as ops from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
@@ -15,7 +14,6 @@ import { ConfigPanel } from '../components/ConfigPanel';
 import { DashboardPanel } from '../components/DashboardPanel';
 import { FarmersPanel } from '../components/FarmersPanel';
 import { PaymentsPanel } from '../components/PaymentsPanel';
-import { PayoutsPanel } from '../components/PayoutsPanel';
 import { PricesPanel } from '../components/PricesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
@@ -25,13 +23,11 @@ import type { OpsData } from '../data';
 
 const TITLES: Record<string, [string, string]> = {
   dashboard: ['Dashboard', 'Supply, money and what needs doing today.'],
-  supply: ['Supply', 'What farmers have listed and what has sold.'],
+  supply: ['Supply', 'What farmers have listed.'],
   farmers: ['Farmers', 'Contact details, wallets and listings.'],
   buyers: ['Buyers', 'Who is buying, where it goes and what they have ordered.'],
-  orders: ['Orders', 'Buyer orders from request to delivery.'],
+  orders: ['Orders', 'Buyer orders.'],
   payments: ['Payments', 'Money received from buyers.'],
-  payouts: ['Payouts', 'Money sent to farmers.'],
-  routes: ['Routes', 'Planning collection and delivery runs.'],
   trucks: ['Cold trucks', 'Bookings, the price per kilometre, and the driver assigned to each trip.'],
   prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
   team: ['Team', 'Drivers and operations staff.'],
@@ -47,11 +43,11 @@ export function OpsHome({ account }: { account: Account }) {
 
   const load = useCallback(async () => {
     try {
-      const [farmers, buyerRows, supply, orders, cat, team, config, settlements, runs] = await Promise.all([
+      const [farmers, buyerRows, supply, orders, cat, team, config] = await Promise.all([
         ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchSupply(), buyers.fetchOrders(),
-        ops.fetchCatalogue(), ops.fetchTeam(), ops.fetchConfig(), payouts.fetchSettlements(), payouts.fetchPayoutRuns(),
+        ops.fetchCatalogue(), ops.fetchTeam(), ops.fetchConfig(),
       ]);
-      setData({ farmers, buyers: buyerRows, supply, orders, categories: cat.categories, products: cat.products, prices: cat.prices, team, config, settlements, runs });
+      setData({ farmers, buyers: buyerRows, supply, orders, categories: cat.categories, products: cat.products, prices: cat.prices, team, config });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
@@ -64,7 +60,6 @@ export function OpsHome({ account }: { account: Account }) {
 
   const n = {
     payments: data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0,
-    payouts: data?.settlements.filter((x) => x.status === 'payable' && !x.inRun).length ?? 0,
   };
   const groups: NavGroup[] = [
     { title: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'grid' }] },
@@ -76,12 +71,8 @@ export function OpsHome({ account }: { account: Account }) {
       { key: 'buyers', label: 'Buyers', icon: 'user' },
       { key: 'orders', label: 'Orders', icon: 'package' },
     ] },
-    { title: 'Money', items: [
-      { key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments },
-      { key: 'payouts', label: 'Payouts out', icon: 'arrowUpRight', badge: n.payouts },
-    ] },
+    { title: 'Money', items: [{ key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments }] },
     { title: 'Logistics', items: [
-      { key: 'routes', label: 'Routes', icon: 'truck' },
       { key: 'trucks', label: 'Cold trucks', icon: 'truck' },
     ] },
     { title: 'Catalogue', items: [{ key: 'prices', label: 'Prices and products', icon: 'tag' }] },
@@ -107,10 +98,8 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'supply' ? <SupplyPanel supply={data.supply} /> : null}
           {tab === 'farmers' ? <FarmersPanel farmers={data.farmers} supply={data.supply} /> : null}
           {tab === 'buyers' ? <BuyersPanel buyers={data.buyers} orders={data.orders} /> : null}
-          {tab === 'orders' ? <Empty icon="package" title="Orders are coming soon" hint="Buyer orders will be followed from request to delivery here." /> : null}
-          {tab === 'routes' ? <Empty icon="truck" title="Route planning is coming soon" hint="Collection and delivery runs will be planned here." /> : null}
+          {tab === 'orders' ? <Empty icon="package" title="Orders are coming soon" hint="Buyer orders will be followed here." /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
-          {tab === 'payouts' ? <PayoutsPanel settlements={data.settlements} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
           {tab === 'prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}

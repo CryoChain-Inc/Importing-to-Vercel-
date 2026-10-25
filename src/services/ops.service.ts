@@ -22,19 +22,12 @@ export interface SupplyRow {
   locality: string;
   point: string;
   pointId: string | null;
-  lotId: string | null;
-  /** State of the lot this listing sits in; null while unallocated. */
-  lotState: string | null;
   /** Storage paths of the farmer's photos in the produce bucket. */
   imagePaths: string[];
-  /** Grade the farmer declared; a lot holds one grade. */
+  /** Grade the farmer declared. */
   grade: 'A' | 'B' | 'C';
   createdAt: string;
 }
-
-/** Sold = the lot's buyer has paid. Listed and awaiting-payment lots still count as supply left to sell. */
-const PAID = ['escrow_funded', 'collecting', 'in_transit', 'delivered', 'accepted', 'disputed'];
-export const isSold = (r: SupplyRow) => Boolean(r.lotId) && PAID.includes(r.lotState ?? '');
 
 export interface Category {
   id: string;
@@ -49,6 +42,9 @@ export interface Product {
   categoryId: string;
   category: string;
   imagePath: string | null;
+  /** Extra gallery photos shown on the buyer's product page, after the cover. */
+  imagePaths: string[];
+  description: string;
   active: boolean;
 }
 
@@ -98,7 +94,7 @@ export async function fetchFarmers(): Promise<FarmerRow[]> {
 export async function fetchSupply(): Promise<SupplyRow[]> {
   const { data, error } = await supabase
     .from('produce_listings')
-    .select('id, product, grade, weight_kg, image_paths, created_at, lot_id, farmer_id, collection_point_id, lots(state), farmers(locality, profiles(display_name)), collection_points(name)')
+    .select('id, product, grade, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)')
     .order('created_at', { ascending: false });
   fail('Could not load supply.')(error);
   return (data ?? []).map((r: any) => ({
@@ -110,8 +106,6 @@ export async function fetchSupply(): Promise<SupplyRow[]> {
     locality: r.farmers?.locality ?? '',
     point: r.collection_points?.name ?? '—',
     pointId: r.collection_point_id,
-    lotId: r.lot_id,
-    lotState: r.lots?.state ?? null,
     imagePaths: r.image_paths ?? [],
     grade: r.grade ?? 'A',
     createdAt: r.created_at,
@@ -121,7 +115,7 @@ export async function fetchSupply(): Promise<SupplyRow[]> {
 export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
   const [k, p, c, b] = await Promise.all([
     supabase.from('categories').select('id, name, image_path, active').order('name'),
-    supabase.from('products').select('id, name, category_id, image_path, active, categories(name)').order('name'),
+    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('name'),
     supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
     supabase.from('buyer_prices').select('product_id, grade, price, prev_price'),
   ]);
@@ -141,6 +135,8 @@ export async function fetchCatalogue(): Promise<{ categories: Category[]; produc
       categoryId: r.category_id,
       category: r.categories?.name ?? '',
       imagePath: r.image_path,
+      imagePaths: r.image_paths ?? [],
+      description: r.description ?? '',
       active: r.active,
     })),
     prices: [...rows('farmer', c.data), ...rows('buyer', b.data)],
@@ -156,7 +152,7 @@ async function saveWithImage(
   oldPath: string | null | undefined,
   removeImage: boolean | undefined,
   failMsg: string,
-) {
+): Promise<string> {
   let rowId = id;
   if (rowId) {
     fail(failMsg)((await supabase.from(table).update(fields).eq('id', rowId)).error);
@@ -173,6 +169,7 @@ async function saveWithImage(
     const path = await replaceImage(table, rowId, image, oldPath);
     fail('Saved, but could not attach the image.')((await supabase.from(table).update({ image_path: path }).eq('id', rowId)).error);
   }
+  return rowId;
 }
 
 export interface CategoryInput { id?: string; name: string; active: boolean; image?: PickedImage; oldImagePath?: string | null; removeImage?: boolean }
@@ -182,9 +179,26 @@ export const saveCategory = (c: CategoryInput) =>
   saveWithImage('categories', c.id, { name: c.name.trim(), active: c.active }, c.image, c.oldImagePath, c.removeImage,
     'Could not save that category (is the name already used?).');
 
-export const saveProduct = (p: ProductInput) =>
-  saveWithImage('products', p.id, { name: p.name.trim(), category_id: p.categoryId, active: p.active }, p.image, p.oldImagePath, p.removeImage,
-    'Could not save that product (is the name already used?).');
+export interface GalleryInput {
+  /** Saved gallery paths to keep, in order. */
+  keep: string[];
+  /** Saved gallery paths the ops user removed; their files are deleted. */
+  dropped: string[];
+  added: PickedImage[];
+}
+
+export async function saveProduct(p: ProductInput & { description: string; gallery: GalleryInput }) {
+  const description = p.description.trim();
+  const id = await saveWithImage('products', p.id, { name: p.name.trim(), category_id: p.categoryId, active: p.active, description: description || null },
+    p.image, p.oldImagePath, p.removeImage, 'Could not save that product (is the name already used?).');
+  const { keep, dropped, added } = p.gallery;
+  if (!dropped.length && !added.length) return;
+  // One at a time: each upload path is stamped with Date.now().
+  const paths = [...keep];
+  for (const img of added) paths.push(await replaceImage('products', id, img));
+  fail('Saved, but could not update the photos.')((await supabase.from('products').update({ image_paths: paths }).eq('id', id)).error);
+  await Promise.all(dropped.map(removeStoredImage));
+}
 
 /** prev_price is set by a database trigger when the price changes. */
 export async function setPrice(kind: PriceKind, productId: string, grade: string, price: number): Promise<void> {

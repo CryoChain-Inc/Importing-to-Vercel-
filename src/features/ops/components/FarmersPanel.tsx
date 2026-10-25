@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Card, Icon, Input } from '../../../components/common';
-import { isSold, type FarmerRow, type SupplyRow } from '../../../services/ops.service';
+import { type FarmerRow, type SupplyRow } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
-import { supplySplit } from '../data';
 import { Empty, kg, usePaged } from './OpsBits';
 
 /** Farmers with a search box; open one for contact details, wallet state and everything they have listed. */
@@ -24,7 +23,7 @@ export function FarmersPanel({ farmers, supply }: { farmers: FarmerRow[]; supply
       {filtered.length === 0 ? <Text style={s.meta}>No farmer matches “{q}”.</Text> : null}
       {rows.map((f) => {
         const mine = supply.filter((r) => r.farmerId === f.id);
-        const sp = supplySplit(mine, isSold);
+        const listed = mine.reduce((n, r) => n + r.weightKg, 0);
         const on = open === f.id;
         return (
           <Card key={f.id} style={s.item}>
@@ -32,7 +31,7 @@ export function FarmersPanel({ farmers, supply }: { farmers: FarmerRow[]; supply
               <View style={s.avatar}><Text style={s.avatarText}>{f.name.slice(0, 1).toUpperCase()}</Text></View>
               <View style={s.grow}>
                 <Text style={s.name} numberOfLines={1}>{f.name}</Text>
-                <Text style={s.meta} numberOfLines={1}>{[f.locality, `${mine.length} listing${mine.length === 1 ? '' : 's'}`, kg(sp.total)].filter(Boolean).join(' · ')}</Text>
+                <Text style={s.meta} numberOfLines={1}>{[f.locality, `${mine.length} listing${mine.length === 1 ? '' : 's'}`, kg(listed)].filter(Boolean).join(' · ')}</Text>
               </View>
               <Badge label={f.walletVerified ? 'Wallet verified' : f.walletReady ? 'Wallet saved' : 'No wallet'} tone={f.walletVerified ? 'success' : f.walletReady ? 'info' : 'warning'} />
               <Icon name="chevronDown" size={18} color={colors.inkMuted} />
@@ -47,7 +46,7 @@ export function FarmersPanel({ farmers, supply }: { farmers: FarmerRow[]; supply
                 {mine.length === 0 ? <Text style={s.meta}>Nothing listed yet.</Text> : mine.slice(0, 5).map((r) => (
                   <View key={r.id} style={s.listing}>
                     <Text style={s.value}>{r.product} · {kg(r.weightKg)}</Text>
-                    <Badge label={!r.lotId ? 'Available' : isSold(r) ? 'Sold' : 'In open lot'} tone={!r.lotId ? 'success' : isSold(r) ? 'neutral' : 'warning'} />
+                    <Badge label={`Grade ${r.grade}`} tone="neutral" />
                   </View>
                 ))}
                 {mine.length > 5 ? <Text style={s.meta}>and {mine.length - 5} more. See the Supply page for the full list.</Text> : null}
