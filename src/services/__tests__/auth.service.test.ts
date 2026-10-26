@@ -2,7 +2,7 @@ import { authService } from '../auth.service';
 import { supabase } from '../supabase';
 
 jest.mock('../supabase', () => ({
-  supabase: { auth: { signInWithOtp: jest.fn(), updateUser: jest.fn(), verifyOtp: jest.fn(), getSession: jest.fn() }, rpc: jest.fn(), from: jest.fn() },
+  supabase: { auth: { signInWithOtp: jest.fn(), updateUser: jest.fn(), verifyOtp: jest.fn(), getSession: jest.fn() }, rpc: jest.fn(), from: jest.fn(), functions: { invoke: jest.fn() } },
 }));
 
 const auth = supabase.auth as unknown as { signInWithOtp: jest.Mock; updateUser: jest.Mock; verifyOtp: jest.Mock };
@@ -45,4 +45,13 @@ test('phone change confirms with a phone_change code', async () => {
 test('a contact owned by another account is rejected with a clear message', async () => {
   auth.updateUser.mockResolvedValue({ error: { code: 'phone_exists', message: 'x' } });
   await expect(authService.requestContactChange('0244000001')).rejects.toThrow('belongs to another account');
+});
+
+test('delete account surfaces the server reason when it is refused', async () => {
+  const invoke = (supabase as unknown as { functions: { invoke: jest.Mock } }).functions.invoke;
+  invoke.mockResolvedValue({ error: { context: { json: async () => ({ error: 'Payout in progress.' }) } } });
+  await expect(authService.deleteAccount()).rejects.toThrow('Payout in progress.');
+  invoke.mockResolvedValue({ error: null });
+  await expect(authService.deleteAccount()).resolves.toBeUndefined();
+  expect(invoke).toHaveBeenCalledWith('delete-account');
 });

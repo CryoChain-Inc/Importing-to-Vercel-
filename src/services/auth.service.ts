@@ -77,5 +77,14 @@ export const authService = {
     if (error) throw error;
   },
 
+  /** Erases the signed-in farmer/buyer's personal data and closes the account; throws the server's reason if it is refused. */
+  async deleteAccount() {
+    const { error } = await supabase.functions.invoke('delete-account');
+    if (!error) return;
+    // Non-2xx responses hide the body inside error.context.
+    const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(body?.error ?? 'Could not delete the account. Please try again.');
+  },
+
   signOut: () => supabase.auth.signOut(),
 };

@@ -26,7 +26,6 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ]
@@ -39,7 +38,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "CryoChain uses the camera to photograph crates, the scale, and the cold-box gauge."
+          "cameraPermission": "CryoChain uses the camera to photograph crates, the scale, and the cold-box gauge.",
+          "microphonePermission": false
         }
       ],
       [

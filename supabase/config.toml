@@ -428,3 +428,6 @@ verify_jwt = true
 
 [functions.truck-pay-verify]
 verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true

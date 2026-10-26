@@ -9,6 +9,7 @@ import { fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type Pr
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { EarningsPanel } from '../components/EarningsPanel';
+import { AccountFooter } from '../../auth/components/AccountFooter';
 import { MessagesPanel } from '../components/MessagesPanel';
 import { Offers } from '../components/Offers';
 import { FarmerProfileCard } from '../components/FarmerProfileCard';
@@ -101,7 +102,12 @@ export function FarmerHome({ account }: { account: Account }) {
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
           {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={addWallet} /> : null}
-          {tab === 'profile' ? <FarmerProfileCard name={account.name} phone={account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} /> : null}
+          {tab === 'profile' ? (
+            <>
+              <FarmerProfileCard name={account.name} phone={account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} />
+              <AccountFooter onDeleted={() => reset({ name: 'landing' })} />
+            </>
+          ) : null}
         </>
       )}
     </TabShell>
