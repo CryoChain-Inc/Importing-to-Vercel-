@@ -210,7 +210,7 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
         <Card key={b.id} style={s.item}>
           <View style={s.top}>
             <Text style={s.name}>{b.code} · {b.purpose === 'transfer' ? 'Transfer' : 'Pick up'}</Text>
-            <Badge label={b.state === 'awaiting_payment' ? 'Awaiting payment' : b.startedAt ? 'On the way' : b.state === 'paid' ? 'Paid' : 'Cancelled'} tone={b.state === 'paid' ? 'success' : b.state === 'cancelled' ? 'neutral' : 'warning'} />
+            <Badge label={b.state === 'awaiting_payment' ? 'Awaiting payment' : b.completedAt ? 'Completed' : b.startedAt ? 'On the way' : b.state === 'paid' ? 'Paid' : 'Cancelled'} tone={b.state === 'paid' ? 'success' : b.state === 'cancelled' ? 'neutral' : 'warning'} />
           </View>
           <Text style={s.meta}>{b.pickupLabel}</Text>
           <Text style={s.meta}>to {b.dropoffLabel}</Text>

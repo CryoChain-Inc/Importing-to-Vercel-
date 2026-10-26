@@ -38,6 +38,7 @@ export interface TruckBooking {
   dropoffLat: number;
   dropoffLng: number;
   startedAt: string | null;
+  completedAt: string | null;
   driverLat: number | null;
   driverLng: number | null;
   driverSeenAt: string | null;
@@ -74,6 +75,7 @@ const mapBooking = (r: any): TruckBooking => ({
   dropoffLat: Number(r.dropoff_lat ?? 0),
   dropoffLng: Number(r.dropoff_lng ?? 0),
   startedAt: r.started_at ?? null,
+  completedAt: r.completed_at ?? null,
   driverLat: r.driver_lat == null ? null : Number(r.driver_lat),
   driverLng: r.driver_lng == null ? null : Number(r.driver_lng),
   driverSeenAt: r.driver_seen_at ?? null,
@@ -84,7 +86,8 @@ const mapBooking = (r: any): TruckBooking => ({
 
 const COORDS = ', pickup_lat, pickup_lng, dropoff_lat, dropoff_lng';
 const LIVE = ', started_at, driver_lat, driver_lng, driver_seen_at';
-const BOOKING_COLUMNS = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at, truck_payments(status, created_at)${COORDS}${LIVE}`;
+const ENDED = ', completed_at';
+const BOOKING_COLUMNS = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at, truck_payments(status, created_at)${COORDS}${LIVE}${ENDED}`;
 const BOOKING_COLUMNS_BASE = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at, truck_payments(status, created_at)${COORDS}`;
 
 async function selectBookings(columns: string, filter?: { driverId: string }) {
@@ -95,6 +98,9 @@ async function selectBookings(columns: string, filter?: { driverId: string }) {
 
 export async function fetchTruckBookings(): Promise<TruckBooking[]> {
   let { data, error } = await selectBookings(BOOKING_COLUMNS);
+  if (error && /completed_at/.test(error.message)) {
+    ({ data, error } = await selectBookings(BOOKING_COLUMNS.replace(ENDED, '')));
+  }
   if (error && /buyer_name|buyer_phone|driver_id|started_at|driver_lat|driver_seen_at/.test(error.message)) {
     ({ data, error } = await selectBookings(BOOKING_COLUMNS_BASE));
   }
@@ -105,8 +111,11 @@ export async function fetchTruckBookings(): Promise<TruckBooking[]> {
 /** Trips assigned to the signed-in driver, including ones still awaiting payment so the buyer can reach them. */
 export async function fetchDriverTrips(): Promise<TruckBooking[]> {
   const id = await requireUserId();
-  const tripColumns = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at${COORDS}${LIVE}`;
+  const tripColumns = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at${COORDS}${LIVE}${ENDED}`;
   let { data, error } = await selectBookings(tripColumns, { driverId: id });
+  if (error && /completed_at/.test(error.message)) {
+    ({ data, error } = await selectBookings(tripColumns.replace(ENDED, ''), { driverId: id }));
+  }
   if (error && /buyer_name|buyer_phone|driver_id|started_at|driver_lat|driver_seen_at/.test(error.message)) {
     ({ data, error } = await selectBookings(
       `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at${COORDS}`,
@@ -208,16 +217,33 @@ export async function startTruckTrip(bookingId: string, code: string): Promise<v
   }, 'Could not start that trip.');
 }
 
+/** The assigned driver ends a trip that has already started. */
+export async function completeTruckTrip(bookingId: string): Promise<void> {
+  await requireUserId();
+  const { error } = await supabase.rpc('complete_truck_trip', { p_booking_id: bookingId });
+  rpcError(error, {
+    'not your trip': 'This trip is not assigned to you.',
+    'pay before ending': 'The buyer has to pay before the trip can end.',
+    'has not started': 'Start the trip with the buyer’s code before ending it.',
+    'already ended': 'This trip has already ended.',
+    'Could not find the function': 'Ending a trip is not available yet. Apply the latest database update, then try again.',
+  }, 'Could not end that trip.');
+}
+
 export async function reportTruckLocation(bookingId: string, lat: number, lng: number): Promise<void> {
   const { error } = await supabase.rpc('report_truck_location', { p_booking_id: bookingId, p_lat: lat, p_lng: lng });
   if (error && !/has not started|not valid/.test(error.message)) throw new Error('Could not share your location.');
 }
 
-export async function fetchTripLive(bookingId: string): Promise<{ startedAt: string | null; driverLat: number | null; driverLng: number | null; driverSeenAt: string | null } | null> {
-  const { data, error } = await supabase.from('truck_bookings').select('started_at, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle();
+export async function fetchTripLive(bookingId: string): Promise<{ startedAt: string | null; completedAt: string | null; driverLat: number | null; driverLng: number | null; driverSeenAt: string | null } | null> {
+  let { data, error } = await supabase.from('truck_bookings').select('started_at, completed_at, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle();
+  if (error && /completed_at/.test(error.message)) {
+    ({ data, error } = await supabase.from('truck_bookings').select('started_at, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle());
+  }
   if (error || !data) return null;
   return {
     startedAt: data.started_at,
+    completedAt: data.completed_at ?? null,
     driverLat: data.driver_lat == null ? null : Number(data.driver_lat),
     driverLng: data.driver_lng == null ? null : Number(data.driver_lng),
     driverSeenAt: data.driver_seen_at,
