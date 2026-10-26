@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F4F6F4",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F4F6F4"
-    },
     "ios": {
       "bundleIdentifier": "com.cryochain.mobile",
       "supportsTablet": true
@@ -35,6 +30,15 @@
     },
     "plugins": [
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F4F6F4",
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-image-picker",
         {
