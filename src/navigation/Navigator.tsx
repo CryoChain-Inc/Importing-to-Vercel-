@@ -26,7 +26,7 @@ const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 // Params live in memory, so a deep link never lands signed in: /ops and /ops/* go to the ops login, anything else to the landing page.
 const START: Route = !isWeb
   ? { name: 'landing' }
-  : /^\/ops(\/|$)/.test(window.location.pathname)
+  : /^\/ops(\/|$)/.test(window.location.pathname) || window.location.hostname.startsWith('ops.')
     ? { name: 'ops' }
     : window.location.pathname === '/email-verified' && verifyLinkStatus(window.location.href)
       ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
