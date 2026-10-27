@@ -1,28 +1,29 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Card, Icon, Input } from '../../../components/common';
-import { type FarmerRow, type SupplyRow } from '../../../services/ops.service';
+import { Banner } from '../../../components/feedback';
+import { fetchFarmersPage } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
-import { Empty, kg, usePaged } from './OpsBits';
+import type { PageProps } from '../useOpsLocation';
+import { Empty, kg, Pager, PanelSkeleton, useServerPage } from './OpsBits';
 
 /** Farmers with a search box; open one for contact details, wallet state and everything they have listed. */
-export function FarmersPanel({ farmers, supply }: { farmers: FarmerRow[]; supply: SupplyRow[] }) {
+export function FarmersPanel({ params, setParams, rev }: PageProps) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
-  const needle = q.trim().toLowerCase();
-  const filtered = farmers.filter((f) => !needle || `${f.name} ${f.phone} ${f.locality}`.toLowerCase().includes(needle));
-  const { rows, more } = usePaged(filtered, needle, 8);
+  const { rows, total, q, text, setText, page, goPage, loading, firstLoad, error } = useServerPage(params, setParams, rev, fetchFarmersPage);
 
-  if (!farmers.length) return <Empty icon="users" title="No farmers yet" hint="Farmers appear here after they sign up. You will see their contact details, wallet status and listings." />;
+  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton />;
+  if (!total && !q && !loading) return <Empty icon="users" title="No farmers yet" hint="Farmers appear here after they sign up. You will see their contact details, wallet status and listings." />;
   return (
-    <View style={s.list}>
-      <Input label="Search farmers" value={q} onChangeText={setQ} placeholder="Name, phone or town" />
-      {filtered.length === 0 ? <Text style={s.meta}>No farmer matches “{q}”.</Text> : null}
+    <View style={[s.list, loading && s.busy]}>
+      {error ? <Banner text={error} /> : null}
+      <Input label="Search farmers" value={text} onChangeText={setText} placeholder="Name, phone or town" />
+      {!loading && rows.length === 0 ? <Text style={s.meta}>No farmer matches “{q}”.</Text> : null}
       {rows.map((f) => {
-        const mine = supply.filter((r) => r.farmerId === f.id);
+        const mine = f.listings;
         const listed = mine.reduce((n, r) => n + r.weightKg, 0);
         const on = open === f.id;
         return (
@@ -55,7 +56,7 @@ export function FarmersPanel({ farmers, supply }: { farmers: FarmerRow[]; supply
           </Card>
         );
       })}
-      {more}
+      <Pager page={page} total={total} onPage={goPage} />
     </View>
   );
 }
@@ -72,6 +73,7 @@ function Detail({ k, v }: { k: string; v: string }) {
 
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 10 },
+  busy: { opacity: 0.6 },
   item: { padding: 0, overflow: 'hidden' as const },
   head: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, padding: 14, minHeight: 64 },
   grow: { flex: 1, gap: 2 },

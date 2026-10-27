@@ -43,7 +43,10 @@ function Picker({ initial, onClose, onPick }: { initial: Coords | null; onClose:
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') throw new Error('Allow location access to use this.');
-      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      // High accuracy often fails on desktop browsers (no GPS); fall back to the network fix.
+      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(() =>
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      );
       moveTo(coords);
     } catch (e) {
       if (!quiet) setError(e instanceof Error ? e.message : 'Could not get your location.');

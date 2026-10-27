@@ -1,6 +1,6 @@
 import React from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, View } from 'react-native';
-import { type PressState, focusRing, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
+import { type PressState, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Brand } from '../common/Brand';
 import { Button } from '../common/Button';
 import { Icon, type IconName } from '../common/Icon';
@@ -27,7 +27,13 @@ export function OpsShell({ groups, active, onSelect, name, onSignOut, children }
     const on = it.key === active;
     return (
       <Pressable key={it.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onSelect(it.key)}
-        style={({ pressed, hovered, focused }: PressState) => [rail ? s.railItem : s.pill, on && (rail ? s.railOn : s.pillOn), hovered && !on ? s.hover : null, pressed ? s.press : null, focused ? focusRing(colors.focusRing) : null]}>
+        style={({ pressed, hovered, focused }: PressState) => [
+          rail ? s.railItem : s.pill,
+          on && (rail ? s.railOn : s.pillOn),
+          hovered && !on ? s.hover : null,
+          pressed ? s.press : null,
+          focused ? s.focused : null,
+        ]}>
         <Icon name={it.icon} size={18} color={on ? colors.brandInk : colors.inkMuted} />
         <Text style={[s.label, on && s.labelOn]} numberOfLines={1}>{it.label}</Text>
         {it.badge ? <View style={s.badge}><Text style={s.badgeText}>{it.badge > 99 ? '99+' : it.badge}</Text></View> : null}
@@ -84,13 +90,14 @@ const styles = (c: Record<ColorToken, string>) => ({
   rootWide: { flexDirection: 'row' as const },
   rail: { width: 264, padding: 20, gap: 20, backgroundColor: c.surfaceCard, borderRightWidth: 1, borderRightColor: c.cardEdge },
   railScroll: { flex: 1 },
-  railList: { gap: 18 },
-  group: { gap: 2 },
-  groupTitle: { fontFamily: fonts.sansSemiBold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' as const, color: c.inkMuted, paddingHorizontal: 12, marginBottom: 4 },
+  railList: { gap: 18, overflow: 'visible' as const },
+  group: { gap: 6, overflow: 'visible' as const },
+  groupTitle: { fontFamily: fonts.sansSemiBold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' as const, color: c.inkMuted, paddingHorizontal: 12, marginBottom: 2 },
   railItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, minHeight: 42, paddingHorizontal: 12, borderRadius: 10 },
   railOn: { backgroundColor: c.brandTint },
   hover: { backgroundColor: c.surfaceSunken },
   press: { opacity: 0.7 },
+  focused: { outlineStyle: 'solid' as const, outlineWidth: 2, outlineOffset: -2, outlineColor: c.focusRing, zIndex: 1 },
   label: { flexShrink: 1, fontFamily: fonts.sansMedium, fontSize: 14, color: c.inkMuted },
   labelOn: { fontFamily: fonts.sansBold, color: c.brandInk },
   badge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.harvestFill, marginLeft: 'auto' as const },

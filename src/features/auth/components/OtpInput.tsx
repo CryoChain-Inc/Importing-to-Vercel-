@@ -5,7 +5,7 @@ import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 export const OTP_LENGTH = 6;
 
 /** Six visible boxes backed by one hidden input: paste, SMS autofill and backspace all just work. */
-export function OtpInput({ value, onChange, hasError }: { value: string; onChange: (v: string) => void; hasError?: boolean }) {
+export function OtpInput({ value, onChange, onSubmit, hasError }: { value: string; onChange: (v: string) => void; onSubmit?: () => void; hasError?: boolean }) {
   const ref = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   const s = useThemedStyles(styles);
@@ -34,6 +34,8 @@ export function OtpInput({ value, onChange, hasError }: { value: string; onChang
         textContentType="oneTimeCode"
         autoComplete="sms-otp"
         maxLength={OTP_LENGTH}
+        returnKeyType="done"
+        onSubmitEditing={onSubmit}
         caretHidden
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

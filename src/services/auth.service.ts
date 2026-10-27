@@ -1,3 +1,4 @@
+import { markCodeSent } from '../utils/codeTimer';
 import { isEmail, normalizePhone } from '../utils/format';
 import { supabase } from './supabase';
 
@@ -21,6 +22,7 @@ export const authService = {
   async sendOtp(identifier: string) {
     const { error } = await supabase.auth.signInWithOtp(target(identifier));
     if (error) throw error;
+    markCodeSent(identifier);
   },
 
   /** Returns false for a wrong or expired code. */
@@ -56,7 +58,7 @@ export const authService = {
   async requestContactChange(identifier: string, redirectTo?: string) {
     const attrs = target(identifier);
     const { error } = redirectTo ? await supabase.auth.updateUser(attrs, { emailRedirectTo: redirectTo }) : await supabase.auth.updateUser(attrs);
-    if (!error) return;
+    if (!error) return markCodeSent(identifier);
     if (error.code === 'email_exists' || error.code === 'phone_exists')
       throw new Error(`That ${isEmail(identifier) ? 'email' : 'phone number'} belongs to another account.`);
     throw error;

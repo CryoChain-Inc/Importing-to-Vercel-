@@ -1,4 +1,5 @@
 import { normalizePhone } from '../utils/format';
+import { likeTerm, pageRange, type Paged } from './paging';
 import { removeStoredImage, replaceImage, type PickedImage } from './catalogueImage';
 import { supabase } from './supabase';
 
@@ -75,54 +76,93 @@ const fail = (msg: string) => (error: unknown) => {
   if (error) throw new Error(msg);
 };
 
+const FARMER_COLS = 'id, address, locality, momo_number, wallet_verified_at, created_at, profiles!inner(display_name, phone)';
+
+const toFarmer = (r: any): FarmerRow => ({
+  id: r.id,
+  name: r.profiles?.display_name ?? 'Unnamed farmer',
+  phone: r.profiles?.phone ?? '',
+  locality: r.locality ?? '',
+  address: r.address ?? '',
+  walletReady: Boolean(r.momo_number),
+  walletVerified: Boolean(r.wallet_verified_at),
+  joinedAt: r.created_at,
+});
+
 export async function fetchFarmers(): Promise<FarmerRow[]> {
-  const { data, error } = await supabase
-    .from('farmers')
-    .select('id, address, locality, momo_number, wallet_verified_at, created_at, profiles(display_name, phone)')
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('farmers').select(FARMER_COLS).order('created_at', { ascending: false });
   fail('Could not load farmers.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.profiles?.display_name ?? 'Unnamed farmer',
-    phone: r.profiles?.phone ?? '',
-    locality: r.locality ?? '',
-    address: r.address ?? '',
-    walletReady: Boolean(r.momo_number),
-    walletVerified: Boolean(r.wallet_verified_at),
-    joinedAt: r.created_at,
-  }));
+  return (data ?? []).map(toFarmer);
 }
+
+export interface FarmerListing { id: string; product: string; grade: 'A' | 'B' | 'C'; weightKg: number }
+
+/** One page of farmers (newest first, optionally matching a search) with everything each has listed. */
+export async function fetchFarmersPage(page: number, q: string): Promise<Paged<FarmerRow & { listings: FarmerListing[] }>> {
+  const [from, to] = pageRange(page);
+  let query = supabase.from('farmers').select(FARMER_COLS, { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+  if (q.trim()) {
+    const p = likeTerm(q);
+    query = query.or(`locality.ilike.${p},profiles.display_name.ilike.${p},profiles.phone.ilike.${p}`);
+  }
+  const { data, error, count } = await query;
+  fail('Could not load farmers.')(error);
+  const farmers = (data ?? []).map(toFarmer);
+  const ids = farmers.map((f) => f.id);
+  const listed = ids.length ? await supabase.from('produce_listings').select('id, product, grade, weight_kg, farmer_id').in('farmer_id', ids).order('created_at', { ascending: false }) : null;
+  fail('Could not load farmers.')(listed?.error);
+  return {
+    rows: farmers.map((f) => ({
+      ...f,
+      listings: (listed?.data ?? []).filter((l: any) => l.farmer_id === f.id).map((l: any) => ({ id: l.id, product: l.product, grade: l.grade ?? 'A', weightKg: Number(l.weight_kg) })),
+    })),
+    total: count ?? 0,
+  };
+}
+
+const SUPPLY_COLS = 'id, product, grade, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)';
+
+const toSupply = (r: any, left: Map<string, number>): SupplyRow => ({
+  id: r.id,
+  product: r.product,
+  weightKg: Number(r.weight_kg),
+  remainingKg: left.get(r.id) ?? Number(r.weight_kg),
+  farmer: r.farmers?.profiles?.display_name ?? 'Unnamed farmer',
+  farmerId: r.farmer_id,
+  locality: r.farmers?.locality ?? '',
+  point: r.collection_points?.name ?? '—',
+  pointId: r.collection_point_id,
+  imagePaths: r.image_paths ?? [],
+  grade: r.grade ?? 'A',
+  createdAt: r.created_at,
+});
 
 export async function fetchSupply(): Promise<SupplyRow[]> {
   const [{ data, error }, stock] = await Promise.all([
-    supabase
-      .from('produce_listings')
-      .select('id, product, grade, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)')
-      .order('created_at', { ascending: false }),
+    supabase.from('produce_listings').select(SUPPLY_COLS).order('created_at', { ascending: false }),
     supabase.from('listing_stock').select('listing_id, remaining_kg'),
   ]);
   fail('Could not load supply.')(error ?? stock.error);
   const left = new Map((stock.data ?? []).map((r) => [r.listing_id as string, Number(r.remaining_kg)]));
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    product: r.product,
-    weightKg: Number(r.weight_kg),
-    remainingKg: left.get(r.id) ?? Number(r.weight_kg),
-    farmer: r.farmers?.profiles?.display_name ?? 'Unnamed farmer',
-    farmerId: r.farmer_id,
-    locality: r.farmers?.locality ?? '',
-    point: r.collection_points?.name ?? '—',
-    pointId: r.collection_point_id,
-    imagePaths: r.image_paths ?? [],
-    grade: r.grade ?? 'A',
-    createdAt: r.created_at,
-  }));
+  return (data ?? []).map((r) => toSupply(r, left));
+}
+
+/** One page of farmers' listings, newest first. */
+export async function fetchSupplyPage(page: number): Promise<Paged<SupplyRow>> {
+  const [from, to] = pageRange(page);
+  const { data, error, count } = await supabase.from('produce_listings').select(SUPPLY_COLS, { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+  fail('Could not load supply.')(error);
+  const ids = (data ?? []).map((r: any) => r.id as string);
+  const stock = ids.length ? await supabase.from('listing_stock').select('listing_id, remaining_kg').in('listing_id', ids) : null;
+  fail('Could not load supply.')(stock?.error);
+  const left = new Map((stock?.data ?? []).map((r) => [r.listing_id as string, Number(r.remaining_kg)]));
+  return { rows: (data ?? []).map((r) => toSupply(r, left)), total: count ?? 0 };
 }
 
 export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
   const [k, p, c, b] = await Promise.all([
-    supabase.from('categories').select('id, name, image_path, active').order('name'),
-    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('name'),
+    supabase.from('categories').select('id, name, image_path, active').order('created_at', { ascending: false }),
+    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('updated_at', { ascending: false }),
     supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
     supabase.from('buyer_prices').select('product_id, grade, price, prev_price'),
   ]);
@@ -302,18 +342,32 @@ export interface BuyerRow {
   joinedAt: string;
 }
 
+const BUYER_COLS = 'id, organization_name, delivery_location, created_at, profiles!inner(phone, email)';
+
+const toBuyer = (r: any): BuyerRow => ({
+  id: r.id,
+  name: r.organization_name ?? 'Unnamed buyer',
+  location: r.delivery_location ?? '',
+  phone: r.profiles?.phone ?? '',
+  email: r.profiles?.email ?? '',
+  joinedAt: r.created_at,
+});
+
 export async function fetchBuyers(): Promise<BuyerRow[]> {
-  const { data, error } = await supabase
-    .from('buyers')
-    .select('id, organization_name, delivery_location, created_at, profiles(phone, email)')
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('buyers').select(BUYER_COLS).order('created_at', { ascending: false });
   fail('Could not load buyers.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.organization_name ?? 'Unnamed buyer',
-    location: r.delivery_location ?? '',
-    phone: r.profiles?.phone ?? '',
-    email: r.profiles?.email ?? '',
-    joinedAt: r.created_at,
-  }));
+  return (data ?? []).map(toBuyer);
+}
+
+/** One page of buyers (newest first, optionally matching a search). */
+export async function fetchBuyersPage(page: number, q: string): Promise<Paged<BuyerRow>> {
+  const [from, to] = pageRange(page);
+  let query = supabase.from('buyers').select(BUYER_COLS, { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+  if (q.trim()) {
+    const p = likeTerm(q);
+    query = query.or(`organization_name.ilike.${p},delivery_location.ilike.${p},profiles.phone.ilike.${p}`);
+  }
+  const { data, error, count } = await query;
+  fail('Could not load buyers.')(error);
+  return { rows: (data ?? []).map(toBuyer), total: count ?? 0 };
 }

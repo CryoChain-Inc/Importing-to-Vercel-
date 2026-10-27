@@ -26,6 +26,7 @@ import { TeamPanel } from '../components/TeamPanel';
 import { TrucksPanel } from '../components/TrucksPanel';
 import { PanelSkeleton } from '../components/OpsBits';
 import type { OpsData } from '../data';
+import { useOpsLocation } from '../useOpsLocation';
 
 const TITLES: Record<string, [string, string]> = {
   dashboard: ['Dashboard', 'Supply, money and what needs doing today.'],
@@ -43,10 +44,13 @@ const TITLES: Record<string, [string, string]> = {
   settings: ['Settings', 'Temperature limits, payout rules and support contact.'],
 };
 
+const TABS = Object.keys(TITLES);
+
 export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
   const s = useThemedStyles(styles);
-  const [tab, setTab] = useState('dashboard');
+  const { tab, params, go } = useOpsLocation(TABS);
+  const [rev, setRev] = useState(0);
   const [data, setData] = useState<OpsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +63,7 @@ export function OpsHome({ account }: { account: Account }) {
       ]);
       setData({ farmers, buyers: buyerRows, supply, orders, categories: cat.categories, products: cat.products, prices: cat.prices, team, config, board, drivers, decisions, payables, runs });
       fulfil.sendQueuedSms();
+      setRev((r) => r + 1);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
@@ -97,9 +102,10 @@ export function OpsHome({ account }: { account: Account }) {
     { title: 'Admin', items: [{ key: 'team', label: 'Team', icon: 'shield' }, { key: 'settings', label: 'Settings', icon: 'sliders' }] },
   ];
   const [title, sub] = TITLES[tab];
+  const page = { params, setParams: (p: Record<string, string>, replace = false) => go(tab, p, replace), rev };
 
   return (
-    <OpsShell groups={groups} active={tab} onSelect={setTab} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}>
+    <OpsShell groups={groups} active={tab} onSelect={(t) => go(t)} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}>
       <View style={s.header}>
         <Text style={s.title}>{title}</Text>
         <Text style={s.sub}>{sub}</Text>
@@ -112,14 +118,14 @@ export function OpsHome({ account }: { account: Account }) {
       ) : null}
       {data ? (
         <>
-          {tab === 'dashboard' ? <DashboardPanel data={data} onGo={setTab} /> : null}
-          {tab === 'supply' ? <SupplyPanel supply={data.supply} /> : null}
-          {tab === 'farmers' ? <FarmersPanel farmers={data.farmers} supply={data.supply} /> : null}
-          {tab === 'buyers' ? <BuyersPanel buyers={data.buyers} orders={data.orders} /> : null}
+          {tab === 'dashboard' ? <DashboardPanel data={data} onGo={(t) => go(t)} /> : null}
+          {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
+          {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
+          {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
           {tab === 'orders' ? <OrdersBoard orders={data.board} onChange={load} /> : null}
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
           {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
-          {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} /> : null}
+          {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
           {tab === 'payouts' ? <PayoutsPanel payables={data.payables} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
           {tab === 'prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}

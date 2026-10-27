@@ -12,6 +12,7 @@ flow.md
 .branches/
 SPEC.md
 tasks/
+docs/
 
 # Native
 .kotlin/

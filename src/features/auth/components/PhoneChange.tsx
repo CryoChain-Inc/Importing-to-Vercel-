@@ -72,8 +72,8 @@ function PhoneVerifyPage({ phone, onResend, onBack, onDone }: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [expiresIn, restartExpiry] = useCountdown(EXPIRY_S);
-  const [cooldown, restartCooldown] = useCountdown(COOLDOWN_S);
+  const [expiresIn, restartExpiry] = useCountdown(phone, EXPIRY_S);
+  const [cooldown, restartCooldown] = useCountdown(phone, COOLDOWN_S);
   const expired = expiresIn === 0;
 
   const submit = async (token: string) => {
