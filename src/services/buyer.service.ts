@@ -17,8 +17,11 @@ export interface Order {
   amount: number;
   state: OrderState;
   createdAt: string;
+  paidAt: string | null;
   items: OrderItem[];
   deliveryAddress: string;
+  /** Farm pickups collected so far and the drop-off time; all zero/null until a driver is on the job. */
+  progress: { pickupsTotal: number; pickupsDone: number; deliveredAt: string | null };
   /** Status of the latest Paystack attempt, if any; failed/abandoned means the buyer can retry. */
   payment: 'pending' | 'success' | 'failed' | 'abandoned' | 'mismatch' | 'orphaned' | null;
 }
@@ -122,17 +125,25 @@ export async function checkoutCart(lines: CartLine[], addressId: string): Promis
 }
 
 export async function fetchOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
+  const [{ data, error }, tracking] = await Promise.all([supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, delivery_address, order_items(grade, kg, line_total, products(name)), payments(status, created_at)')
-    .order('created_at', { ascending: false });
+    .select('id, code, amount, state, created_at, paid_at, delivery_address, order_items(grade, kg, line_total, products(name)), payments(status, created_at)')
+    .order('created_at', { ascending: false }), supabase.rpc('buyer_order_progress')]);
   fail('Could not load your orders.')(error);
+  // Tracking is a nicety: if it cannot load, orders still show with their paid/unpaid state.
+  const stops = new Map<string, any>((tracking.data ?? []).map((r: any) => [r.order_id, r]));
   return (data ?? []).map((r: any) => ({
     id: r.id,
     code: r.code,
     amount: Number(r.amount),
     state: r.state,
     createdAt: r.created_at,
+    paidAt: r.paid_at,
+    progress: {
+      pickupsTotal: stops.get(r.id)?.pickups_total ?? 0,
+      pickupsDone: stops.get(r.id)?.pickups_done ?? 0,
+      deliveredAt: stops.get(r.id)?.delivered_at ?? null,
+    },
     items: (r.order_items ?? []).map((i: any) => ({ name: i.products?.name ?? '', grade: i.grade, kg: Number(i.kg), lineTotal: Number(i.line_total) })),
     deliveryAddress: r.delivery_address ?? '',
     payment: [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]?.status ?? null,
@@ -252,9 +263,23 @@ export async function deleteAddress(id: string): Promise<void> {
   fail('Could not remove that address.')(error);
 }
 
+export type OrderStage = 'cancelled' | 'placed' | 'preparing' | 'on_the_way' | 'delivered';
+
+/** Where an order stands: payment first, then (once paid) farm pickups and the drop-off. */
+export function orderStage(o: Pick<Order, 'state' | 'progress'>): OrderStage {
+  if (o.state === 'cancelled') return 'cancelled';
+  if (o.state === 'awaiting_payment') return 'placed';
+  if (o.progress.deliveredAt) return 'delivered';
+  return o.progress.pickupsDone > 0 ? 'on_the_way' : 'preparing';
+}
+
 /** What the buyer sees: just the order, not who farmed or hauled it. */
-export function orderStatus(o: Pick<Order, 'state'>): { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' } {
-  if (o.state === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
-  if (o.state === 'awaiting_payment') return { label: 'Awaiting payment', tone: 'warning' };
-  return { label: 'Paid', tone: 'success' };
+export function orderStatus(o: Pick<Order, 'state' | 'progress'>): { label: string; tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' } {
+  switch (orderStage(o)) {
+    case 'cancelled': return { label: 'Cancelled', tone: 'neutral' };
+    case 'placed': return { label: 'Awaiting payment', tone: 'warning' };
+    case 'preparing': return { label: 'Preparing', tone: 'info' };
+    case 'on_the_way': return { label: 'On the way', tone: 'info' };
+    case 'delivered': return { label: 'Delivered', tone: 'success' };
+  }
 }

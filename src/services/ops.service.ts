@@ -161,8 +161,8 @@ export async function fetchSupplyPage(page: number): Promise<Paged<SupplyRow>> {
 
 export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
   const [k, p, c, b] = await Promise.all([
-    supabase.from('categories').select('id, name, image_path, active').order('name'),
-    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('name'),
+    supabase.from('categories').select('id, name, image_path, active').order('created_at', { ascending: false }),
+    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('updated_at', { ascending: false }),
     supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
     supabase.from('buyer_prices').select('product_id, grade, price, prev_price'),
   ]);
