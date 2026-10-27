@@ -56,7 +56,7 @@ export function VerifyCode({ onSubmit, onResend, submitLabel = 'Confirm' }: Veri
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
       {expired ? <Banner text="That code has expired. Request a new one." /> : null}
-      <OtpInput value={code} onChange={setCode} hasError={!!error} />
+      <OtpInput value={code} onChange={setCode} onSubmit={() => code.length === OTP_LENGTH && !expired && !busy && submit()} hasError={!!error} />
       {expired ? null : <Text style={s.hint}>Code expires in {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, '0')}</Text>}
       <Button label={submitLabel} size="lg" onPress={submit} loading={busy} disabled={code.length !== OTP_LENGTH || expired} />
       <Button label={cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'} variant="ghost" onPress={resend} disabled={cooldown > 0 || busy} />
