@@ -35,7 +35,7 @@ export function VerifyScreen({ route }: { route: VerifyRoute }) {
 
   return (
     <AuthLayout title="Enter your code" subtitle={`We sent a 6-digit code to ${target}.`}>
-      <VerifyCode onSubmit={submit} onResend={resend} />
+      <VerifyCode identifier={identifier} onSubmit={submit} onResend={resend} />
     </AuthLayout>
   );
 }

@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
+import { codeSentAt } from '../../../utils/codeTimer';
 
-/** Seconds remaining; restart() begins a fresh run. */
-export function useCountdown(seconds: number) {
-  const [left, setLeft] = useState(seconds);
-  const [run, setRun] = useState(0);
+/**
+ * Seconds left of `seconds` since the code for `identifier` was sent. Derived from the send time rather than counted
+ * down in state, so it survives remounts and stays right after the tab or app was in the background.
+ * restart() re-reads it after a resend (the service has already recorded the new send time).
+ */
+export function useCountdown(identifier: string, seconds: number) {
+  const [now, setNow] = useState(Date.now);
+  const left = Math.max(0, Math.ceil((codeSentAt(identifier) + seconds * 1000 - now) / 1000));
 
   useEffect(() => {
-    setLeft(seconds);
-    const t = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000);
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [seconds, run]);
+  }, []);
 
-  const restart = useCallback(() => setRun((r) => r + 1), []);
+  const restart = useCallback(() => setNow(Date.now()), []);
   return [left, restart] as const;
 }

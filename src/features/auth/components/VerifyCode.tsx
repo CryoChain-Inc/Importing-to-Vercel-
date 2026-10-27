@@ -11,19 +11,21 @@ const EXPIRY_S = 120;
 const COOLDOWN_S = 30;
 
 export interface VerifyCodeProps {
+  /** Who the code was sent to; the countdowns run from when it was sent, so they survive leaving and returning. */
+  identifier: string;
   /** Returns an error message, or null when the step is complete. */
   onSubmit: (code: string) => Promise<string | null>;
   onResend: () => Promise<void>;
   submitLabel?: string;
 }
 
-export function VerifyCode({ onSubmit, onResend, submitLabel = 'Confirm' }: VerifyCodeProps) {
+export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Confirm' }: VerifyCodeProps) {
   const s = useThemedStyles(styles);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expiresIn, restartExpiry] = useCountdown(EXPIRY_S);
-  const [cooldown, restartCooldown] = useCountdown(COOLDOWN_S);
+  const [expiresIn, restartExpiry] = useCountdown(identifier, EXPIRY_S);
+  const [cooldown, restartCooldown] = useCountdown(identifier, COOLDOWN_S);
   const expired = expiresIn === 0;
 
   const run = async (fn: () => Promise<void>) => {
