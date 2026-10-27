@@ -1,10 +1,11 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Card } from '../../../components/common';
-import type { SupplyRow } from '../../../services/ops.service';
+import { fetchSupplyPage, type SupplyRow } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { supplyByProduct } from '../data';
-import { Empty, Hero, kg, SectionTitle, usePaged } from './OpsBits';
+import type { PageProps } from '../useOpsLocation';
+import { Empty, Hero, kg, Pager, SectionTitle, usePaged, useServerPage } from './OpsBits';
 
 /** One row per product: kilos farmers have listed. Pages so a long catalogue stays short. */
 export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?: number }) {
@@ -28,9 +29,9 @@ export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?
 }
 
 /** Farmers' listings: the stock the shop sells from. */
-export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
+export function SupplyPanel({ supply, params, setParams, rev }: { supply: SupplyRow[] } & PageProps) {
   const s = useThemedStyles(styles);
-  const { rows, more } = usePaged(supply, 'listings', 6);
+  const { rows, total, page, goPage, loading } = useServerPage(params, setParams, rev, fetchSupplyPage);
   if (!supply.length) return <Empty icon="leaf" title="No supply yet" hint="Farmers' listings appear here with their estimated kilos." />;
   return (
     <View style={s.gap}>
@@ -44,6 +45,7 @@ export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
       <ProductSupply supply={supply} />
 
       <SectionTitle title="Farmer listings" note={`${supply.length} listings`} />
+      <View style={[s.gap, loading && s.busy]}>
       {rows.map((r) => (
         <Card key={r.id} style={s.item}>
           <Text style={s.name} numberOfLines={1}>{r.product} · Grade {r.grade} · {kg(r.remainingKg)} left of {kg(r.weightKg)}</Text>
@@ -51,13 +53,15 @@ export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
           <Text style={s.meta}>Listed {new Date(r.createdAt).toLocaleDateString('en-GH')}</Text>
         </Card>
       ))}
-      {more}
+      </View>
+      <Pager page={page} total={total} onPage={goPage} />
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   gap: { gap: 12 },
+  busy: { opacity: 0.6 },
   group: { padding: 0, overflow: 'hidden' as const },
   prod: { gap: 2, paddingHorizontal: 16, paddingVertical: 14 },
   divider: { borderTopWidth: 1, borderTopColor: c.borderSubtle },

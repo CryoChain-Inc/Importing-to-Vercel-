@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Button, Card, Icon, type IconName } from '../../../components/common';
 import { Skeleton, SkeletonCard } from '../../../components/feedback';
+import { PAGE_SIZE, type Paged } from '../../../services/paging';
+import type { Params } from '../useOpsLocation';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
 export const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 0 })} kg`;
@@ -52,6 +54,57 @@ export function usePaged<T>(rows: T[], resetKey: string, page = 5) {
     ? <Button label={`Show ${Math.min(page, left)} more · ${left} left`} variant="outline" onPress={() => setState({ key: resetKey, n: n + page })} />
     : null;
   return { rows: rows.slice(0, n), more };
+}
+
+/** Previous / next with a "Page 2 of 7" label, for lists the server pages. */
+export function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const s = useThemedStyles(styles);
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (pages < 2) return null;
+  return (
+    <View style={s.pager} accessibilityRole="toolbar">
+      <Button label="Previous" size="sm" variant="outline" disabled={page <= 1} onPress={() => onPage(page - 1)} />
+      <Text style={s.note}>Page {page} of {pages} · {total} total</Text>
+      <Button label="Next" size="sm" variant="outline" disabled={page >= pages} onPress={() => onPage(page + 1)} />
+    </View>
+  );
+}
+
+const NONE: never[] = []; // stable, so effects keyed on `rows` don't re-run while loading
+
+/**
+ * One server-fetched page driven by the URL: `page` and `q` come from `params`, edits go back through `setParams`.
+ * Refetches when page, search or `rev` changes. `text` is the live search box; `q` follows it after a short pause.
+ */
+export function useServerPage<T>(params: Params, setParams: (p: Params, replace?: boolean) => void, rev: number, fetchPage: (page: number, q: string) => Promise<Paged<T>>) {
+  const page = Math.max(1, Number(params.page) || 1);
+  const q = params.q ?? '';
+  const [text, setText] = useState(q);
+  const [result, setResult] = useState<(Paged<T> & { key: string }) | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const key = `${rev}|${JSON.stringify(params)}`; // any filter in the URL (e.g. state) refetches
+
+  useEffect(() => {
+    if (text === q) return;
+    const t = setTimeout(() => setParams({ ...params, q: text, page: '' }, true), 300);
+    return () => clearTimeout(t);
+  }, [text, q, params, setParams]);
+
+  useEffect(() => {
+    let live = true;
+    fetchPage(page, q).then((r) => {
+      if (!live) return;
+      setError(null);
+      const last = Math.max(1, Math.ceil(r.total / PAGE_SIZE));
+      if (page > last) setParams({ ...params, page: last > 1 ? String(last) : '' }, true); // e.g. a stale ?page=9
+      else setResult({ ...r, key });
+    }).catch((e) => live && setError(e instanceof Error ? e.message : 'Could not load this page.'));
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` covers rev and every URL param
+  }, [key]);
+
+  const goPage = (p: number) => setParams({ ...params, page: p > 1 ? String(p) : '' });
+  return { page, q, text, setText, rows: result?.rows ?? (NONE as T[]), total: result?.total ?? 0, loading: !result || result.key !== key, firstLoad: !result, error, goPage };
 }
 
 /** Skeleton shaped like a panel: hero, two tiles, then list rows. */
@@ -110,6 +163,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
   skel: { gap: 12 },
+  pager: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12, flexWrap: 'wrap' as const },
   tile: { flexGrow: 1, flexBasis: 150, width: undefined },
   grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
   stat: { flexGrow: 1, flexBasis: 150, gap: 4, padding: 16 },
