@@ -31,6 +31,10 @@ export function MapCanvas({ target, onSettle }: { target: MapTarget; onSettle: (
   useEffect(() => {
     settle.current = onSettle;
   });
+  // Latest target, so a map that finishes loading after the GPS fix still opens there.
+  const goal = useRef(target);
+  goal.current = target;
+  const last = useRef<{ lat: number; lng: number } | null>(null);
   const [error, setError] = useState<string | null>(KEY ? null : 'Map key missing.');
 
   useEffect(() => {
@@ -40,7 +44,7 @@ export function MapCanvas({ target, onSettle }: { target: MapTarget; onSettle: (
       .then((maps) => {
         if (dead || !host.current) return;
         const m = new maps.Map(host.current as unknown as HTMLElement, {
-          center: { lat: target.latitude, lng: target.longitude },
+          center: { lat: goal.current.latitude, lng: goal.current.longitude },
           zoom: 17,
           disableDefaultUI: true,
           zoomControl: true,
@@ -49,7 +53,12 @@ export function MapCanvas({ target, onSettle }: { target: MapTarget; onSettle: (
         });
         m.addListener('idle', () => {
           const c = m.getCenter();
-          settle.current(c.lat(), c.lng());
+          const lat = c.lat();
+          const lng = c.lng();
+          // `idle` also fires on container resizes; the address card resizing the map on every lookup made this loop.
+          if (last.current && Math.abs(last.current.lat - lat) < 1e-6 && Math.abs(last.current.lng - lng) < 1e-6) return;
+          last.current = { lat, lng };
+          settle.current(lat, lng);
         });
         map.current = m;
       })
