@@ -154,6 +154,7 @@ export async function resolveDecision(id: string, note: string): Promise<void> {
 /** Re-runs allocation for an order: tops up whatever is still uncovered and re-plans routes. */
 export async function retryAllocation(orderId: string): Promise<void> {
   const { error } = await supabase.rpc('ops_retry_allocation', { p_order: orderId });
+  if (error?.message.includes('been delivered')) throw new Error('This order has been delivered, so it can no longer be changed.');
   fail('Could not retry the allocation.')(error);
   await sendQueuedSms();
 }

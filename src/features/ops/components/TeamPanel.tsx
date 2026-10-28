@@ -4,7 +4,7 @@ import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/com
 import { Banner } from '../../../components/feedback';
 import { inviteStaff, type StaffRole, type TeamMember } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { formatPhone, isEmail, isPhone } from '../../../utils/format';
+import { EMAIL_MAX, NAME_MAX, formatPhone, isEmail, isPhone } from '../../../utils/format';
 import { Empty, SectionTitle, Stat, StatGrid } from './OpsBits';
 import { useAction } from './useAction';
 
@@ -23,7 +23,7 @@ export function TeamPanel({ team, onChange }: { team: TeamMember[]; onChange: ()
 
   const phoneOk = !phone.trim() || isPhone(phone);
   const emailOk = !email.trim() || isEmail(email);
-  const valid = name.trim().length >= 2 && (phone.trim() || email.trim()) && phoneOk && emailOk;
+  const valid = name.trim().length >= 2 && name.trim().length <= NAME_MAX && (phone.trim() || email.trim()) && phoneOk && emailOk;
 
   return (
     <View style={s.list}>
@@ -36,9 +36,9 @@ export function TeamPanel({ team, onChange }: { team: TeamMember[]; onChange: ()
         <Text style={s.title}>Invite a team member</Text>
         <Text style={s.meta}>Give a phone number, an email, or both. They sign in with a code sent there.</Text>
         <ChoiceChips label="Role" options={ROLES} value={role} onChange={(r) => setRole(r as StaffRole)} />
-        <Input label="Name" value={name} onChangeText={setName} />
+        <Input label="Name" value={name} onChangeText={setName} maxLength={NAME_MAX} />
         <Input label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="024 123 4567" error={phoneOk ? undefined : 'Enter a valid Ghana number'} />
-        <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={emailOk ? undefined : 'Enter a valid email'} />
+        <Input label="Email" value={email} onChangeText={setEmail} maxLength={EMAIL_MAX} keyboardType="email-address" autoCapitalize="none" error={emailOk ? undefined : 'Enter a valid email'} />
         {done ? <Banner tone="info" text={done} /> : null}
         <Button label="Send invite" loading={busy} disabled={!valid}
           onPress={() => run(async () => {

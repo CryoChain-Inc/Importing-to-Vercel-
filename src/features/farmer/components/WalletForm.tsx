@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Button, Input } from '../../../components/common';
 import { PAYOUT_NETWORKS } from '../../../data/options';
 import { lookupWalletName, type Wallet } from '../../../services/farmer.service';
+import { NAME_MAX } from '../../../utils/format';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
 /** MoMo network, number and registered name. Shared by onboarding and the profile tab. */
@@ -42,7 +43,7 @@ export function WalletForm({ value, onChange }: { value: Wallet; onChange: (patc
         })}
       </View>
       <Input label="2. Wallet number" prefix="+233" value={value.number} onChangeText={(number) => edit({ number })} keyboardType="phone-pad" placeholder="24 000 0000" />
-      <Input label="3. Name on the wallet" value={value.name} onChangeText={(name) => onChange({ name })} hint="As registered with your network. A mismatch pauses payouts." />
+      <Input label="3. Name on the wallet" value={value.name} onChangeText={(name) => onChange({ name })} maxLength={NAME_MAX} hint="As registered with your network. A mismatch pauses payouts." />
       <Button size="sm" variant="tonal" icon="check" label={found ? 'Verify again' : 'Verify wallet'} loading={checking} disabled={!value.network || value.number.replace(/\D/g, '').length < 9} onPress={check} />
       {found === null ? <Text style={s.note}>We couldn’t verify this wallet. You can still save it; just check the number and name.</Text> : null}
       {found ? (
@@ -51,7 +52,7 @@ export function WalletForm({ value, onChange }: { value: Wallet; onChange: (patc
           {same ? <Text style={s.ok}>Matches the name you entered.</Text> : (
             <>
               <Text style={s.note}>This differs from “{value.name || 'no name'}”. You can still save.</Text>
-              <Button size="sm" variant="tonal" label="Use this name" onPress={() => onChange({ name: found })} />
+              <Button size="sm" variant="tonal" label="Use this name" onPress={() => onChange({ name: found.slice(0, NAME_MAX) })} />
             </>
           )}
         </View>

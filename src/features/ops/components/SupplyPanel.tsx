@@ -31,7 +31,7 @@ export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?
 export function SupplyPanel({ supply }: { supply: SupplyRow[] }) {
   const s = useThemedStyles(styles);
   const { rows, more } = usePaged(supply, 'listings', 6);
-  if (!supply.length) return <Empty icon="leaf" title="No supply yet" hint="Farmers' listings appear here with their estimated kilos." />;
+  if (!supply.length) return <Empty icon="leaf" title="No produce listed yet" hint="No farmer has listed produce. Their listings will appear here, with the kilos still available to sell." />;
   return (
     <View style={s.gap}>
       <Hero label="Listed by farmers" value={kg(supply.reduce((n, r) => n + r.weightKg, 0))} cells={[

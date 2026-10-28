@@ -3,7 +3,7 @@ import { Linking, Text, View } from 'react-native';
 import { Badge, Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell, type TabDef } from '../../../components/layout';
-import { useNav } from '../../../navigation';
+import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
@@ -40,6 +40,7 @@ export function BuyerHome({ account }: { account: Account }) {
 
 function BuyerShell({ account }: { account: Account }) {
   const { reset } = useNav();
+  const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
   const [tab, setTab] = useState<Tab>('shop');
   // The order being paid. While set, the payment page replaces the tabs' content.
@@ -54,10 +55,11 @@ function BuyerShell({ account }: { account: Account }) {
       ]);
       setData({ catalogue, orders, transfer, details });
       setError(null);
+      await refreshAccount();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your marketplace.');
     }
-  }, []);
+  }, [refreshAccount]);
 
   useEffect(() => {
     load();
@@ -87,7 +89,7 @@ function BuyerShell({ account }: { account: Account }) {
     <TabShell tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
       <View style={s.header}>
         <View style={s.headerText}>
-          <Text style={s.hello}>Hello, {account.name || 'buyer'}</Text>
+          <Text style={s.hello} numberOfLines={1}>Hello, {data?.details.name || account.name || 'buyer'}</Text>
           {toPay ? <Badge label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`} tone="warning" /> : null}
         </View>
       </View>

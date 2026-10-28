@@ -18,6 +18,8 @@ interface Nav {
   push: (r: Route) => void;
   /** Replace the whole history, e.g. after sign-in so Back doesn't return to the OTP page. */
   reset: (r: Route) => void;
+  /** Update the signed-in person on the current screen without leaving it. */
+  patchAccount: (patch: Partial<Account>) => void;
   back: () => void;
 }
 
@@ -58,6 +60,19 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
     if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH[r.name]);
   }, []);
 
+  const patchAccount = useCallback((patch: Partial<Account>) => {
+    setStack((s) => {
+      const i = s.length - 1;
+      const top = s[i];
+      if (!top || (top.name !== 'home' && top.name !== 'workspace')) return s;
+      const account = { ...top.account, ...patch };
+      if (account.name === top.account.name && account.phone === top.account.phone && account.email === top.account.email) return s;
+      const next = s.slice();
+      next[i] = { ...top, account };
+      return next;
+    });
+  }, []);
+
   const back = useCallback(() => {
     if (stackRef.current.length < 2) return;
     if (isWeb) window.history.back(); // popstate below trims the stack
@@ -81,7 +96,7 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []);
 
-  const value: Nav = { route: stack[stack.length - 1], canGoBack: stack.length > 1, push, reset, back };
+  const value: Nav = { route: stack[stack.length - 1], canGoBack: stack.length > 1, push, reset, patchAccount, back };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

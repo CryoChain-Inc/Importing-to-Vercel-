@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { OpsShell, type NavGroup } from '../../../components/layout/OpsShell';
-import { useNav } from '../../../navigation';
+import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import * as buyers from '../../../services/ops.buyers.service';
 import * as fulfil from '../../../services/ops.fulfilment.service';
@@ -45,6 +45,7 @@ const TITLES: Record<string, [string, string]> = {
 
 export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
+  const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
   const [tab, setTab] = useState('dashboard');
   const [data, setData] = useState<OpsData | null>(null);
@@ -60,10 +61,11 @@ export function OpsHome({ account }: { account: Account }) {
       setData({ farmers, buyers: buyerRows, supply, orders, categories: cat.categories, products: cat.products, prices: cat.prices, team, config, board, drivers, decisions, payables, runs });
       fulfil.sendQueuedSms();
       setError(null);
+      await refreshAccount();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
     }
-  }, []);
+  }, [refreshAccount]);
 
   useEffect(() => {
     load();

@@ -18,6 +18,7 @@ export function ConfigPanel({ config, onChange }: { config: OpsConfig; onChange:
   return (
     <View style={s.list}>
       {error ? <Banner text={error} /> : null}
+      {saved ? <Banner tone="info" text="Settings saved." /> : null}
       <Card style={s.form}>
         <Head icon="sliders" title="Cold-chain temperature" help="Readings outside this range are flagged on deliveries." />
         <Input label="Min temperature (°C)" value={c.minTemp} onChangeText={set('minTemp')} keyboardType="numbers-and-punctuation" />

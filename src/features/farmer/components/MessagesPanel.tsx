@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Card, Icon } from '../../../components/common';
-import { SkeletonCard } from '../../../components/feedback';
+import { SkeletonCard, useToast } from '../../../components/feedback';
 import { fetchNotices, type Notice, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
@@ -11,15 +11,26 @@ const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'nume
 export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
+  const { show } = useToast();
   const [notices, setNotices] = useState<Notice[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   // Listings change when a lot is bought, a pickup is scheduled or produce is weighed, so refetch with them.
   useEffect(() => {
-    fetchNotices().then((n) => { setNotices(n); setFailed(false); }, () => setFailed(true));
-  }, [listings]);
+    fetchNotices().then((n) => { setNotices(n); setFailed(false); }, () => {
+      setFailed(true);
+      show("We couldn't load your messages. Reopen the tab to try again.");
+    });
+  }, [listings, show]);
 
-  if (failed && !notices) return <Text style={s.note}>We couldn&apos;t load your messages. Pull the page down or reopen the tab to try again.</Text>;
+  if (failed && !notices) {
+    return (
+      <Card style={s.emptyCard}>
+        <Text style={s.emptyTitle}>Couldn't load messages</Text>
+        <Text style={s.note}>Reopen this tab to try again.</Text>
+      </Card>
+    );
+  }
   if (!notices) return <View style={s.skel}>{[0, 1, 2].map((i) => <SkeletonCard key={i} lines={3} />)}</View>;
   if (notices.length === 0) {
     return (

@@ -3,7 +3,7 @@ import { Linking } from 'react-native';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { LoadingScreen } from './components/feedback';
+import { LoadingScreen, ToastProvider } from './components/feedback';
 import { EmailVerifiedScreen } from './features/auth/screens/EmailVerifiedScreen';
 import { LandingScreen } from './features/auth/screens/LandingScreen';
 import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
@@ -80,9 +80,11 @@ export default function V1App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <NavigatorProvider>
-          <Shell />
-        </NavigatorProvider>
+        <ToastProvider>
+          <NavigatorProvider>
+            <Shell />
+          </NavigatorProvider>
+        </ToastProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

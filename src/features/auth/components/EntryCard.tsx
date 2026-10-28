@@ -6,7 +6,7 @@ import { DEFAULT_COUNTRY, isNationalNumber, toE164 } from '../../../data/countri
 import { startSignIn } from '../../../data/demoAuth';
 import { useNav } from '../../../navigation';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { isEmail } from '../../../utils/format';
+import { EMAIL_MAX, isEmail } from '../../../utils/format';
 import { errorMessage } from '../errors';
 import { PhoneField } from './PhoneField';
 
@@ -45,7 +45,7 @@ export function EntryCard() {
     <Card style={s.card}>
       {error ? <Banner text={error} /> : null}
       {viaEmail ? (
-        <Input label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" onSubmitEditing={() => ready && submit()} />
+        <Input label="Email" value={email} onChangeText={setEmail} maxLength={EMAIL_MAX} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" onSubmitEditing={() => ready && submit()} />
       ) : (
         <PhoneField country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
       )}
