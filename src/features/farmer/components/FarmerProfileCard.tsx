@@ -93,6 +93,7 @@ export function FarmerProfileCard({
           </View>
         ) : (
           <View style={s.rows}>
+            {farmer.address ? null : <Text style={s.empty}>No farm address yet. Add it so our truck knows where to collect, and to unlock listing.</Text>}
             <Row label="Name" value={name} />
             <Row label="Address" value={farmer.address ? composeAddress({ line1: farmer.line1 ?? '', address: farmer.address }) : null} />
             <Row label="Landmark" value={farmer.landmark} />

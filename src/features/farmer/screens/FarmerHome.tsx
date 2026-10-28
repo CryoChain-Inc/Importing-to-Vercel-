@@ -5,7 +5,7 @@ import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
-import { fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
+import { detailsDone, fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { EarningsPanel } from '../components/EarningsPanel';
@@ -66,9 +66,10 @@ export function FarmerHome({ account }: { account: Account }) {
 
   const signOut = () => authService.signOut().finally(() => reset({ name: 'landing' }));
   const walletReady = hasWallet(farmer);
+  const addressReady = detailsDone(farmer);
 
-  const addWallet = () => {
-    setEditing('wallet');
+  const setup = (section: 'details' | 'wallet') => {
+    setEditing(section);
     setTab('profile');
   };
 
@@ -85,7 +86,7 @@ export function FarmerHome({ account }: { account: Account }) {
           <Text style={s.hello}>{tab === 'listings' ? `Hello, ${first}` : TABS.find((t) => t.key === tab)?.label}</Text>
           <Text style={s.sub}>{tab === 'listings' ? 'Your produce, from listing to payout.' : SUB[tab]}</Text>
         </View>
-        {loaded && farmer && !walletReady ? <Badge label="Wallet needed" tone="warning" /> : null}
+        {loaded && farmer && !(walletReady && addressReady) ? <Badge label={addressReady ? 'Wallet needed' : walletReady ? 'Address needed' : 'Setup needed'} tone="warning" /> : null}
       </View>
       {error ? <Banner text={error} /> : null}
       {!loaded ? (
@@ -97,11 +98,11 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} walletReady={walletReady} onAddWallet={addWallet} onChange={load} />
+              <ProduceListings listings={listings} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={load} />
             </>
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
-          {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={addWallet} /> : null}
+          {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={() => setup('wallet')} /> : null}
           {tab === 'profile' ? (
             <>
               <FarmerProfileCard name={account.name} phone={account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} />
