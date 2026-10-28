@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { OpsShell, type NavGroup } from '../../../components/layout/OpsShell';
-import { useNav } from '../../../navigation';
+import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import * as buyers from '../../../services/ops.buyers.service';
 import * as fulfil from '../../../services/ops.fulfilment.service';
@@ -48,6 +48,7 @@ const TABS = Object.keys(TITLES);
 
 export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
+  const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
   const { tab, params, go } = useOpsLocation(TABS);
   const [rev, setRev] = useState(0);
@@ -65,10 +66,11 @@ export function OpsHome({ account }: { account: Account }) {
       fulfil.sendQueuedSms();
       setRev((r) => r + 1);
       setError(null);
+      await refreshAccount();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
     }
-  }, []);
+  }, [refreshAccount]);
 
   useEffect(() => {
     load();

@@ -1,9 +1,11 @@
 import { normalizePhone } from '../utils/format';
-import type { PickedImage } from './catalogueImage';
+import { samePhoto, type PickedImage } from './catalogueImage';
 import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
 
 export interface Farmer {
+  name: string;
+  phone: string;
   address: string | null;
   line1: string | null;
   landmark: string | null;
@@ -71,7 +73,7 @@ export interface CollectionPoint {
   address: string | null;
 }
 
-const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at';
+const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, profiles(display_name, phone)';
 
 /** Profile stores the nearest collection point as this label (see DetailsForm). */
 export const pointLabel = (p: CollectionPoint) => (p.address ? `${p.name}, ${p.address}` : p.name);
@@ -94,7 +96,10 @@ export async function fetchFarmer(): Promise<Farmer | null> {
   const { data, error } = await supabase.from('farmers').select(FARMER_COLUMNS).eq('id', id).maybeSingle();
   if (error) throw new Error('Could not load your farm.');
   if (!data) return null;
+  const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
   return {
+    name: profile?.display_name ?? '',
+    phone: profile?.phone ?? '',
     address: data.address,
     line1: data.line1,
     landmark: data.landmark,
@@ -272,6 +277,9 @@ async function uploadPhotos(farmerId: string, images: PickedImage[]): Promise<st
 
 export async function createListing(pointId: string, product: string, weightKg: number, grade: string, images: PickedImage[]): Promise<void> {
   if (images.length < MIN_PHOTOS) throw new Error(`Add at least ${MIN_PHOTOS} photos.`);
+  if (images.some((img, i) => images.slice(0, i).some((earlier) => samePhoto(earlier, img)))) {
+    throw new Error('Each photo has to be a different picture.');
+  }
   const farmerId = await userId();
   const paths = await uploadPhotos(farmerId, images);
   const { error } = await supabase
@@ -288,6 +296,7 @@ export async function updateListing(id: string, product: string, weightKg: numbe
   if (!error) return;
   const msg = error.message ?? '';
   if (msg.includes('already in a lot')) throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
+  if (msg.includes('been delivered')) throw new Error('This produce has been delivered, so it can no longer be edited.');
   if (msg.includes('no published price')) throw new Error(`No published price for ${product} grade ${grade} yet.`);
   if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
   throw new Error('Could not save your changes.');

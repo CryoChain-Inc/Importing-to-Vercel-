@@ -11,7 +11,7 @@ export interface InputProps extends TextInputProps {
   prefix?: string;
 }
 
-export function Input({ label, error, hint, prefix, style, onFocus, onBlur, secureTextEntry, ...rest }: InputProps) {
+export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onChangeText, maxLength, secureTextEntry, ...rest }: InputProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const [focused, setFocused] = useState(false);
@@ -34,6 +34,8 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, secu
             onBlur?.(e);
           }}
           secureTextEntry={secureTextEntry && !shown}
+          maxLength={maxLength}
+          onChangeText={onChangeText ? (text) => onChangeText(maxLength != null ? text.slice(0, maxLength) : text) : undefined}
           {...rest}
         />
         {secureTextEntry ? (

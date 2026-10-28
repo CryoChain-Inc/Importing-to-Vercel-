@@ -153,7 +153,7 @@ function RunCard({ r, busy, run }: { r: svc.PayoutRun; busy: boolean; run: (fn: 
           </View>
           <Text style={s.meta}>{t.network} {formatPhone(t.momoNumber)}{t.attempts ? ` · attempt ${t.attempts}` : ''}</Text>
           {t.walletCheck ? <Text style={s.meta}>{t.walletCheck === 'verified' ? `Wallet verified: ${t.walletName}` : 'Wallet name could not be verified (advisory)'}</Text> : null}
-          {t.lastError && t.status === 'failed' ? <Text style={s.err}>{t.lastError}</Text> : null}
+          {t.lastError && t.status === 'failed' ? <Banner text={`${t.farmer}: ${t.lastError}`} /> : null}
           {!review ? (
             <View style={s.actions}>
               {t.status === 'sent' ? <Button size="sm" variant="outline" label="Check with Paystack" disabled={busy} onPress={() => run(async () => { await svc.checkTransfer(t.id); })} /> : null}
@@ -184,5 +184,4 @@ const styles = (c: Record<ColorToken, string>) => ({
   name: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink, flexShrink: 1 },
   amount: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink, fontVariant: ['tabular-nums' as const] },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  err: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.dangerInk },
 });

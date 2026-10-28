@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Badge, Button, type IconName } from '../../../components/common';
 import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
-import { useNav } from '../../../navigation';
+import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import { detailsDone, fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
@@ -28,6 +28,7 @@ const TABS: { key: Tab; label: string; icon: IconName }[] = [
 /** Tab content for the farmer; TabShell supplies the phone bar and desktop rail. */
 export function FarmerHome({ account }: { account: Account }) {
   const { reset } = useNav();
+  const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
   const [tab, setTab] = useState<Tab>('listings');
   const [editing, setEditing] = useState<'details' | 'wallet' | null>(null);
@@ -44,12 +45,13 @@ export function FarmerHome({ account }: { account: Account }) {
       setListings(l);
       setSales(sold);
       setError(null);
+      await refreshAccount();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your farm.');
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [refreshAccount]);
 
   useEffect(() => {
     load();
@@ -78,7 +80,7 @@ export function FarmerHome({ account }: { account: Account }) {
     setEditing(null);
   };
 
-  const first = (account.name || 'farmer').split(' ')[0];
+  const first = (farmer?.name || account.name || 'farmer').split(' ')[0];
   return (
     <TabShell tabs={TABS} tab={tab} onSelect={select}>
       <View style={s.header}>

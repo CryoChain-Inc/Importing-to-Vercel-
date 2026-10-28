@@ -35,10 +35,10 @@ Deno.serve(async (req) => {
   const phone = digits ? `+${digits.startsWith('0') ? `233${digits.slice(1)}` : digits}` : '';
 
   if (!['agent', 'driver', 'ops'].includes(body.role ?? '')) return json({ error: 'Choose a valid role.' }, 400);
-  if (name.length < 2 || name.length > 80) return json({ error: "Enter the person's name." }, 400);
+  if (name.length < 2 || name.length > 60) return json({ error: "Enter the person's name (60 characters at most)." }, 400);
   if (!phone && !email) return json({ error: 'Provide a phone number or an email.' }, 400);
   if (phone && !/^\+233\d{9}$/.test(phone)) return json({ error: 'Enter a valid Ghana phone number.' }, 400);
-  if (email && !/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Enter a valid email address.' }, 400);
+  if (email && (email.length > 60 || !/^\S+@\S+\.\S+$/.test(email))) return json({ error: 'Enter a valid email address, up to 60 characters.' }, 400);
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const { data: created, error } = await admin.auth.admin.createUser({

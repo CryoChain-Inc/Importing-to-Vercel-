@@ -5,7 +5,7 @@ import { Button, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TripMap } from '../../buyer/components/TripMap';
 import {
-  fetchStartCode, fetchTripLive, reportTruckLocation, startTruckTrip, type TruckBooking,
+  completeTruckTrip, fetchStartCode, fetchTripLive, reportTruckLocation, startTruckTrip, type TruckBooking,
 } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
@@ -15,6 +15,8 @@ const placed = (lat: number, lng: number) => Number.isFinite(lat) && Number.isFi
 export function TripProgress({ booking, role }: { booking: TruckBooking; role: 'buyer' | 'driver' }) {
   const s = useThemedStyles(styles);
   const [startedAt, setStartedAt] = useState(booking.startedAt);
+  const [completedAt, setCompletedAt] = useState(booking.completedAt);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [driver, setDriver] = useState(booking.driverLat != null && booking.driverLng != null ? { lat: booking.driverLat, lng: booking.driverLng } : null);
   const [seenAt, setSeenAt] = useState(booking.driverSeenAt);
   const [code, setCode] = useState<string | null>(null);
@@ -24,6 +26,7 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
   const [sharing, setSharing] = useState<'pending' | 'on' | 'off'>('pending');
   const paid = booking.state === 'paid';
   const started = paid && !!startedAt;
+  const ended = !!completedAt;
   const from = useMemo(
     () => (placed(booking.pickupLat, booking.pickupLng) ? { label: booking.pickupLabel, lat: booking.pickupLat, lng: booking.pickupLng } : null),
     [booking.pickupLabel, booking.pickupLat, booking.pickupLng],
@@ -35,7 +38,8 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
 
   useEffect(() => {
     if (booking.startedAt) setStartedAt(booking.startedAt);
-  }, [booking.startedAt]);
+    if (booking.completedAt) setCompletedAt(booking.completedAt);
+  }, [booking.startedAt, booking.completedAt]);
 
   useEffect(() => {
     if (role !== 'buyer' || !paid || started) return;
@@ -43,12 +47,13 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
   }, [booking.id, paid, role, started]);
 
   useEffect(() => {
-    if (role !== 'buyer' || !paid) return;
+    if (role !== 'buyer' || !paid || ended) return;
     let live = true;
     const tick = () => {
       fetchTripLive(booking.id).then((row) => {
         if (!live || !row) return;
         setStartedAt(row.startedAt);
+        setCompletedAt(row.completedAt);
         setSeenAt(row.driverSeenAt);
         if (row.driverLat != null && row.driverLng != null) {
           setDriver((prev) => (prev && prev.lat === row.driverLat && prev.lng === row.driverLng ? prev : { lat: row.driverLat as number, lng: row.driverLng as number }));
@@ -58,10 +63,10 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
     tick();
     const timer = setInterval(tick, 5000);
     return () => { live = false; clearInterval(timer); };
-  }, [booking.id, paid, role]);
+  }, [booking.id, ended, paid, role]);
 
   useEffect(() => {
-    if (role !== 'driver' || !started) return;
+    if (role !== 'driver' || !started || ended) return;
     let live = true;
     const handle: { timer?: ReturnType<typeof setInterval> } = {};
     const watch = async () => {
@@ -85,7 +90,7 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
     };
     watch();
     return () => { live = false; if (handle.timer) clearInterval(handle.timer); };
-  }, [booking.id, role, started]);
+  }, [booking.id, ended, role, started]);
 
   const begin = async () => {
     setBusy(true);
@@ -95,6 +100,20 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
       setStartedAt(new Date().toISOString());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start that trip.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finish = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await completeTruckTrip(booking.id);
+      setCompletedAt(new Date().toISOString());
+      setConfirmEnd(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not end that trip.');
     } finally {
       setBusy(false);
     }
@@ -117,8 +136,19 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
           <Button label="Start trip" size="sm" loading={busy} disabled={entry.trim().length !== 4} onPress={begin} />
         </View>
       ) : null}
-      {started && role === 'buyer' ? <Text style={s.meta}>{driver && seenAt ? `Driver location updated ${new Date(seenAt).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}.` : 'Waiting for the driver’s location.'}</Text> : null}
-      {started && role === 'driver' ? <Text style={s.meta}>{sharing === 'off' ? 'Allow location so the buyer can follow the truck.' : 'Trip started. Your location is shared with the buyer.'}</Text> : null}
+      {started && !ended && role === 'buyer' ? <Text style={s.meta}>{driver && seenAt ? `Driver location updated ${new Date(seenAt).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}.` : 'Waiting for the driver’s location.'}</Text> : null}
+      {started && !ended && role === 'driver' ? <Text style={s.meta}>{sharing === 'off' ? 'Allow location so the buyer can follow the truck.' : 'Trip started. Your location is shared with the buyer.'}</Text> : null}
+      {started && !ended && role === 'driver' ? (
+        confirmEnd ? (
+          <View style={s.form}>
+            <Text style={s.meta}>End this trip? The buyer will see it as finished, and live location stops.</Text>
+            {error ? <Banner text={error} /> : null}
+            <Button label="End trip" size="sm" loading={busy} onPress={finish} />
+            <Button label="Keep going" size="sm" variant="outline" disabled={busy} onPress={() => { setConfirmEnd(false); setError(null); }} />
+          </View>
+        ) : <Button label="End trip" size="sm" variant="outline" onPress={() => setConfirmEnd(true)} />
+      ) : null}
+      {ended ? <Text style={s.meta}>{role === 'driver' ? 'Trip ended.' : 'The driver ended this trip.'}</Text> : null}
       {!paid && role === 'driver' ? <Text style={s.meta}>The start code is available after the buyer pays.</Text> : null}
     </View>
   );

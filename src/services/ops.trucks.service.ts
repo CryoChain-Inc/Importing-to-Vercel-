@@ -31,10 +31,11 @@ export async function saveTruckRate(pricePerKm: number): Promise<void> {
 }
 
 export async function fetchOpsTruckBookings(): Promise<OpsTruckBooking[]> {
-  const { data, error } = await supabase
-    .from('truck_bookings')
-    .select('id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at, buyers(organization_name), truck_payments(status, created_at)')
-    .order('created_at', { ascending: false });
+  const columns = 'id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at, buyers(organization_name), truck_payments(status, created_at)';
+  let { data, error } = await supabase.from('truck_bookings').select(`${columns}, completed_at`).order('created_at', { ascending: false });
+  if (error && /completed_at/.test(error.message)) {
+    ({ data, error } = await supabase.from('truck_bookings').select(columns).order('created_at', { ascending: false }));
+  }
   fail(error, {}, 'Could not load truck bookings.');
   return (data ?? []).map((r: any) => ({
     id: r.id,
@@ -58,6 +59,7 @@ export async function fetchOpsTruckBookings(): Promise<OpsTruckBooking[]> {
     dropoffLat: Number(r.dropoff_lat ?? 0),
     dropoffLng: Number(r.dropoff_lng ?? 0),
     startedAt: r.started_at ?? null,
+    completedAt: r.completed_at ?? null,
     driverLat: r.driver_lat == null ? null : Number(r.driver_lat),
     driverLng: r.driver_lng == null ? null : Number(r.driver_lng),
     driverSeenAt: r.driver_seen_at ?? null,
