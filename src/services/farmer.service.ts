@@ -346,29 +346,21 @@ export interface Offer {
   /** What CryoChain pays this farmer for the allocation. */
   amount: number;
   status: 'offered' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'collected';
-  expiresAt: string;
+  /** When CryoChain collects it from the farm. */
+  pickupAt: string | null;
   createdAt: string;
 }
 
-/** Orders CryoChain wants to buy from this farmer. The buyer is never shown. */
+/** Pickups CryoChain has scheduled with this farmer. The buyer is never shown. */
 export async function fetchOffers(): Promise<Offer[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, grade, kg, amount, status, expires_at, created_at, products(name)')
+    .select('id, grade, kg, amount, status, pickup_at, created_at, products(name)')
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) throw new Error('Could not load your orders.');
   return (data ?? []).map((r: any) => ({
     id: r.id, product: r.products?.name ?? '', grade: r.grade, kg: Number(r.kg), amount: Number(r.amount),
-    status: r.status, expiresAt: r.expires_at, createdAt: r.created_at,
+    status: r.status, pickupAt: r.pickup_at, createdAt: r.created_at,
   }));
-}
-
-export async function respondToOffer(id: string, accept: boolean): Promise<void> {
-  const { error } = await supabase.rpc('respond_allocation', { p_id: id, p_accept: accept });
-  if (error?.message.includes('offer expired')) throw new Error('This offer has expired.');
-  if (error?.message.includes('offer not available')) throw new Error('This offer is no longer open.');
-  if (error) throw new Error('Could not send your answer. Please try again.');
-  // A decline re-allocates to another farmer, who needs their SMS now.
-  if (!accept) await supabase.functions.invoke('dispatch-sms').catch(() => undefined);
 }
