@@ -1,29 +1,39 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Card, Icon, Input } from '../../../components/common';
-import type { OrderRow } from '../../../services/ops.buyers.service';
-import type { BuyerRow } from '../../../services/ops.service';
+import { Banner } from '../../../components/feedback';
+import { fetchOrdersFor } from '../../../services/ops.buyers.service';
+import { fetchBuyersPage } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone, ghs } from '../../../utils/format';
-import { Empty, usePaged } from './OpsBits';
+import type { PageProps } from '../useOpsLocation';
+import { Empty, Pager, PanelSkeleton, useServerPage } from './OpsBits';
 
 const TONE = { awaiting_payment: 'warning', paid: 'success', cancelled: 'neutral' } as const;
 
 /** Buyers with their delivery point, contact details and order history. */
-export function BuyersPanel({ buyers, orders }: { buyers: BuyerRow[]; orders: OrderRow[] }) {
+export function BuyersPanel({ params, setParams, rev }: PageProps) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
-  const needle = q.trim().toLowerCase();
-  const filtered = buyers.filter((b) => !needle || `${b.name} ${b.phone} ${b.location}`.toLowerCase().includes(needle));
-  const { rows, more } = usePaged(filtered, needle, 8);
+  const { rows, total, q, text, setText, page, goPage, loading, firstLoad, error } = useServerPage(params, setParams, rev, fetchBuyersPage);
+  // Orders for just the buyers on this page.
+  const [orders, setOrders] = useState<Awaited<ReturnType<typeof fetchOrdersFor>>>([]);
+  const ids = rows.map((b) => b.id).join(',');
+  useEffect(() => {
+    if (!ids) return;
+    let live = true;
+    fetchOrdersFor(ids.split(',')).then((o) => live && setOrders(o)).catch(() => undefined);
+    return () => { live = false; };
+  }, [ids, rev]);
 
-  if (!buyers.length) return <Empty icon="users" title="No buyers yet" hint="Buyers appear here once they register. Open one to see their contact details, delivery location and orders." />;
+  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton />;
+  if (!total && !q && !loading) return <Empty icon="users" title="No buyers yet" hint="Buyers appear here once they register. Open one to see their contact details, delivery location and orders." />;
   return (
-    <View style={s.list}>
-      <Input label="Search buyers" value={q} onChangeText={setQ} placeholder="Business, phone or location" />
-      {filtered.length === 0 ? <Text style={s.meta}>No buyer matches “{q}”.</Text> : null}
+    <View style={[s.list, loading && s.busy]}>
+      {error ? <Banner text={error} /> : null}
+      <Input label="Search buyers" value={text} onChangeText={setText} placeholder="Business, phone or location" />
+      {!loading && rows.length === 0 ? <Text style={s.meta}>No buyer matches “{q}”.</Text> : null}
       {rows.map((b) => {
         const mine = orders.filter((o) => o.buyerId === b.id);
         const spent = mine.filter((o) => o.state === 'paid').reduce((n, o) => n + o.amount, 0);
@@ -59,13 +69,14 @@ export function BuyersPanel({ buyers, orders }: { buyers: BuyerRow[]; orders: Or
           </Card>
         );
       })}
-      {more}
+      <Pager page={page} total={total} onPage={goPage} />
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 10 },
+  busy: { opacity: 0.6 },
   item: { padding: 0, overflow: 'hidden' as const },
   head: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, padding: 14, minHeight: 64 },
   grow: { flex: 1, gap: 2 },

@@ -34,6 +34,8 @@ const START: Route = !isWeb
       ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
       : { name: 'landing' };
 const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', emailVerified: '/email-verified', verify: '/verify', role: '/role', workspace: '/workspace', home: '/home' };
+/** The ops console owns its URL (/ops/<section>?page=2), so entering it, or reloading on a deep link, keeps the address as is. */
+const pathFor = (r: Route) => (r.name === 'home' && r.role === 'ops' ? window.location.pathname + window.location.search : PATH[r.name]);
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)
@@ -46,18 +48,18 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
   stackRef.current = stack;
 
   useEffect(() => {
-    if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH[START.name]);
+    if (isWeb) window.history.replaceState({ idx: 0 }, '', START.name === 'ops' ? window.location.pathname + window.location.search : PATH[START.name]);
   }, []);
 
   const push = useCallback((r: Route) => {
     const next = [...stackRef.current, r];
     setStack(next);
-    if (isWeb) window.history.pushState({ idx: next.length - 1 }, '', PATH[r.name]);
+    if (isWeb) window.history.pushState({ idx: next.length - 1 }, '', pathFor(r));
   }, []);
 
   const reset = useCallback((r: Route) => {
     setStack([r]);
-    if (isWeb) window.history.replaceState({ idx: 0 }, '', PATH[r.name]);
+    if (isWeb) window.history.replaceState({ idx: 0 }, '', pathFor(r));
   }, []);
 
   const patchAccount = useCallback((patch: Partial<Account>) => {

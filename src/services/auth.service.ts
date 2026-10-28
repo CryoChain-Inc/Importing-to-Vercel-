@@ -1,3 +1,4 @@
+import { markCodeSent } from '../utils/codeTimer';
 import { isEmail, normalizePhone } from '../utils/format';
 import { supabase } from './supabase';
 
@@ -21,6 +22,7 @@ export const authService = {
   async sendOtp(identifier: string) {
     const { error } = await supabase.auth.signInWithOtp(target(identifier));
     if (error) throw error;
+    markCodeSent(identifier);
   },
 
   /** Returns false for a wrong or expired code. */
@@ -56,7 +58,7 @@ export const authService = {
   async requestContactChange(identifier: string, redirectTo?: string) {
     const attrs = target(identifier);
     const { error } = redirectTo ? await supabase.auth.updateUser(attrs, { emailRedirectTo: redirectTo }) : await supabase.auth.updateUser(attrs);
-    if (!error) return;
+    if (!error) return markCodeSent(identifier);
     if (error.code === 'email_exists' || error.code === 'phone_exists')
       throw new Error(`That ${isEmail(identifier) ? 'email' : 'phone number'} belongs to another account.`);
     throw error;
@@ -75,6 +77,15 @@ export const authService = {
   async refreshSession() {
     const { error } = await supabase.auth.refreshSession();
     if (error) throw error;
+  },
+
+  /** Erases the signed-in farmer/buyer's personal data and closes the account; throws the server's reason if it is refused. */
+  async deleteAccount() {
+    const { error } = await supabase.functions.invoke('delete-account');
+    if (!error) return;
+    // Non-2xx responses hide the body inside error.context.
+    const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(body?.error ?? 'Could not delete the account. Please try again.');
   },
 
   signOut: () => supabase.auth.signOut(),

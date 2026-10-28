@@ -1,6 +1,7 @@
 // Supabase "Send Email" auth hook: delivers the 6-digit sign-in code through Twilio's Email API
 // instead of Supabase's rate-limited built-in SMTP.
 import { Webhook } from 'npm:standardwebhooks@1.0.0';
+import { codeEmail, confirmEmail } from '../_shared/templates/email.ts';
 
 const hookSecret = (Deno.env.get('SEND_EMAIL_HOOK_SECRET') ?? '').replace('v1,whsec_', '');
 
@@ -49,10 +50,7 @@ Deno.serve(async (req) => {
       from: { address: from, name: 'CryoChain' },
       to: [{ address: to }],
       content: {
-        subject: change ? 'Confirm your CryoChain email' : 'Your CryoChain sign-in code',
-        html: link
-          ? `<p>Tap the button to confirm this email for your CryoChain account.</p><p><a href="${link}" clicktracking="off" style="display:inline-block;padding:12px 20px;background:#1f7a45;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Confirm email</a></p><p style="font-size:12px;color:#666">Button not working? Paste this into your browser:<br>${link}</p><p style="font-size:12px;color:#666">If you didn't request it, ignore this email.</p>`
-          : `<p>Your ${change ? 'confirmation' : 'sign-in'} code is <strong style="font-size:20px">${code}</strong>.</p><p>It expires shortly. If you didn't request it, ignore this email.</p>`,
+        ...(link ? confirmEmail(link) : codeEmail(code, change ? 'confirmation' : 'sign-in')),
       },
     }),
   });

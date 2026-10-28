@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F4F6F4",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F4F6F4"
-    },
     "ios": {
       "bundleIdentifier": "com.cryochain.mobile",
       "supportsTablet": true
@@ -26,7 +21,6 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ]
@@ -37,9 +31,19 @@
     "plugins": [
       "expo-font",
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F4F6F4",
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "imageWidth": 200
+        }
+      ],
+      [
         "expo-image-picker",
         {
-          "cameraPermission": "CryoChain uses the camera to photograph crates, the scale, and the cold-box gauge."
+          "cameraPermission": "CryoChain uses the camera to photograph crates, the scale, and the cold-box gauge.",
+          "microphonePermission": false
         }
       ],
       [

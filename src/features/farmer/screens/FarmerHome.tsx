@@ -5,10 +5,11 @@ import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
-import { fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
+import { detailsDone, fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { EarningsPanel } from '../components/EarningsPanel';
+import { AccountFooter } from '../../auth/components/AccountFooter';
 import { MessagesPanel } from '../components/MessagesPanel';
 import { Offers } from '../components/Offers';
 import { FarmerProfileCard } from '../components/FarmerProfileCard';
@@ -67,9 +68,10 @@ export function FarmerHome({ account }: { account: Account }) {
 
   const signOut = () => authService.signOut().finally(() => reset({ name: 'landing' }));
   const walletReady = hasWallet(farmer);
+  const addressReady = detailsDone(farmer);
 
-  const addWallet = () => {
-    setEditing('wallet');
+  const setup = (section: 'details' | 'wallet') => {
+    setEditing(section);
     setTab('profile');
   };
 
@@ -86,7 +88,7 @@ export function FarmerHome({ account }: { account: Account }) {
           <Text style={s.hello}>{tab === 'listings' ? `Hello, ${first}` : TABS.find((t) => t.key === tab)?.label}</Text>
           <Text style={s.sub}>{tab === 'listings' ? 'Your produce, from listing to payout.' : SUB[tab]}</Text>
         </View>
-        {loaded && farmer && !walletReady ? <Badge label="Wallet needed" tone="warning" /> : null}
+        {loaded && farmer && !(walletReady && addressReady) ? <Badge label={addressReady ? 'Wallet needed' : walletReady ? 'Address needed' : 'Setup needed'} tone="warning" /> : null}
       </View>
       {error ? <Banner text={error} /> : null}
       {!loaded ? (
@@ -98,12 +100,17 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} walletReady={walletReady} onAddWallet={addWallet} onChange={load} />
+              <ProduceListings listings={listings} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={load} />
             </>
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
-          {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={addWallet} /> : null}
-          {tab === 'profile' ? <FarmerProfileCard name={farmer.name || account.name} phone={farmer.phone || account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} /> : null}
+          {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={() => setup('wallet')} /> : null}
+          {tab === 'profile' ? (
+            <>
+              <FarmerProfileCard name={account.name} phone={account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} />
+              <AccountFooter onDeleted={() => reset({ name: 'landing' })} />
+            </>
+          ) : null}
         </>
       )}
     </TabShell>

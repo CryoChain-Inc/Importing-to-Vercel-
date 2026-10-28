@@ -9,6 +9,7 @@ import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
+import { AccountFooter } from '../../auth/components/AccountFooter';
 import { CartProvider, useCart } from '../cart/CartProvider';
 import { BuyerAccount, buyerProfileComplete } from '../components/BuyerAccount';
 import { Cart } from '../components/Cart';
@@ -108,6 +109,7 @@ function BuyerShell({ account }: { account: Account }) {
             <>
               <BuyerAccount details={data.details} onRefresh={load} />
               <Button label="Sign out" variant="ghost" icon="logOut" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} style={{ alignSelf: 'center' }} />
+              <AccountFooter onDeleted={() => reset({ name: 'landing' })} />
             </>
           ) : null}
         </>
