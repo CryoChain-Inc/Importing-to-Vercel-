@@ -48,7 +48,7 @@ export function TrucksPanel() {
         <Card key={b.id} style={s.item}>
           <View style={s.top}>
             <Text style={s.name}>{b.code} · {ghs(b.amount)}</Text>
-            <Badge label={b.state === 'awaiting_payment' ? 'Awaiting payment' : b.state === 'paid' ? 'Paid' : 'Cancelled'} tone={b.state === 'paid' ? 'success' : b.state === 'cancelled' ? 'neutral' : 'warning'} />
+            <Badge label={b.completedAt ? 'Completed' : b.state === 'awaiting_payment' ? 'Awaiting payment' : b.state === 'paid' ? 'Paid' : 'Cancelled'} tone={b.completedAt || b.state === 'paid' ? 'success' : b.state === 'cancelled' ? 'neutral' : 'warning'} />
           </View>
           <Text style={s.meta}>{b.buyer} · {b.purpose === 'transfer' ? 'Transfer' : 'Pick up'}</Text>
           <Text style={s.meta}>{b.pickupLabel}</Text>

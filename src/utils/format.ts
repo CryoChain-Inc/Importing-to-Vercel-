@@ -7,14 +7,16 @@ export function normalizePhone(raw: string): string {
 }
 
 export const isPhone = (raw: string) => /^233\d{9}$/.test(normalizePhone(raw));
-/** Person's name on a buyer account. */
-export const BUYER_NAME_MAX = 80;
-/** RFC 5321: the whole address is at most 254 characters, and the part before @ is at most 64. */
-export const EMAIL_MAX = 254;
+/** Person's name on an account: buyer, farmer, driver, or operations. */
+export const NAME_MAX = 60;
+/** @deprecated Use NAME_MAX. Kept so older buyer screens stay in sync. */
+export const BUYER_NAME_MAX = NAME_MAX;
+/** Sign-in and contact email for every role. */
+export const EMAIL_MAX = 60;
 export const isEmail = (raw: string) => {
   const v = raw.trim();
   const at = v.indexOf('@');
-  return at > 0 && at <= 64 && v.length <= EMAIL_MAX && /^\S+@\S+\.\S+$/.test(v);
+  return at > 0 && at < v.length - 1 && v.length <= EMAIL_MAX && /^\S+@\S+\.\S+$/.test(v);
 };
 
 /** Today's calendar service date in Ghana (YYYY-MM-DD), matching route service_date in Africa/Accra timezone. */

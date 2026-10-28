@@ -200,7 +200,7 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
         <Text style={s.meta}>
           {quote ? `${quote.distanceKm.toLocaleString('en-GH', { maximumFractionDigits: 1 })} km · ${ghs(quote.pricePerKm)} per km` : 'Choose both places to see the fare.'}
         </Text>
-        {quoteError ? <Text style={s.warn}>{quoteError}</Text> : null}
+        {quoteError ? <Banner text={quoteError} /> : null}
         <Button label="Book this truck" loading={busy} disabled={!quote || when.getTime() < Date.now() - 10 * 60 * 1000} onPress={book} />
       </Card>
 
@@ -210,7 +210,7 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
         <Card key={b.id} style={s.item}>
           <View style={s.top}>
             <Text style={s.name}>{b.code} · {b.purpose === 'transfer' ? 'Transfer' : 'Pick up'}</Text>
-            <Badge label={b.state === 'awaiting_payment' ? 'Awaiting payment' : b.startedAt ? 'On the way' : b.state === 'paid' ? 'Paid' : 'Cancelled'} tone={b.state === 'paid' ? 'success' : b.state === 'cancelled' ? 'neutral' : 'warning'} />
+            <Badge label={b.state === 'awaiting_payment' ? 'Awaiting payment' : b.completedAt ? 'Completed' : b.startedAt ? 'On the way' : b.state === 'paid' ? 'Paid' : 'Cancelled'} tone={b.state === 'paid' ? 'success' : b.state === 'cancelled' ? 'neutral' : 'warning'} />
           </View>
           <Text style={s.meta}>{b.pickupLabel}</Text>
           <Text style={s.meta}>to {b.dropoffLabel}</Text>
@@ -301,7 +301,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   fare: { gap: 8, alignItems: 'flex-start' as const },
   fareLabel: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
   fareAmount: { fontFamily: fonts.heading, fontSize: 36, letterSpacing: -0.8, color: c.ink },
-  warn: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.dangerInk },
   item: { gap: 6 },
   top: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8 },
   name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, flexShrink: 1 },

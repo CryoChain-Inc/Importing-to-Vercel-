@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useScrollTo } from '../../../components/layout';
 import { Badge, Button, Card, HeroCard, Icon, Input, ProfileChecklist } from '../../../components/common';
+import { Banner } from '../../../components/feedback';
 import { saveBuyerDetails, type BuyerDetails } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { BUYER_NAME_MAX, formatPhone } from '../../../utils/format';
+import { BUYER_NAME_MAX, NAME_MAX, formatPhone } from '../../../utils/format';
 import { ChangeContact } from '../../auth/components/ChangeContact';
 import { PhoneChange } from '../../auth/components/PhoneChange';
 import { useAction } from '../../ops/components/useAction';
@@ -26,13 +27,18 @@ export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; on
   const scrollTo = useScrollTo();
   const businessRef = useRef<View>(null);
   const addressRef = useRef<View>(null);
-  const [d, setD] = useState({ organization: details.organization, name: details.name.slice(0, BUYER_NAME_MAX) });
+  const [d, setD] = useState({ organization: details.organization.slice(0, NAME_MAX), name: details.name.slice(0, BUYER_NAME_MAX) });
   const hasBusiness = details.organization.trim().length >= 2 && details.name.trim().length >= 2;
   const complete = buyerProfileComplete(details);
-  const valid = d.organization.trim().length >= 2 && d.name.trim().length >= 2 && d.name.trim().length <= BUYER_NAME_MAX;
+  const valid = d.organization.trim().length >= 2 && d.organization.trim().length <= NAME_MAX && d.name.trim().length >= 2 && d.name.trim().length <= BUYER_NAME_MAX;
+
+  useEffect(() => {
+    if (editing === 'business') return;
+    setD({ organization: details.organization.slice(0, NAME_MAX), name: details.name.slice(0, BUYER_NAME_MAX) });
+  }, [details.organization, details.name, editing]);
 
   const editBusiness = () => {
-    setD({ organization: details.organization, name: details.name.slice(0, BUYER_NAME_MAX) });
+    setD({ organization: details.organization.slice(0, NAME_MAX), name: details.name.slice(0, BUYER_NAME_MAX) });
     setEditing('business');
     scrollTo(businessRef.current);
   };
@@ -67,9 +73,9 @@ export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; on
         </View>
         {editing === 'business' ? (
           <View style={s.form}>
-            <Input label="Organization name" value={d.organization} onChangeText={(organization) => setD({ ...d, organization })} autoComplete="organization" maxLength={120} />
+            <Input label="Organization name" value={d.organization} onChangeText={(organization) => setD({ ...d, organization })} autoComplete="organization" maxLength={NAME_MAX} />
             <Input label="Your name" value={d.name} onChangeText={(name) => setD({ ...d, name })} maxLength={BUYER_NAME_MAX} autoComplete="name" />
-            {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
+            {error ? <Banner text={error} /> : null}
             <View style={s.actions}>
               <Button label="Cancel" variant="outline" onPress={() => setEditing(null)} style={s.action} />
               <Button label="Save" loading={busy} disabled={!valid} style={s.action}
@@ -144,7 +150,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   form: { gap: 16 },
   actions: { flexDirection: 'row' as const, gap: 12 },
   action: { flex: 1 },
-  error: { fontFamily: fonts.sansMedium, fontSize: 13, lineHeight: 18, color: c.dangerInk },
   row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: c.surfaceSunken },
   label: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
   value: { flex: 1, textAlign: 'right' as const, fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },

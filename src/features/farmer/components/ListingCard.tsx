@@ -64,7 +64,11 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
       </View>
 
       <View style={s.actions}>
-        <Button label="Edit" variant="tonal" size="sm" icon="edit" onPress={() => setEditing(true)} />
+        {l.deliveredKg > 0 ? (
+          <Text style={s.meta}>This produce has been delivered, so the listing can no longer be changed.</Text>
+        ) : (
+          <Button label="Edit" variant="tonal" size="sm" icon="edit" onPress={() => setEditing(true)} />
+        )}
         {onRemove && l.soldKg + l.withdrawnKg === 0 ? <Button label="Remove" variant="ghost" size="sm" onPress={() => onRemove(l.id)} /> : null}
       </View>
     </Card>

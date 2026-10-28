@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
@@ -49,6 +49,26 @@ export function FarmerProfileCard({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (editing) return;
+    setDetails({
+      name,
+      address: farmer.address ?? '',
+      line1: farmer.line1 ?? '',
+      landmark: farmer.landmark ?? '',
+      city: farmer.city ?? '',
+      postcode: farmer.postcode ?? '',
+      locality: farmer.locality ?? '',
+      latitude: farmer.latitude,
+      longitude: farmer.longitude,
+    });
+    setWallet({
+      network: farmer.momoNetwork ?? '',
+      number: farmer.momoNumber ?? '',
+      name: farmer.momoName ?? '',
+    });
+  }, [editing, name, farmer]);
 
   const save = async (fn: () => Promise<void>) => {
     setBusy(true);

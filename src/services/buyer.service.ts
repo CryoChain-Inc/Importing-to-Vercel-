@@ -204,7 +204,8 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
     .eq('id', buyerId)
     .single();
   fail('Could not load your account.')(error);
-  const p = (data as any).profiles;
+  const p = (data as { profiles?: { display_name?: string | null; phone?: string | null; email?: string | null } | { display_name?: string | null; phone?: string | null; email?: string | null }[] | null }).profiles;
+  const profile = Array.isArray(p) ? p[0] : p;
   const rows: any[] = (data as any).buyer_addresses ?? [];
   const addresses = rows
     .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.created_at.localeCompare(b.created_at))
@@ -222,9 +223,9 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
     }));
   return {
     organization: data!.organization_name,
-    name: p?.display_name ?? '',
-    phone: p?.phone ?? '',
-    email: p?.email ?? '',
+    name: profile?.display_name ?? '',
+    phone: profile?.phone ?? '',
+    email: profile?.email ?? '',
     location: data!.delivery_location,
     addresses,
   };

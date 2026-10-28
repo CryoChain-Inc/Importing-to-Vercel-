@@ -27,7 +27,7 @@ export function TruckJobs() {
       {trips.map((t) => (
         <Card key={t.id} style={s.item}>
           <Text style={s.name}>{t.code} · {new Date(t.pickupAt).toLocaleString('en-GH')}</Text>
-          <Badge label={t.startedAt ? 'On the way' : t.state === 'paid' ? 'Paid' : 'Awaiting payment'} tone={t.state === 'paid' ? 'success' : 'warning'} />
+          <Badge label={t.completedAt ? 'Completed' : t.startedAt ? 'On the way' : t.state === 'paid' ? 'Paid' : 'Awaiting payment'} tone={t.state === 'paid' ? 'success' : 'warning'} />
           <Text style={s.meta}>Buyer {t.buyerName || 'Buyer'}</Text>
           <Text style={s.meta}>From {t.pickupLabel}</Text>
           <Text style={s.meta}>To {t.dropoffLabel}</Text>

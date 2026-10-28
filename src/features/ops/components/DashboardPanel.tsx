@@ -17,12 +17,18 @@ export function DashboardPanel({ data, onGo }: { data: OpsData; onGo: (tab: stri
     { tab: 'payments', icon: 'banknote', label: 'Orders awaiting payment', n: data.orders.filter((o) => o.state === 'awaiting_payment').length },
   ];
 
+  const noListings = data.supply.length === 0;
+
   return (
     <View style={s.wrap}>
-      <Hero label="Listed by farmers" value={kg(listed)} cells={[
-        { label: 'Products', value: String(supplyByProduct(data.supply).length) },
-        { label: 'Listings', value: String(data.supply.length) },
-      ]} />
+      {noListings ? (
+        <Empty icon="leaf" title="No produce listed yet" hint="No farmer has listed produce. Stock, kilos and products will show up here when they do." />
+      ) : (
+        <Hero label="Listed by farmers" value={kg(listed)} cells={[
+          { label: 'Products', value: String(supplyByProduct(data.supply).length) },
+          { label: 'Listings', value: String(data.supply.length) },
+        ]} />
+      )}
       <StatGrid>
         <Stat label="Received from buyers" value={ghs(received)} tone="brand" note="Paid through Paystack" />
       </StatGrid>
@@ -39,10 +45,12 @@ export function DashboardPanel({ data, onGo }: { data: OpsData; onGo: (tab: stri
         ))}
       </View>
 
-      <SectionTitle title="Supply by product" note="Kilos listed by farmers." />
-      {data.supply.length === 0 ? (
-        <Empty icon="leaf" title="No produce listed yet" hint="When farmers list produce, the stock shows up here." />
-      ) : <ProductSupply supply={data.supply} page={4} />}
+      {noListings ? null : (
+        <>
+          <SectionTitle title="Supply by product" note="Kilos listed by farmers." />
+          <ProductSupply supply={data.supply} page={4} />
+        </>
+      )}
     </View>
   );
 }
