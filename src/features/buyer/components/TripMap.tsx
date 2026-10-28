@@ -3,7 +3,7 @@ import { Linking, Platform, Text, View } from 'react-native';
 import { Button } from '../../../components/common';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Place } from '../../../services/truck.service';
-import { googleKeyAccepted, labelFor } from './places';
+import { labelFor } from './places';
 import { roadRoute } from './route';
 
 const ACCRA = { lat: 5.6037, lng: -0.187 };
@@ -125,7 +125,7 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
       setTimeout(() => map.invalidateSize(), 200);
     };
     const start = async () => {
-      if (KEY && await googleKeyAccepted(KEY)) {
+      if (KEY) {
         (window as unknown as { gm_authFailure?: () => void }).gm_authFailure = () => {
           mapRef.current = null;
           startLeaflet().catch(() => undefined);

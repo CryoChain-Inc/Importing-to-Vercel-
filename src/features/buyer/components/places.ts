@@ -3,22 +3,6 @@ import type { Place } from '../../../services/truck.service';
 const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY;
 let googleOff = false;
 
-/** Google rejected this key, so search and the map stay on OpenStreetMap. */
-export async function googleKeyAccepted(candidate = key): Promise<boolean> {
-  if (!candidate || googleOff) return false;
-  try {
-    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=Accra&key=${encodeURIComponent(candidate)}`);
-    const body = await res.json();
-    if (body.status === 'REQUEST_DENIED') {
-      googleOff = true;
-      return false;
-    }
-    return body.status === 'OK' || body.status === 'ZERO_RESULTS';
-  } catch {
-    return false;
-  }
-}
-
 /** Turns a search into places. Uses Google when the key is accepted, otherwise OpenStreetMap. */
 export async function searchPlaces(query: string): Promise<Place[]> {
   const q = query.trim();
