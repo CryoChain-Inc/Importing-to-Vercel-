@@ -1,6 +1,8 @@
-import { Linking, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
+import { openCheckout } from './checkout';
+import { paymentReturnReference } from '../utils/paymentReturn';
 
 export type OrderState = 'awaiting_payment' | 'paid' | 'cancelled';
 
@@ -163,7 +165,7 @@ export async function cancelOrder(id: string): Promise<void> {
 
 /** Asks Paystack for a checkout URL for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
 export async function startPayment(orderId: string): Promise<{ url: string; reference: string }> {
-  const { data, error } = await supabase.functions.invoke('paystack-init', { body: { order_id: orderId } });
+  const { data, error } = await supabase.functions.invoke('paystack-init', { body: { order_id: orderId, native: Platform.OS !== 'web' } });
   if (error || !data?.url) {
     // Non-2xx responses hide the body inside error.context; surface our message when there is one.
     const body = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
@@ -172,19 +174,15 @@ export async function startPayment(orderId: string): Promise<{ url: string; refe
   return { url: data.url, reference: data.reference };
 }
 
-export async function openPayment(url: string): Promise<void> {
-  if (Platform.OS === 'web') window.location.assign(url);
-  else await Linking.openURL(url);
-}
+export const openPayment = openCheckout;
 
 /** Returning from Paystack: pull the reference out of the callback URL and confirm it server-side. */
-export function paymentReference(url: string | null): string | null {
-  const m = url?.match(/[?&](?:reference|trxref)=([^&#]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+export const paymentReference = paymentReturnReference;
 
-export async function verifyPayment(reference: string): Promise<void> {
-  await supabase.functions.invoke('paystack-verify', { body: { reference } });
+/** Asks Paystack (via the server) how a payment ended; null when it could not be reached. */
+export async function verifyPayment(reference: string): Promise<string | null> {
+  const { data } = await supabase.functions.invoke('paystack-verify', { body: { reference } });
+  return typeof data?.status === 'string' ? data.status : null;
 }
 
 /** Ops bank account for transfers; only buyers can call it (ops_config is ops-only). */

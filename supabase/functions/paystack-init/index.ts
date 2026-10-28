@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   const { data: who } = await caller.auth.getUser();
   if (!who.user) return json({ error: 'Sign in again to continue.' }, 401);
 
-  const { order_id } = await req.json().catch(() => ({}));
+  const { order_id, native } = await req.json().catch(() => ({}));
   // Own-order check rides on RLS (orders_select_own); buyers row gives the contact email.
   const { data: order } = await caller.from('orders').select('id, code, amount, state, buyer_id').eq('id', order_id ?? '').maybeSingle();
   if (!order || order.buyer_id !== who.user.id) return json({ error: 'Order not found.' }, 404);
@@ -67,7 +67,8 @@ Deno.serve(async (req) => {
       // Paystack requires an email; buyers who signed up by phone get a stable placeholder.
       email: buyer?.email || who.user.email || `${who.user.id}@pay.cryochain.app`,
       // No `channels`: Paystack shows every method enabled on the account (mobile money, bank, card).
-      ...(appUrl ? { callback_url: appUrl } : {}),
+      // The app opens checkout in an auth session that closes when Paystack redirects to its own URL scheme.
+      ...(native === true ? { callback_url: 'cryochain://payment/verify' } : appUrl ? { callback_url: `${appUrl.replace(/\/$/, '')}/payment/verify` } : {}),
       metadata: { order_id: order.id, order_code: order.code },
     }),
   });

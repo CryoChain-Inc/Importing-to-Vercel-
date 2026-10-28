@@ -35,15 +35,15 @@ interface Data {
   details: buyer.BuyerDetails;
 }
 
-export function BuyerHome({ account }: { account: Account }) {
-  return <CartProvider><BuyerShell account={account} /></CartProvider>;
+export function BuyerHome({ account, tab }: { account: Account; tab?: string }) {
+  return <CartProvider><BuyerShell account={account} firstTab={TABS.find((t) => t.key === tab)?.key} /></CartProvider>;
 }
 
-function BuyerShell({ account }: { account: Account }) {
+function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab }) {
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
-  const [tab, setTab] = useState<Tab>('shop');
+  const [tab, setTab] = useState<Tab>(firstTab ?? 'shop');
   // The order being paid. While set, the payment page replaces the tabs' content.
   const [paying, setPaying] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);

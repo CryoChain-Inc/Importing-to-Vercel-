@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
   const { data: who } = await caller.auth.getUser();
   if (!who.user) return json({ error: 'Sign in again to continue.' }, 401);
 
-  const { booking_id } = await req.json().catch(() => ({}));
+  const { booking_id, native } = await req.json().catch(() => ({}));
   const { data: booking } = await caller.from('truck_bookings').select('id, code, amount, state, buyer_id').eq('id', booking_id ?? '').maybeSingle();
   if (!booking || booking.buyer_id !== who.user.id) return json({ error: 'Booking not found.' }, 404);
   if (booking.state !== 'awaiting_payment') return json({ error: 'This booking is not awaiting payment.' }, 409);
@@ -58,7 +58,8 @@ Deno.serve(async (req) => {
       amount: pesewas,
       currency: 'GHS',
       email: profile?.email || who.user.email || `${who.user.id}@pay.cryochain.app`,
-      ...(appUrl ? { callback_url: appUrl } : {}),
+      // The app opens checkout in an auth session that closes when Paystack redirects to its own URL scheme.
+      ...(native === true ? { callback_url: 'cryochain://payment/verify' } : appUrl ? { callback_url: `${appUrl.replace(/\/$/, '')}/payment/verify` } : {}),
       metadata: { booking_id: booking.id, booking_code: booking.code },
     }),
   });

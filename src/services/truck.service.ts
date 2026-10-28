@@ -1,4 +1,5 @@
-import { Linking, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { openCheckout } from './checkout';
 import { requireUserId, supabase } from './supabase';
 
 export type TruckPurpose = 'transfer' | 'pickup';
@@ -180,22 +181,22 @@ export async function cancelTruckBooking(id: string): Promise<void> {
 
 /** Opens Paystack checkout for an unpaid cold-truck booking. Stored on truck_payments, not lot payments. */
 export async function payTruck(bookingId: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('truck-pay', { body: { booking_id: bookingId } });
+  const { data, error } = await supabase.functions.invoke('truck-pay', { body: { booking_id: bookingId, native: Platform.OS !== 'web' } });
   if (error || !data?.url) {
     const body = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
     throw new Error(body?.error ?? data?.error ?? 'Could not start the truck payment. Please try again.');
   }
-  if (Platform.OS === 'web') window.location.assign(data.url);
-  else await Linking.openURL(data.url);
+  await openCheckout(data.url);
 }
 
 /** Confirms a Paystack return for a truck booking reference (TRK-...). */
-export async function verifyTruckPayment(reference: string): Promise<void> {
-  const { error } = await supabase.functions.invoke('truck-pay-verify', { body: { reference } });
+export async function verifyTruckPayment(reference: string): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke('truck-pay-verify', { body: { reference } });
   if (error) {
     const body = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
     throw new Error(body?.error ?? 'Could not confirm the truck payment yet.');
   }
+  return typeof data?.status === 'string' ? data.status : null;
 }
 
 /** The four-digit code only the buyer can read. Null until the payment migration is applied. */
