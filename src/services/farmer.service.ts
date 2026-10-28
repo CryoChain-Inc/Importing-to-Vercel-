@@ -279,7 +279,7 @@ export async function createListing(pointId: string, product: string, weightKg: 
     .insert({ farmer_id: farmerId, collection_point_id: pointId, product: product.trim(), weight_kg: weightKg, grade, image_paths: paths });
   if (error) {
     await supabase.storage.from(PRODUCE_BUCKET).remove(paths);
-    throw new Error('Could not add the listing. Check your MoMo wallet, that the collection point is active and that the product has a published price.');
+    throw new Error('Could not add the listing. Check your farm address and MoMo wallet, that the collection point is active and that the product has a published price.');
   }
 }
 

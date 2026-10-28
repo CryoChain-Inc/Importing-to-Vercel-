@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Button, Card, Icon } from '../../../components/common';
+import { Button, Card, Icon, ProfileChecklist } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { deleteListing, fetchCollectionPoints, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
@@ -13,11 +13,12 @@ const FILTERS = [
   { key: 'sold', label: 'Sold out', has: (l: ProduceListing) => l.remainingKg <= 0, empty: 'Nothing has sold out yet.' },
 ] as const;
 
-/** Listing form is locked until a wallet is saved (the database enforces this too). */
-export function ProduceListings({ listings, walletReady, onAddWallet, onChange }: {
+/** Listing form is locked until the farm address and a wallet are saved (the database enforces this too). */
+export function ProduceListings({ listings, addressReady, walletReady, onSetup, onChange }: {
   listings: ProduceListing[];
+  addressReady: boolean;
   walletReady: boolean;
-  onAddWallet: () => void;
+  onSetup: (section: 'details' | 'wallet') => void;
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
@@ -46,15 +47,17 @@ export function ProduceListings({ listings, walletReady, onAddWallet, onChange }
   return (
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
-      {walletReady ? (
+      {addressReady && walletReady ? (
         <NewListing points={points} onCreated={onChange} />
       ) : (
-        <Card tone="tint" style={s.locked}>
-          <View style={s.lockIcon}><Icon name="lock" size={22} color={colors.brandInk} /></View>
-          <Text style={s.title}>Add your MoMo wallet to start listing</Text>
-          <Text style={s.copy}>We need somewhere to send your payment before we can collect your produce.</Text>
-          <Button label="Add wallet" icon="wallet" onPress={onAddWallet} />
-        </Card>
+        <ProfileChecklist
+          title="Set up your farm to start listing"
+          lead="We need to know where to collect and where to send your payment. This takes about two minutes, once."
+          steps={[
+            { key: 'address', label: 'Farm address', hint: 'Pin your farm on the map so the truck can find you.', done: addressReady, onPress: () => onSetup('details') },
+            { key: 'wallet', label: 'MoMo wallet', hint: 'Where we send your payment after delivery.', done: walletReady, onPress: () => onSetup('wallet') },
+          ]}
+        />
       )}
 
       <View style={s.head}>
@@ -99,7 +102,5 @@ const styles = (c: Record<ColorToken, string>) => ({
   segText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
-  locked: { gap: 4, alignItems: 'flex-start' as const },
-  lockIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.surfaceCard, marginBottom: 8 },
   emptyCard: { alignItems: 'center' as const, gap: 8, paddingVertical: 28 },
 });

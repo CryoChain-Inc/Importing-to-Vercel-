@@ -15,7 +15,7 @@ export interface ChecklistStep {
 }
 
 /** "Finish your profile" card: progress bar plus one tappable row per step. Render it only while required steps remain. */
-export function ProfileChecklist({ steps }: { steps: ChecklistStep[] }) {
+export function ProfileChecklist({ steps, title = 'Finish your profile', lead }: { steps: ChecklistStep[]; title?: string; lead?: string }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const required = steps.filter((x) => !x.optional);
@@ -24,9 +24,10 @@ export function ProfileChecklist({ steps }: { steps: ChecklistStep[] }) {
   return (
     <Card tone="tint" style={s.card}>
       <View style={s.top}>
-        <Text style={s.title}>Finish your profile</Text>
+        <Text style={s.title}>{title}</Text>
         <Text style={s.count}>{done} of {required.length}</Text>
       </View>
+      {lead ? <Text style={s.hint}>{lead}</Text> : null}
       <View style={s.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: required.length, now: done }}>
         <View style={[s.fill, { width: `${(done / required.length) * 100}%` }]} />
       </View>
