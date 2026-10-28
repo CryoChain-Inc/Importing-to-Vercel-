@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Icon, ProfileChecklist } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { deleteListing, fetchCollectionPoints, type CollectionPoint, type ProduceListing } from '../../../services/farmer.service';
+import { deleteListing, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ListingCard } from './ListingCard';
 import { NewListing } from './NewListing';
@@ -14,8 +14,10 @@ const FILTERS = [
 ] as const;
 
 /** Listing form is locked until the farm address and a wallet are saved (the database enforces this too). */
-export function ProduceListings({ listings, addressReady, walletReady, onSetup, onChange }: {
+export function ProduceListings({ listings, pickup, addressReady, walletReady, onSetup, onChange }: {
   listings: ProduceListing[];
+  /** Farm address shown as the pickup location. Empty until saved. */
+  pickup: string;
   addressReady: boolean;
   walletReady: boolean;
   onSetup: (section: 'details' | 'wallet') => void;
@@ -23,16 +25,11 @@ export function ProduceListings({ listings, addressReady, walletReady, onSetup, 
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const [points, setPoints] = useState<CollectionPoint[]>([]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active');
   const [shown, setShown] = useState(PAGE);
   const [error, setError] = useState<string | null>(null);
   const active = FILTERS.find((f) => f.key === filter)!;
   const rows = listings.filter(active.has);
-
-  useEffect(() => {
-    fetchCollectionPoints().then(setPoints, (e) => setError(e.message));
-  }, []);
 
   const remove = async (id: string) => {
     setError(null);
@@ -48,7 +45,7 @@ export function ProduceListings({ listings, addressReady, walletReady, onSetup, 
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
       {addressReady && walletReady ? (
-        <NewListing points={points} onCreated={onChange} />
+        <NewListing pickup={pickup} onCreated={onChange} />
       ) : (
         <ProfileChecklist
           title="Set up your farm to start listing"
