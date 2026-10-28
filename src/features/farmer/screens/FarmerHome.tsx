@@ -4,6 +4,7 @@ import { Badge, Button, type IconName } from '../../../components/common';
 import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
+import { composeAddress } from '../../../services/maps.service';
 import { authService } from '../../../services/auth.service';
 import { detailsDone, fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
@@ -100,7 +101,7 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={load} />
+              <ProduceListings listings={listings} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={load} />
             </>
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
@@ -116,6 +117,8 @@ export function FarmerHome({ account }: { account: Account }) {
     </TabShell>
   );
 }
+
+const farmerPickup = (f: Farmer) => (f.address ? composeAddress({ line1: f.line1 ?? '', address: f.address }) : '');
 
 function Loading({ tab }: { tab: Tab }) {
   if (tab === 'payments') return <><Skeleton height={168} radius={24} /><SkeletonCard lines={2} lead /><SkeletonCard lines={2} /></>;
