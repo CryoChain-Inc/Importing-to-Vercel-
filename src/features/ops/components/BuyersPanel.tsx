@@ -55,7 +55,7 @@ export function BuyersPanel({ params, setParams, rev }: PageProps) {
                 <View><Text style={s.meta}>Delivery location</Text><Text style={s.value}>{b.location || '—'}</Text></View>
                 <View><Text style={s.meta}>Joined</Text><Text style={s.value}>{new Date(b.joinedAt).toLocaleDateString('en-GH')}</Text></View>
                 <Text style={s.sub}>Orders</Text>
-                {mine.length === 0 ? <Text style={s.meta}>No orders yet.</Text> : mine.slice(0, 5).map((o) => (
+                {mine.length === 0 ? <Text style={s.meta}>No orders yet.</Text> : mine.map((o) => (
                   <View key={o.id} style={s.order}>
                     <View style={s.grow}>
                       <Text style={s.value}>{o.code} · {ghs(o.amount)}</Text>
