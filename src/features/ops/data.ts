@@ -13,8 +13,6 @@ export interface OpsData {
   drivers: fulfil.DriverRoute[];
   decisions: fulfil.Decision[];
   categories: ops.Category[];
-  products: ops.Product[];
-  prices: ops.PriceRow[];
   team: ops.TeamMember[];
   config: ops.OpsConfig;
   payables: payouts.PayableRow[];

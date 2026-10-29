@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Image, Text, View } from 'react-native';
-import { Button, ChoiceChips, Icon, Input } from '../../../components/common';
+import { Button, ChoiceChips, Icon, Input, Pagination } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { imageUrl, type PickedImage } from '../../../services/catalogueImage';
+import { PAGE_SIZE } from '../../../services/paging';
 import { saveCategory, saveProduct, setVisibility, type Category, type Product } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { GalleryField } from './GalleryField';
 import { ImageField } from './ImageField';
-import { ActiveToggle, Empty, usePaged } from './OpsBits';
+import { ActiveToggle, Empty } from './OpsBits';
 import { Sheet } from './Sheet';
 import { useAction } from './useAction';
 
@@ -36,7 +37,7 @@ function CategoryForm({ category, onSaved, onClose }: { category?: Category; onS
   );
 }
 
-function ProductForm({ categories, product, onSaved, onClose }: { categories: Category[]; product?: Product; onSaved: () => Promise<void>; onClose: () => void }) {
+export function ProductForm({ categories, product, onSaved, onClose }: { categories: Category[]; product?: Product; onSaved: () => Promise<void>; onClose: () => void }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onSaved);
   const [name, setName] = useState(product?.name ?? '');
@@ -106,11 +107,13 @@ function Row({ path, name, meta, active, onToggle, onEdit }: { path: string | nu
   );
 }
 
-export function CategoriesSection({ categories, products, onChange }: { categories: Category[]; products: Product[]; onChange: () => Promise<void> }) {
+export function CategoriesSection({ categories, onChange }: { categories: Category[]; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const [form, setForm] = useState<Category | 'new' | null>(null);
-  const { rows, more } = usePaged(categories, 'categories', 8);
-  const count = (id: string) => products.filter((p) => p.categoryId === id).length;
+  const [page, setPage] = useState(1);
+  const last = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
+  const at = Math.min(page, last);
+  const rows = categories.slice((at - 1) * PAGE_SIZE, at * PAGE_SIZE);
   return (
     <View style={s.list}>
       <View style={s.bar}>
@@ -120,42 +123,26 @@ export function CategoriesSection({ categories, products, onChange }: { categori
       {categories.length === 0 ? <Empty icon="tag" title="No categories yet" hint="Categories group products, such as Vegetables or Grains." /> : (
         <View style={s.table}>
           {rows.map((c) => (
-            <Row key={c.id} path={c.imagePath} name={c.name} meta={`${count(c.id)} ${count(c.id) === 1 ? 'product' : 'products'}`} active={c.active}
+            <Row key={c.id} path={c.imagePath} name={c.name} meta={c.active ? 'Shown in the catalogue' : 'Hidden from the catalogue'} active={c.active}
               onToggle={async (next) => { await setVisibility('categories', c.id, next); await onChange(); }} onEdit={() => setForm(c)} />
           ))}
         </View>
       )}
-      {more}
+      <Pagination page={at} total={categories.length} pageSize={PAGE_SIZE} onPage={setPage} noun="categories" />
       {form ? <CategoryForm category={form === 'new' ? undefined : form} onSaved={onChange} onClose={() => setForm(null)} /> : null}
     </View>
   );
 }
 
-export function ProductsSection({ categories, products, onChange }: { categories: Category[]; products: Product[]; onChange: () => Promise<void> }) {
+/** The products on the current page, each with its visibility switch and an Edit button. */
+export function ProductList({ rows, onChange, onEdit }: { rows: Product[]; onChange: () => Promise<void>; onEdit: (p: Product) => void }) {
   const s = useThemedStyles(styles);
-  const [form, setForm] = useState<Product | 'new' | null>(null);
-  const [q, setQ] = useState('');
-  const needle = q.trim().toLowerCase();
-  const filtered = products.filter((p) => !needle || `${p.name} ${p.category}`.toLowerCase().includes(needle));
-  const { rows, more } = usePaged(filtered, needle, 8);
   return (
-    <View style={s.list}>
-      <View style={s.bar}>
-        <View style={s.search}><Input label="Search products" value={q} onChangeText={setQ} placeholder="Name or category" /></View>
-        <Button label="Add product" icon="tag" onPress={() => setForm('new')} />
-      </View>
-      {products.length === 0 ? <Empty icon="leaf" title="No products yet" hint="Add the produce farmers can list, with a photo so buyers recognise it." /> : null}
-      {products.length > 0 && filtered.length === 0 ? <Text style={s.meta}>No product matches.</Text> : null}
-      {rows.length ? (
-        <View style={s.table}>
-          {rows.map((p) => (
-            <Row key={p.id} path={p.imagePath} name={p.name} meta={p.category} active={p.active}
-              onToggle={async (next) => { await setVisibility('products', p.id, next); await onChange(); }} onEdit={() => setForm(p)} />
-          ))}
-        </View>
-      ) : null}
-      {more}
-      {form ? <ProductForm categories={categories} product={form === 'new' ? undefined : form} onSaved={onChange} onClose={() => setForm(null)} /> : null}
+    <View style={s.table}>
+      {rows.map((p) => (
+        <Row key={p.id} path={p.imagePath} name={p.name} meta={p.category} active={p.active}
+          onToggle={async (next) => { await setVisibility('products', p.id, next); await onChange(); }} onEdit={() => onEdit(p)} />
+      ))}
     </View>
   );
 }

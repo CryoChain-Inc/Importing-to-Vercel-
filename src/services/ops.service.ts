@@ -160,24 +160,40 @@ export async function fetchSupplyPage(page: number): Promise<Paged<SupplyRow>> {
   return { rows: (data ?? []).map((r) => toSupply(r, left)), total: count ?? 0 };
 }
 
-export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
-  const [k, p, c, b] = await Promise.all([
-    supabase.from('categories').select('id, name, image_path, active').order('created_at', { ascending: false }),
-    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('updated_at', { ascending: false }),
-    supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
-    supabase.from('buyer_prices').select('product_id, grade, price, prev_price'),
-  ]);
-  fail('Could not load prices.')(k.error ?? p.error ?? c.error ?? b.error);
-  const rows = (kind: PriceKind, d: typeof c.data): PriceRow[] => (d ?? []).map((r) => ({
+export async function fetchCategories(): Promise<Category[]> {
+  const { data, error } = await supabase.from('categories').select('id, name, image_path, active').order('created_at', { ascending: false });
+  fail('Could not load categories.')(error);
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active }));
+}
+
+export type PricedProduct = Product & { prices: PriceRow[] };
+
+/** One page of products (newest edit first) with their farmer and buyer prices, filtered by name and category. */
+export async function fetchProductsPage(page: number, q: string, categoryId = ''): Promise<Paged<PricedProduct>> {
+  const [from, to] = pageRange(page);
+  let query = supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)', { count: 'exact' });
+  if (q.trim()) query = query.ilike('name', likeTerm(q));
+  if (categoryId) query = query.eq('category_id', categoryId);
+  const { data, error, count } = await query.order('updated_at', { ascending: false }).order('id').range(from, to);
+  fail('Could not load products.')(error);
+  const ids = (data ?? []).map((r: any) => r.id as string);
+  const [c, b] = ids.length
+    ? await Promise.all([
+        supabase.from('crop_prices').select('product_id, grade, price, prev_price').in('product_id', ids),
+        supabase.from('buyer_prices').select('product_id, grade, price, prev_price').in('product_id', ids),
+      ])
+    : [null, null];
+  fail('Could not load prices.')(c?.error ?? b?.error);
+  const rows = (kind: PriceKind, d: NonNullable<typeof c>['data']): PriceRow[] => (d ?? []).map((r) => ({
     kind,
     productId: r.product_id,
     grade: r.grade,
     price: Number(r.price),
     prevPrice: r.prev_price == null ? null : Number(r.prev_price),
   }));
+  const prices = [...rows('farmer', c?.data ?? null), ...rows('buyer', b?.data ?? null)];
   return {
-    categories: (k.data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active })),
-    products: (p.data ?? []).map((r: any) => ({
+    rows: (data ?? []).map((r: any) => ({
       id: r.id,
       name: r.name,
       categoryId: r.category_id,
@@ -186,8 +202,9 @@ export async function fetchCatalogue(): Promise<{ categories: Category[]; produc
       imagePaths: r.image_paths ?? [],
       description: r.description ?? '',
       active: r.active,
+      prices: prices.filter((p) => p.productId === r.id),
     })),
-    prices: [...rows('farmer', c.data), ...rows('buyer', b.data)],
+    total: count ?? 0,
   };
 }
 

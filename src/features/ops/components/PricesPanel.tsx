@@ -3,12 +3,14 @@ import { Image, Text, View } from 'react-native';
 import { Badge, Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { imageUrl } from '../../../services/catalogueImage';
-import { savePrices, type Category, type PriceKind, type PriceRow, type Product } from '../../../services/ops.service';
+import { fetchProductsPage, savePrices, type Category, type PriceKind, type PriceRow, type Product } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { GRADES, gradeOrderError, type Grade } from '../../../utils/gradeOrder';
-import { CategoriesSection, ProductsSection } from './CatalogueSections';
-import { Empty, UnderlineTabs, usePaged } from './OpsBits';
+import type { PageProps } from '../useOpsLocation';
+import { CategoriesSection, ProductForm, ProductList } from './CatalogueSections';
+import { ListRowsSkeleton, PriceCardsSkeleton } from './CatalogueSkeletons';
+import { Empty, Pager, UnderlineTabs, useServerPage } from './OpsBits';
 import { Sheet } from './Sheet';
 import { useAction } from './useAction';
 
@@ -132,52 +134,54 @@ function PriceCard({ product, rows, onEdit }: { product: Product; rows: PriceRow
   );
 }
 
-export function PricesPanel({ categories, products, prices, onChange }: {
-  categories: Category[];
-  products: Product[];
-  prices: PriceRow[];
-  onChange: () => Promise<void>;
-}) {
+export function PricesPanel({ categories, onChange, params, setParams, rev }: PageProps & { categories: Category[]; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
-  const [view, setView] = useState<View_>('prices');
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('All');
-  const [editing, setEditing] = useState<string | null>(null);
-  const needle = q.trim().toLowerCase();
-  const filtered = products.filter((p) => (category === 'All' || p.category === category) && (!needle || p.name.toLowerCase().includes(needle)));
-  const { rows, more } = usePaged(filtered, `${category}|${needle}`, 6);
-  const target = products.find((p) => p.id === editing);
+  const view: View_ = params.view === 'products' || params.view === 'categories' ? params.view : 'prices';
+  const category = categories.find((c) => c.id === params.cat);
+  const { rows, total, q, text, setText, page, goPage, firstLoad, switching, error } = useServerPage(params, setParams, rev,
+    (p, term) => fetchProductsPage(p, term, params.cat ?? ''));
+  const [form, setForm] = useState<Product | 'new' | null>(null);
+  const [priceFor, setPriceFor] = useState<string | null>(null);
+  const target = rows.find((p) => p.id === priceFor);
+  const listed = view !== 'categories';
+  const empty = !firstLoad && !total && !q && !category;
 
   return (
     <View style={s.list}>
-      <UnderlineTabs value={view} onChange={setView} options={[
-        { key: 'prices', label: 'Prices', count: products.length },
-        { key: 'products', label: 'Products', count: products.length },
+      <UnderlineTabs value={view} onChange={(k) => setParams(k === 'prices' ? {} : { view: k })} options={[
+        { key: 'prices', label: 'Prices' },
+        { key: 'products', label: 'Products' },
         { key: 'categories', label: 'Categories', count: categories.length },
       ]} />
-      {view === 'categories' ? <CategoriesSection categories={categories} products={products} onChange={onChange} /> : null}
-      {view === 'products' ? <ProductsSection categories={categories} products={products} onChange={onChange} /> : null}
-      {view === 'prices' ? (
-        products.length === 0 ? <Empty icon="tag" title="No products yet" hint="Add a category and a product first, then set a farmer and a buyer price for each grade." /> : (
-          <>
-            <View style={s.search}><Input label="Search products" value={q} onChangeText={setQ} placeholder="Garden egg" /></View>
-            <ChoiceChips label="Category" options={['All', ...categories.map((c) => c.name)]} value={category} onChange={setCategory} />
-            {filtered.length === 0 ? <Text style={s.meta}>No product matches.</Text> : null}
-            <View style={s.cards}>
-              {rows.map((p) => <PriceCard key={p.id} product={p} rows={prices.filter((r) => r.productId === p.id)} onEdit={() => setEditing(p.id)} />)}
-            </View>
-            {more}
-          </>
-        )
-      ) : null}
-      {target ? <PriceSheet product={target} rows={prices.filter((r) => r.productId === target.id)} onSaved={onChange} onClose={() => setEditing(null)} /> : null}
+      {listed ? (
+        <>
+          {error ? <Banner text={error} /> : null}
+          <View style={s.bar}>
+            <View style={s.search}><Input label="Search products" value={text} onChangeText={setText} placeholder="Garden egg" /></View>
+            {view === 'products' ? <Button label="Add product" icon="tag" onPress={() => setForm('new')} /> : null}
+          </View>
+          {categories.length ? (
+            <ChoiceChips label="Category" options={['All', ...categories.map((c) => c.name)]} value={category?.name ?? 'All'}
+              onChange={(n) => setParams({ ...params, cat: categories.find((c) => c.name === n)?.id ?? '', page: '' })} />
+          ) : null}
+          {firstLoad || switching ? (view === 'prices' ? <PriceCardsSkeleton /> : <ListRowsSkeleton />) : empty ? (
+            <Empty icon="tag" title="No products yet" hint="Add a category and a product first, then set a farmer and a buyer price for each grade." />
+          ) : total === 0 ? <Text style={s.meta}>No product matches.</Text> : view === 'prices' ? (
+            <View style={s.cards}>{rows.map((p) => <PriceCard key={p.id} product={p} rows={p.prices} onEdit={() => setPriceFor(p.id)} />)}</View>
+          ) : <ProductList rows={rows} onChange={onChange} onEdit={setForm} />}
+          {firstLoad ? null : <Pager page={page} total={total} onPage={goPage} noun="products" />}
+        </>
+      ) : <CategoriesSection categories={categories} onChange={onChange} />}
+      {form ? <ProductForm categories={categories} product={form === 'new' ? undefined : form} onSaved={onChange} onClose={() => setForm(null)} /> : null}
+      {target ? <PriceSheet product={target} rows={target.prices} onSaved={onChange} onClose={() => setPriceFor(null)} /> : null}
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 16 },
-  search: { maxWidth: 420 },
+  bar: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, justifyContent: 'space-between' as const, flexWrap: 'wrap' as const, gap: 12 },
+  search: { flexGrow: 1, flexBasis: 220, maxWidth: 420 },
   cards: { gap: 14 },
   item: { gap: 14, padding: 16 },
   head: { flexDirection: 'row' as const, alignItems: 'center' as const, flexWrap: 'wrap' as const, gap: 12 },

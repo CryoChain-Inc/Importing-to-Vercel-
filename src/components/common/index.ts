@@ -12,3 +12,4 @@ export * from './ThemeToggle';
 export * from './HeroCard';
 export * from './StatHero';
 export * from './ProfileChecklist';
+export * from './Pagination';
