@@ -1,4 +1,5 @@
 import { normalizePhone } from '../utils/format';
+import { GRADES, gradeOrderError, type Grade } from '../utils/gradeOrder';
 import { likeTerm, pageRange, type Paged } from './paging';
 import { removeStoredImage, replaceImage, type PickedImage } from './catalogueImage';
 import { supabase } from './supabase';
@@ -247,17 +248,20 @@ export async function saveProduct(p: ProductInput & { description: string; galle
   await Promise.all(dropped.map(removeStoredImage));
 }
 
-/** prev_price is set by a database trigger when the price changes. */
-export async function setPrice(kind: PriceKind, productId: string, grade: string, price: number): Promise<void> {
-  const { error } = await supabase
-    .from(PRICE_TABLE[kind])
-    .upsert({ product_id: productId, grade, price }, { onConflict: 'product_id,grade' });
-  fail('Could not save the price.')(error);
+/** Saves one kind of a product's prices (prev_price is set by a database trigger): a number sets the grade, null clears it. Grade order is checked here and again by the database. */
+export async function savePrices(productId: string, kind: PriceKind, prices: Record<Grade, number | null>): Promise<void> {
+  const bad = gradeOrderError(prices);
+  if (bad) throw new Error(bad);
+  const table = PRICE_TABLE[kind];
+  const rows = GRADES.flatMap((grade) => (prices[grade] != null ? [{ product_id: productId, grade, price: prices[grade] }] : []));
+  const cleared = GRADES.filter((g) => prices[g] == null);
+  if (rows.length) fail('Could not save the prices.')((await supabase.from(table).upsert(rows, { onConflict: 'product_id,grade' })).error);
+  if (cleared.length) fail('Could not clear a price.')((await supabase.from(table).delete().eq('product_id', productId).in('grade', cleared)).error);
 }
 
-export async function deletePrice(kind: PriceKind, productId: string, grade: string): Promise<void> {
-  const { error } = await supabase.from(PRICE_TABLE[kind]).delete().eq('product_id', productId).eq('grade', grade);
-  fail('Could not remove the price.')(error);
+/** Show or hide a category or product in the public catalogue. */
+export async function setVisibility(table: 'categories' | 'products', id: string, active: boolean): Promise<void> {
+  fail('Could not change visibility.')((await supabase.from(table).update({ active }).eq('id', id)).error);
 }
 
 export async function fetchConfig(): Promise<OpsConfig> {

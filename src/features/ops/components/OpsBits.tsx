@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Switch, Text, View } from 'react-native';
 import { Button, Card, Icon, type IconName } from '../../../components/common';
-import { Skeleton, SkeletonCard } from '../../../components/feedback';
+import { Skeleton, SkeletonCard, useToast } from '../../../components/feedback';
 import { PAGE_SIZE, type Paged } from '../../../services/paging';
 import type { Params } from '../useOpsLocation';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
@@ -41,6 +41,44 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/** Underline tabs with counts: lighter than Segmented, for switching between a page's main views. */
+export function UnderlineTabs<K extends string>({ options, value, onChange }: { options: { key: K; label: string; count?: number }[]; value: K; onChange: (k: K) => void }) {
+  const s = useThemedStyles(styles);
+  return (
+    <View style={s.tabs} accessibilityRole="tablist">
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <Pressable key={o.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[s.tab, on && s.tabOn]}>
+            <Text style={[s.tabText, on && s.tabTextOn]} numberOfLines={1}>{o.label}</Text>
+            {o.count != null ? <View style={[s.tabCount, on && s.tabCountOn]}><Text style={[s.tabCountText, on && s.tabCountTextOn]}>{o.count}</Text></View> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Switch that shows or hides an item; flips at once and rolls back with a message if the save fails. */
+export function ActiveToggle({ active, label, onToggle }: { active: boolean; label: string; onToggle: (next: boolean) => Promise<void> }) {
+  const s = useThemedStyles(styles);
+  const { colors } = useTheme();
+  const { show } = useToast();
+  const [pending, setPending] = useState<boolean | null>(null);
+  const on = pending ?? active;
+  const flip = async (next: boolean) => {
+    setPending(next);
+    try { await onToggle(next); } catch (e) { show(e instanceof Error ? e.message : 'Could not save.', 'error'); } finally { setPending(null); }
+  };
+  return (
+    <View style={s.toggle}>
+      <Text style={[s.toggleText, on && s.toggleOn]}>{on ? 'Active' : 'Hidden'}</Text>
+      <Switch value={on} disabled={pending !== null} onValueChange={flip} accessibilityLabel={`${label}: ${on ? 'active' : 'hidden'}`}
+        trackColor={{ false: colors.borderStrong, true: colors.brand600 }} thumbColor="#ffffff" />
     </View>
   );
 }
@@ -162,6 +200,18 @@ const styles = (c: Record<ColorToken, string>) => ({
   segText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
+  tabs: { flexDirection: 'row' as const, gap: 4, borderBottomWidth: 1, borderBottomColor: c.borderSubtle },
+  tab: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, minHeight: 46, paddingHorizontal: 14, marginBottom: -1, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabOn: { borderBottomColor: c.brand600 },
+  tabText: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.inkMuted },
+  tabTextOn: { fontFamily: fonts.sansBold, color: c.ink },
+  tabCount: { minWidth: 24, height: 22, paddingHorizontal: 7, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
+  tabCountOn: { backgroundColor: c.brandTint },
+  tabCountText: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.inkMuted, fontVariant: ['tabular-nums' as const] },
+  tabCountTextOn: { color: c.brandInk },
+  toggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  toggleText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted, minWidth: 44, textAlign: 'right' as const },
+  toggleOn: { color: c.brandInk },
   skel: { gap: 12 },
   pager: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12, flexWrap: 'wrap' as const },
   tile: { flexGrow: 1, flexBasis: 150, width: undefined },

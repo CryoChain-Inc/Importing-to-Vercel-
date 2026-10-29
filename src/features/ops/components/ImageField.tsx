@@ -1,11 +1,12 @@
 import * as ImagePicker from 'expo-image-picker';
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Button, Icon } from '../../../components/common';
 import type { PickedImage } from '../../../services/catalogueImage';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { CropModal } from './CropModal';
 
-/** Preview of the current or newly picked image with a remove button; the parent uploads or deletes on save. */
+/** Preview of the current or newly picked image (cropped to a square on pick) with a remove button; the parent uploads or deletes on save. */
 export function ImageField({ label, currentUrl, picked, removed, onPick, onRemove }: {
   label: string;
   currentUrl: string | null;
@@ -16,11 +17,12 @@ export function ImageField({ label, currentUrl, picked, removed, onPick, onRemov
   onRemove: () => void;
 }) {
   const s = useThemedStyles(styles);
+  const [raw, setRaw] = useState<string | null>(null);
   const uri = picked?.uri ?? (removed ? null : currentUrl);
 
   const choose = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
-    if (!r.canceled) onPick({ uri: r.assets[0].uri, mimeType: r.assets[0].mimeType });
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    if (!r.canceled) setRaw(r.assets[0].uri);
   };
 
   return (
@@ -46,6 +48,7 @@ export function ImageField({ label, currentUrl, picked, removed, onPick, onRemov
           </Text>
         </View>
       </View>
+      {raw ? <CropModal uri={raw} onCancel={() => setRaw(null)} onDone={(img) => { setRaw(null); onPick(img); }} /> : null}
     </View>
   );
 }
