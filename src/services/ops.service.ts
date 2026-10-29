@@ -66,11 +66,9 @@ export interface PriceRow {
 export interface OpsConfig {
   minTemp: string;
   maxTemp: string;
-  payoutThreshold: string;
-  bankName: string;
-  accountName: string;
-  accountNumber: string;
   supportPhone: string;
+  supportEmail: string;
+  updatedAt: string;
 }
 
 const fail = (msg: string) => (error: unknown) => {
@@ -288,11 +286,9 @@ export async function fetchConfig(): Promise<OpsConfig> {
   return {
     minTemp: s(data!.min_temp_c),
     maxTemp: s(data!.max_temp_c),
-    payoutThreshold: s(data!.payout_threshold_ghs),
-    bankName: s(data!.transfer_bank_name),
-    accountName: s(data!.transfer_account_name),
-    accountNumber: s(data!.transfer_account_number),
     supportPhone: s(data!.support_phone),
+    supportEmail: s(data!.support_email),
+    updatedAt: s(data!.updated_at),
   };
 }
 
@@ -304,15 +300,12 @@ export async function saveConfig(c: OpsConfig): Promise<void> {
     .update({
       min_temp_c: num(c.minTemp),
       max_temp_c: num(c.maxTemp),
-      payout_threshold_ghs: num(c.payoutThreshold),
-      transfer_bank_name: txt(c.bankName),
-      transfer_account_name: txt(c.accountName),
-      transfer_account_number: txt(c.accountNumber),
       support_phone: c.supportPhone.trim() ? normalizePhone(c.supportPhone) : null,
+      support_email: txt(c.supportEmail),
       updated_at: new Date().toISOString(),
     })
     .eq('id', true);
-  fail('Could not save settings (min temp must be below max; account number is digits only).')(error);
+  fail('Could not save settings (min temp must be below max).')(error);
 }
 
 export type StaffRole = 'driver' | 'ops';
