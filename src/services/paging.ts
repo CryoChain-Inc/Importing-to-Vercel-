@@ -1,4 +1,4 @@
-export const PAGE_SIZE = 10;
+export const PAGE_SIZE = 6;
 
 export interface Paged<T> { rows: T[]; total: number }
 

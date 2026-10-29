@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
-import { Button, Card, Icon, type IconName } from '../../../components/common';
-import { Skeleton, SkeletonCard } from '../../../components/feedback';
+import { Image, Pressable, Switch, Text, View } from 'react-native';
+import { Button, Card, Icon, Pagination, type IconName } from '../../../components/common';
+import { Skeleton, SkeletonCard, useToast } from '../../../components/feedback';
 import { PAGE_SIZE, type Paged } from '../../../services/paging';
 import type { Params } from '../useOpsLocation';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
@@ -45,6 +45,44 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
   );
 }
 
+/** Underline tabs with counts: lighter than Segmented, for switching between a page's main views. */
+export function UnderlineTabs<K extends string>({ options, value, onChange }: { options: { key: K; label: string; count?: number }[]; value: K; onChange: (k: K) => void }) {
+  const s = useThemedStyles(styles);
+  return (
+    <View style={s.tabs} accessibilityRole="tablist">
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <Pressable key={o.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[s.tab, on && s.tabOn]}>
+            <Text style={[s.tabText, on && s.tabTextOn]} numberOfLines={1}>{o.label}</Text>
+            {o.count != null ? <View style={[s.tabCount, on && s.tabCountOn]}><Text style={[s.tabCountText, on && s.tabCountTextOn]}>{o.count}</Text></View> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Switch that shows or hides an item; flips at once and rolls back with a message if the save fails. */
+export function ActiveToggle({ active, label, onToggle }: { active: boolean; label: string; onToggle: (next: boolean) => Promise<void> }) {
+  const s = useThemedStyles(styles);
+  const { colors } = useTheme();
+  const { show } = useToast();
+  const [pending, setPending] = useState<boolean | null>(null);
+  const on = pending ?? active;
+  const flip = async (next: boolean) => {
+    setPending(next);
+    try { await onToggle(next); } catch (e) { show(e instanceof Error ? e.message : 'Could not save.', 'error'); } finally { setPending(null); }
+  };
+  return (
+    <View style={s.toggle}>
+      <Text style={[s.toggleText, on && s.toggleOn]}>{on ? 'Active' : 'Hidden'}</Text>
+      <Switch value={on} disabled={pending !== null} onValueChange={flip} accessibilityLabel={`${label}: ${on ? 'active' : 'hidden'}`}
+        trackColor={{ false: colors.borderStrong, true: colors.brand600 }} thumbColor="#ffffff" />
+    </View>
+  );
+}
+
 /** First `page` rows, plus a button that reveals more. Paging restarts when `resetKey` changes. */
 export function usePaged<T>(rows: T[], resetKey: string, page = 5) {
   const [state, setState] = useState({ key: resetKey, n: page });
@@ -56,33 +94,25 @@ export function usePaged<T>(rows: T[], resetKey: string, page = 5) {
   return { rows: rows.slice(0, n), more };
 }
 
-/** Previous / next with a "Page 2 of 7" label, for lists the server pages. */
-export function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
-  const s = useThemedStyles(styles);
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (pages < 2) return null;
-  return (
-    <View style={s.pager} accessibilityRole="toolbar">
-      <Button label="Previous" size="sm" variant="outline" disabled={page <= 1} onPress={() => onPage(page - 1)} />
-      <Text style={s.note}>Page {page} of {pages} · {total} total</Text>
-      <Button label="Next" size="sm" variant="outline" disabled={page >= pages} onPress={() => onPage(page + 1)} />
-    </View>
-  );
+/** Numbered pagination for lists the server pages. */
+export function Pager({ page, total, onPage, noun }: { page: number; total: number; onPage: (p: number) => void; noun?: string }) {
+  return <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPage={onPage} noun={noun} />;
 }
 
 const NONE: never[] = []; // stable, so effects keyed on `rows` don't re-run while loading
 
 /**
  * One server-fetched page driven by the URL: `page` and `q` come from `params`, edits go back through `setParams`.
- * Refetches when page, search or `rev` changes. `text` is the live search box; `q` follows it after a short pause.
+ * Refetches when page, search or `rev` changes. `switching` is true while a new page/search/filter loads (not for a refresh after an edit). `text` is the live search box; `q` follows it after a short pause.
  */
 export function useServerPage<T>(params: Params, setParams: (p: Params, replace?: boolean) => void, rev: number, fetchPage: (page: number, q: string) => Promise<Paged<T>>) {
   const page = Math.max(1, Number(params.page) || 1);
   const q = params.q ?? '';
   const [text, setText] = useState(q);
-  const [result, setResult] = useState<(Paged<T> & { key: string }) | null>(null);
+  const [result, setResult] = useState<(Paged<T> & { key: string; view: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const key = `${rev}|${JSON.stringify(params)}`; // any filter in the URL (e.g. state) refetches
+  const view = JSON.stringify(params);
+  const key = `${rev}|${view}`; // any filter in the URL (e.g. state) refetches
 
   useEffect(() => {
     if (text === q) return;
@@ -97,14 +127,14 @@ export function useServerPage<T>(params: Params, setParams: (p: Params, replace?
       setError(null);
       const last = Math.max(1, Math.ceil(r.total / PAGE_SIZE));
       if (page > last) setParams({ ...params, page: last > 1 ? String(last) : '' }, true); // e.g. a stale ?page=9
-      else setResult({ ...r, key });
+      else setResult({ ...r, key, view });
     }).catch((e) => live && setError(e instanceof Error ? e.message : 'Could not load this page.'));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` covers rev and every URL param
   }, [key]);
 
   const goPage = (p: number) => setParams({ ...params, page: p > 1 ? String(p) : '' });
-  return { page, q, text, setText, rows: result?.rows ?? (NONE as T[]), total: result?.total ?? 0, loading: !result || result.key !== key, firstLoad: !result, error, goPage };
+  return { page, q, text, setText, rows: result?.rows ?? (NONE as T[]), total: result?.total ?? 0, loading: !result || result.key !== key, switching: !result || result.view !== view, firstLoad: !result, error, goPage };
 }
 
 /** Skeleton shaped like a panel: hero, two tiles, then list rows. */
@@ -162,6 +192,18 @@ const styles = (c: Record<ColorToken, string>) => ({
   segText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
+  tabs: { flexDirection: 'row' as const, gap: 4, borderBottomWidth: 1, borderBottomColor: c.borderSubtle },
+  tab: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, minHeight: 46, paddingHorizontal: 14, marginBottom: -1, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabOn: { borderBottomColor: c.brand600 },
+  tabText: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.inkMuted },
+  tabTextOn: { fontFamily: fonts.sansBold, color: c.ink },
+  tabCount: { minWidth: 24, height: 22, paddingHorizontal: 7, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
+  tabCountOn: { backgroundColor: c.brandTint },
+  tabCountText: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.inkMuted, fontVariant: ['tabular-nums' as const] },
+  tabCountTextOn: { color: c.brandInk },
+  toggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  toggleText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted, minWidth: 44, textAlign: 'right' as const },
+  toggleOn: { color: c.brandInk },
   skel: { gap: 12 },
   pager: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12, flexWrap: 'wrap' as const },
   tile: { flexGrow: 1, flexBasis: 150, width: undefined },

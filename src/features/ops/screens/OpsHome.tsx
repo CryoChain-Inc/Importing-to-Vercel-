@@ -59,10 +59,10 @@ export function OpsHome({ account }: { account: Account }) {
     try {
       const [farmers, buyerRows, supply, orders, cat, team, config, board, drivers, decisions, payables, runs] = await Promise.all([
         ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchSupply(), buyers.fetchOrders(),
-        ops.fetchCatalogue(), ops.fetchTeam(), ops.fetchConfig(), fulfil.fetchBoard(), fulfil.fetchDriverRoutes(), fulfil.fetchDecisions(),
+        ops.fetchCategories(), ops.fetchTeam(), ops.fetchConfig(), fulfil.fetchBoard(), fulfil.fetchDriverRoutes(), fulfil.fetchDecisions(),
         payouts.fetchPayables(), payouts.fetchPayoutRuns(),
       ]);
-      setData({ farmers, buyers: buyerRows, supply, orders, categories: cat.categories, products: cat.products, prices: cat.prices, team, config, board, drivers, decisions, payables, runs });
+      setData({ farmers, buyers: buyerRows, supply, orders, categories: cat, team, config, board, drivers, decisions, payables, runs });
       fulfil.sendQueuedSms();
       setRev((r) => r + 1);
       setError(null);
@@ -130,7 +130,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
           {tab === 'payouts' ? <PayoutsPanel payables={data.payables} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
-          {tab === 'prices' ? <PricesPanel categories={data.categories} products={data.products} prices={data.prices} onChange={load} /> : null}
+          {tab === 'prices' ? <PricesPanel categories={data.categories} onChange={load} {...page} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}
           {tab === 'settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
         </>
