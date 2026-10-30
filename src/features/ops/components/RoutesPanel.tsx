@@ -38,7 +38,10 @@ export function RoutesPanel({ drivers, onChange }: { drivers: DriverRoute[]; onC
             <SectionTitle title="Route" note={`${todo.length} pending`} />
             {d.stops.length === 0 ? <Text style={s.meta}>No stops. New orders are assigned automatically.</Text> : d.stops.map((x) => (
               <View key={x.id} style={s.row}>
-                <Text style={[s.stop, x.state === 'done' && s.done]} numberOfLines={2}>{x.seq ? `${x.seq}. ` : ''}{x.label} · {x.order}</Text>
+                <View style={s.grow}>
+                  <Text style={[s.stop, x.state === 'done' && s.done]} numberOfLines={2}>{x.seq ? `${x.seq}. ` : ''}{x.label} · {x.order}</Text>
+                  {x.reading ? <Text style={s.meta}>{x.reading}</Text> : null}
+                </View>
                 <Badge label={x.state === 'done' ? 'Done' : x.kind} tone={x.state === 'done' ? 'success' : 'neutral'} />
               </View>
             ))}
