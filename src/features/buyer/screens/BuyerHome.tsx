@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, ScrollView, Text, View } from 'react-native';
 import { Badge, Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell, type TabDef } from '../../../components/layout';
@@ -86,6 +86,15 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   const leavePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load]);
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
 
+  // Paying takes over the whole screen: no side rail or bottom bar.
+  if (paying) {
+    return (
+      <ScrollView style={s.full} contentContainerStyle={s.fullContent} keyboardShouldPersistTaps="handled">
+        <View style={s.fullInner}><Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} /></View>
+      </ScrollView>
+    );
+  }
+
   return (
     <TabShell tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
       <View style={s.header}>
@@ -96,7 +105,7 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
       </View>
       {error ? <Banner text={error} /> : null}
       {data ? (
-        paying ? <Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} /> : <>
+        <>
           {tab === 'shop' ? (
             <Shop items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
           ) : null}
@@ -119,6 +128,9 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
+  full: { flex: 1, backgroundColor: c.bgApp },
+  fullContent: { flexGrow: 1, padding: 16, paddingBottom: 32 },
+  fullInner: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const },
   header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
   headerText: { gap: 8, alignItems: 'flex-start' as const, flexShrink: 1 },
   hello: { fontFamily: fonts.heading, fontSize: 26, lineHeight: 32, letterSpacing: -0.4, color: c.ink },
