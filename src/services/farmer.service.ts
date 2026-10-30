@@ -1,5 +1,5 @@
 import { normalizePhone } from '../utils/format';
-import { samePhoto, type PickedImage } from './catalogueImage';
+import { cached } from './offlineCache';
 import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
 
@@ -90,7 +90,8 @@ export async function createFarmer(): Promise<void> {
   if (error) throw new Error('Could not set up your farmer account.');
 }
 
-export async function fetchFarmer(): Promise<Farmer | null> {
+export const fetchFarmer = () => cached('fetchFarmer', loadFarmer);
+async function loadFarmer(): Promise<Farmer | null> {
   const id = await userId();
   const { data, error } = await supabase.from('farmers').select(FARMER_COLUMNS).eq('id', id).maybeSingle();
   if (error) throw new Error('Could not load your farm.');
@@ -144,7 +145,8 @@ export async function saveWallet(w: Wallet): Promise<void> {
   if (error) throw new Error('Could not save your wallet.');
 }
 
-export async function fetchListings(): Promise<ProduceListing[]> {
+export const fetchListings = () => cached('fetchListings', loadListings);
+async function loadListings(): Promise<ProduceListing[]> {
   const [listed, stock] = await Promise.all([
     supabase
       .from('produce_listings')
@@ -177,6 +179,7 @@ export async function fetchListings(): Promise<ProduceListing[]> {
 
 export interface Sale {
   id: string;
+  listingId: string;
   product: string;
   grade: string;
   kg: number;
@@ -190,15 +193,17 @@ export interface Sale {
 }
 
 /** What buyers' payments have allocated to this farmer, with where each payout stands. Declined offers are left out. */
-export async function fetchSales(): Promise<Sale[]> {
+export const fetchSales = () => cached('fetchSales', loadSales);
+async function loadSales(): Promise<Sale[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, grade, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
+    .select('id, listing_id, grade, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
     .in('status', ['accepted', 'collected', 'offered'])
     .order('created_at', { ascending: false });
   if (error) throw new Error('Could not load your sales.');
   return (data ?? []).map((r: any) => ({
     id: r.id,
+    listingId: r.listing_id,
     product: r.products?.name ?? '',
     grade: r.grade,
     kg: Number(r.kg),
@@ -211,14 +216,26 @@ export async function fetchSales(): Promise<Sale[]> {
   }));
 }
 
-export async function fetchProductNames(): Promise<string[]> {
+export const fetchProductNames = () => cached('fetchProductNames', loadProductNames);
+async function loadProductNames(): Promise<string[]> {
   const { data, error } = await supabase.from('products').select('name').eq('active', true).order('name');
   if (error) throw new Error('Could not load products.');
   return (data ?? []).map((r) => r.name);
 }
 
+/** Category name per product name, for grouping a farmer's listings. */
+export const fetchProductCategories = () => cached('fetchProductCategories', loadProductCategories);
+async function loadProductCategories(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from('products').select('name, categories(name)');
+  if (error) throw new Error('Could not load categories.');
+  const out: Record<string, string> = {};
+  for (const r of (data ?? []) as { name: string; categories?: { name?: string } | null }[]) if (r.categories?.name) out[r.name] = r.categories.name;
+  return out;
+}
+
 /** Grades that have a published farm-gate price, keyed by product name. */
-export async function fetchPricedGrades(): Promise<Record<string, string[]>> {
+export const fetchPricedGrades = () => cached('fetchPricedGrades', loadPricedGrades);
+async function loadPricedGrades(): Promise<Record<string, string[]>> {
   const { data, error } = await supabase.from('crop_prices').select('grade, products!inner(name)').eq('products.active', true);
   if (error) throw new Error('Could not load prices.');
   const found: Record<string, string[]> = {};
@@ -245,42 +262,6 @@ export async function estimateListing(product: string, kg: number, grade: string
   } | null;
   if (row?.price_per_kg == null) return null;
   return { pricePerKg: Number(row.price_per_kg), gross: Number(row.gross), feeRate: Number(row.fee_rate), fee: Number(row.fee), net: Number(row.net) };
-}
-
-async function uploadPhotos(farmerId: string, images: PickedImage[]): Promise<string[]> {
-  const paths: string[] = [];
-  try {
-    for (const img of images) {
-      const type = img.mimeType ?? 'image/jpeg';
-      const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type];
-      if (!ext) throw new Error('Use JPEG, PNG or WebP photos.');
-      const body = await (await fetch(img.uri)).arrayBuffer();
-      const path = `${farmerId}/${Date.now()}-${paths.length}.${ext}`;
-      const { error } = await supabase.storage.from(PRODUCE_BUCKET).upload(path, body, { contentType: type });
-      if (error) throw new Error('Could not upload a photo (max 2 MB each).');
-      paths.push(path);
-    }
-  } catch (e) {
-    if (paths.length) await supabase.storage.from(PRODUCE_BUCKET).remove(paths);
-    throw e;
-  }
-  return paths;
-}
-
-export async function createListing(product: string, weightKg: number, grade: string, images: PickedImage[]): Promise<void> {
-  if (images.length < MIN_PHOTOS) throw new Error(`Add at least ${MIN_PHOTOS} photos.`);
-  if (images.some((img, i) => images.slice(0, i).some((earlier) => samePhoto(earlier, img)))) {
-    throw new Error('Each photo has to be a different picture.');
-  }
-  const farmerId = await userId();
-  const paths = await uploadPhotos(farmerId, images);
-  const { error } = await supabase
-    .from('produce_listings')
-    .insert({ farmer_id: farmerId, product: product.trim(), weight_kg: weightKg, grade, image_paths: paths });
-  if (error) {
-    await supabase.storage.from(PRODUCE_BUCKET).remove(paths);
-    throw new Error('Could not add the listing. Check your farm address and MoMo wallet, and that the product has a published price.');
-  }
 }
 
 export async function updateListing(id: string, product: string, weightKg: number, grade: string): Promise<void> {

@@ -20,7 +20,10 @@ export function EditListing({ listing, onDone, onSaved }: { listing: ProduceList
   const grades = priced ? (priced[product] ?? []) : GRADES;
   const grade = grades.length > 0 && !grades.includes(gradePick) ? grades[0] : gradePick;
   const kg = Number(weight);
-  const valid = Number.isFinite(kg) && kg > 0 && grades.length > 0;
+  // The server refuses a weight below what is already sold or declined, and a product/grade change once anything sold.
+  const floor = listing.soldKg + listing.withdrawnKg;
+  const locked = floor > 0;
+  const valid = Number.isFinite(kg) && kg > 0 && kg >= floor && grades.length > 0;
   const changed = product !== listing.product || grade !== listing.grade || kg !== listing.weightKg;
 
   const save = async () => {
@@ -41,13 +44,13 @@ export function EditListing({ listing, onDone, onSaved }: { listing: ProduceList
     <View style={s.wrap}>
       <Text style={s.title}>Edit listing</Text>
       {error || loadError ? <Banner text={(error ?? loadError)!} /> : null}
-      {names.length ? (
+      {locked ? <Text style={s.meta}>{listing.product} · Grade {listing.grade} cannot change because part of it has sold. You can change the weight, down to {floor.toLocaleString('en-GH')} kg.</Text> : names.length ? (
         <ChoiceChips label="Product" options={names} value={product} onChange={setProduct} />
       ) : (
         <View style={s.skel}>{[88, 72, 104].map((w) => <Skeleton key={w} width={w} height={42} radius={21} />)}</View>
       )}
-      {grades.length > 0 ? <ChoiceChips label="Grade" options={grades} value={grade} onChange={setGrade} /> : <Text style={s.meta}>No published price for this product yet.</Text>}
-      <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" />
+      {!locked && grades.length > 0 ? <ChoiceChips label="Grade" options={grades} value={grade} onChange={setGrade} /> : locked ? null : <Text style={s.meta}>No published price for this product yet.</Text>}
+      <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" error={kg > 0 && kg < floor ? `At least ${floor.toLocaleString('en-GH')} kg, which is already sold.` : undefined} />
       <View style={s.actions}>
         <Button label="Cancel" variant="outline" onPress={onDone} style={s.action} />
         <Button label="Save changes" onPress={save} loading={busy} disabled={!valid || !changed} style={s.action} />
