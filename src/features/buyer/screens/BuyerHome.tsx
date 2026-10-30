@@ -8,6 +8,7 @@ import { authService } from '../../../services/auth.service';
 import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { useThemedStyles, type ColorToken } from '../../../theme';
+import type { Account } from '../../../types/auth';
 import { AccountFooter } from '../../auth/components/AccountFooter';
 import { CartProvider, useCart } from '../cart/CartProvider';
 import { BuyerAccount, buyerProfileComplete } from '../components/BuyerAccount';
@@ -57,11 +58,11 @@ interface Data {
   details: buyer.BuyerDetails;
 }
 
-export function BuyerHome({ tab }: { tab?: string }) {
-  return <CartProvider><BuyerShell firstTab={TABS.find((t) => t.key === tab)?.key} /></CartProvider>;
+export function BuyerHome({ account, tab }: { account: Account; tab?: string }) {
+  return <CartProvider><BuyerShell account={account} firstTab={TABS.find((t) => t.key === tab)?.key} /></CartProvider>;
 }
 
-function BuyerShell({ firstTab }: { firstTab?: Tab }) {
+function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab }) {
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
@@ -126,7 +127,7 @@ function BuyerShell({ firstTab }: { firstTab?: Tab }) {
       {data ? (
         <>
           {tab === 'shop' ? (
-            <Shop items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
+            <Shop name={data.details.name || account.name || ''} items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
           ) : null}
           {tab === 'cart' ? (
             <Cart items={data.catalogue} addresses={data.details.addresses} onRefresh={load} onOrdered={setPaying} onShop={() => setTab('shop')} onAddAddress={() => setTab('account')} />

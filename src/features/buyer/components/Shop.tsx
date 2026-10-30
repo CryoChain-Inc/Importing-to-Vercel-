@@ -6,8 +6,8 @@ import type { CatalogueItem } from '../../../services/buyer.service';
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-import { KG_STEP } from '../cart/cart';
 import { useCart } from '../cart/CartProvider';
+import { AddToCartSheet } from './AddToCartSheet';
 import { KgStepper } from './KgStepper';
 import { ProductDetail } from './ProductDetail';
 
@@ -16,7 +16,8 @@ const GAP = 12;
 const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
 /** Marketplace home: search, category pills and a grid of products (newest first) that can be added to the cart by the kilogram. */
-export function Shop({ items, address, onOpenCart, onPickAddress }: {
+export function Shop({ name, items, address, onOpenCart, onPickAddress }: {
+  name: string;
   items: CatalogueItem[];
   address: string;
   onOpenCart: () => void;
@@ -28,6 +29,7 @@ export function Shop({ items, address, onOpenCart, onPickAddress }: {
   const [category, setCategory] = useState(ALL);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState<string | null>(null);
   // Measured, not guessed: the shop sits beside a rail on wide screens and full width on phones.
   const [width, setWidth] = useState(0);
 
@@ -55,6 +57,7 @@ export function Shop({ items, address, onOpenCart, onPickAddress }: {
 
   return (
     <View style={s.wrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <Text style={s.hello} numberOfLines={1}>{name ? `Hello, ${name}` : 'Welcome'}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Change delivery address" onPress={onPickAddress} style={s.address}>
         <View style={s.addressIcon}><Icon name="pin" size={16} color={colors.brandInk} /></View>
         <View style={s.addressBody}>
@@ -131,13 +134,13 @@ export function Shop({ items, address, onOpenCart, onPickAddress }: {
               <View style={s.action}>
                 {stocked.length === 0 ? <Badge label="Out of stock" tone="danger" />
                   : only && inCart > 0 ? <KgStepper compact value={inCart} max={only.availableKg} onChange={(n) => setKg(only, n)} />
-                  : only ? <Button size="sm" variant="tonal" icon="cart" label="Add" onPress={() => setKg(only, Math.min(KG_STEP, only.availableKg))} style={s.addBtn} />
-                  : <Button size="sm" variant="outline" label="Choose grade" onPress={() => setOpen(p.productId)} style={s.addBtn} />}
+                  : <Button size="sm" variant="tonal" icon="cart" label="Add" onPress={() => setChoosing(p.productId)} style={s.addBtn} />}
               </View>
             </View>
           );
         }) : null}
       </View>
+      {choosing ? <AddToCartSheet grades={items.filter((i) => i.productId === choosing)} onClose={() => setChoosing(null)} /> : null}
     </View>
   );
 }
@@ -148,6 +151,7 @@ export function ShopSkeleton() {
 
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 14 },
+  hello: { fontFamily: fonts.heading, fontSize: 26, lineHeight: 32, letterSpacing: -0.4, color: c.ink },
   pressed: { opacity: 0.75 },
   address: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, minHeight: TOUCH + 8, paddingHorizontal: 14, borderRadius: 16, backgroundColor: c.surfaceCard, borderWidth: 1, borderColor: c.cardEdge },
   addressIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },

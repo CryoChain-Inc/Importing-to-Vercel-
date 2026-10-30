@@ -1,5 +1,5 @@
 // Buyer starts (or retries) an online payment for one of their unpaid orders. Returns the Paystack checkout URL.
-import { admin, applyTransaction, asCaller, cors, json, paystack } from '../_shared/paystack.ts';
+import { admin, applyTransaction, asCaller, callbackUrl, cors, json, paystack } from '../_shared/paystack.ts';
 
 const PENDING_TTL_MS = 30 * 60 * 1000;
 
@@ -57,7 +57,6 @@ Deno.serve(async (req) => {
     return json({ error: 'Could not start the payment.' }, 500);
   }
 
-  const appUrl = Deno.env.get('APP_URL') ?? '';
   const res = await paystack('/transaction/initialize', {
     method: 'POST',
     body: JSON.stringify({
@@ -68,7 +67,7 @@ Deno.serve(async (req) => {
       email: buyer?.email || who.user.email || `${who.user.id}@pay.cryochain.app`,
       // No `channels`: Paystack shows every method enabled on the account (mobile money, bank, card).
       // The app opens checkout in an auth session that closes when Paystack redirects to its own URL scheme.
-      ...(native === true ? { callback_url: 'cryochain://payment/verify' } : appUrl ? { callback_url: `${appUrl.replace(/\/$/, '')}/payment/verify` } : {}),
+      ...(callbackUrl(req, native === true) ? { callback_url: callbackUrl(req, native === true) } : {}),
       metadata: { order_id: order.id, order_code: order.code },
     }),
   });
