@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Button, Card, Icon, ProfileChecklist } from '../../../components/common';
+import { Badge, Button, Card, Icon, ProfileChecklist } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
+import { discardQueued, retryQueued, useOutbox } from '../../../services/listingOutbox';
 import { deleteListing, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ListingCard } from './ListingCard';
@@ -28,6 +29,7 @@ export function ProduceListings({ listings, pickup, addressReady, walletReady, o
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active');
   const [shown, setShown] = useState(PAGE);
   const [error, setError] = useState<string | null>(null);
+  const queued = useOutbox();
   const active = FILTERS.find((f) => f.key === filter)!;
   const rows = listings.filter(active.has);
 
@@ -56,6 +58,21 @@ export function ProduceListings({ listings, pickup, addressReady, walletReady, o
           ]}
         />
       )}
+
+      {queued.map((q) => (
+        <Card key={q.id} style={s.queued}>
+          <View style={s.head}>
+            <Text style={s.title}>{q.product}</Text>
+            <Badge label={q.error ? 'Needs attention' : 'Waiting for internet'} tone="warning" />
+          </View>
+          <Text style={s.copy}>{q.weightKg.toLocaleString('en-GH')} kg · Grade {q.grade} · saved on this phone</Text>
+          <Text style={s.copy}>{q.error ?? 'It uploads by itself as soon as you have signal. You can close the app.'}</Text>
+          <View style={s.actions}>
+            {q.error ? <Button label="Try again" size="sm" variant="outline" onPress={() => retryQueued(q.id).then(onChange)} /> : null}
+            <Button label="Discard" size="sm" variant="ghost" onPress={() => discardQueued(q.id)} />
+          </View>
+        </Card>
+      ))}
 
       <View style={s.head}>
         <Text style={s.title}>Your listings</Text>
@@ -99,5 +116,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   segText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
+  queued: { gap: 8 },
+  actions: { flexDirection: 'row' as const, gap: 8 },
   emptyCard: { alignItems: 'center' as const, gap: 8, paddingVertical: 28 },
 });

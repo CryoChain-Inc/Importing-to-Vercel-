@@ -3,7 +3,8 @@ import { Text, View } from 'react-native';
 import { Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner, Skeleton } from '../../../components/feedback';
 import type { PickedImage } from '../../../services/catalogueImage';
-import { createListing, estimateListing, GRADES, MIN_PHOTOS, type Estimate } from '../../../services/farmer.service';
+import { estimateListing, GRADES, MIN_PHOTOS, type Estimate } from '../../../services/farmer.service';
+import { enqueueListing } from '../../../services/listingOutbox';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { useProductOptions } from '../useProductOptions';
@@ -50,7 +51,7 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
     setBusy(true);
     setError(null);
     try {
-      await createListing(chosen, weightKg, grade, photos);
+      await enqueueListing(chosen, weightKg, grade, photos);
       setWeight('');
       setPhotos([]);
       await onCreated();

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { AppState, Text, View } from 'react-native';
 import { Badge, Button, type IconName } from '../../../components/common';
 import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { composeAddress } from '../../../services/maps.service';
 import { authService } from '../../../services/auth.service';
+import { flushOutbox, queuedCount } from '../../../services/listingOutbox';
 import { detailsDone, fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
@@ -54,9 +55,22 @@ export function FarmerHome({ account }: { account: Account }) {
     }
   }, [refreshAccount]);
 
+  // Uploads listings saved while offline, then reloads so they appear as real listings.
+  const sync = useCallback(async () => {
+    if (queuedCount() > 0 && (await flushOutbox()) > 0) await load();
+  }, [load]);
+  const refresh = useCallback(async () => {
+    await load();
+    await sync();
+  }, [load, sync]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    sync();
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && sync());
+    const timer = setInterval(sync, 20000);
+    return () => { sub.remove(); clearInterval(timer); };
+  }, [load, sync]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -101,14 +115,14 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={load} />
+              <ProduceListings listings={listings} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={refresh} />
             </>
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
           {tab === 'payments' ? <EarningsPanel sales={sales} farmer={farmer} onWallet={() => setup('wallet')} /> : null}
           {tab === 'profile' ? (
             <>
-              <FarmerProfileCard name={account.name} phone={account.phone} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} />
+              <FarmerProfileCard name={account.name} phone={account.phone} email={account.email} farmer={farmer} editing={editing} onEdit={setEditing} onSaved={load} onSignOut={signOut} />
               <AccountFooter onDeleted={() => reset({ name: 'landing' })} />
             </>
           ) : null}

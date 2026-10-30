@@ -6,6 +6,7 @@ import { detailsDone, hasWallet, saveDetails, saveWallet, type Farmer, type Farm
 import { composeAddress } from '../../../services/maps.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
+import { SignInCard } from '../../auth/components/SignInCard';
 import { detailsReady, walletReady } from '../validation';
 import { DetailsForm } from './DetailsForm';
 import { WalletForm } from './WalletForm';
@@ -16,6 +17,7 @@ type Section = 'details' | 'wallet';
 export function FarmerProfileCard({
   name,
   phone,
+  email,
   farmer,
   editing,
   onEdit,
@@ -24,6 +26,7 @@ export function FarmerProfileCard({
 }: {
   name: string;
   phone?: string;
+  email?: string;
   farmer: Farmer;
   editing: Section | null;
   onEdit: (s: Section | null) => void;
@@ -149,6 +152,7 @@ export function FarmerProfileCard({
           </View>
         )}
       </Card>
+      <SignInCard phone={phone ?? ''} email={email ?? ''} onRefresh={onSaved} />
       <Button label="Sign out" variant="ghost" icon="logOut" onPress={onSignOut} style={s.signOut} />
     </View>
   );
