@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useScrollTo } from '../../../components/layout';
-import { Badge, Button, Card, HeroCard, Icon, Input, ProfileChecklist } from '../../../components/common';
+import { Badge, Button, Card, HeroCard, Input, ProfileChecklist } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { saveBuyerDetails, type BuyerDetails } from '../../../services/buyer.service';
-import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { BUYER_NAME_MAX, NAME_MAX, formatPhone } from '../../../utils/format';
-import { ChangeContact } from '../../auth/components/ChangeContact';
-import { PhoneChange } from '../../auth/components/PhoneChange';
+import { SignInCard } from '../../auth/components/SignInCard';
 import { useAction } from '../../ops/components/useAction';
 import { BuyerAddresses } from './BuyerAddresses';
 
@@ -20,9 +19,8 @@ const initials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0
 /** Account tab: completion checklist, business details, address book and sign-in contacts. */
 export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; onRefresh: () => Promise<void> }) {
   const s = useThemedStyles(styles);
-  const { colors } = useTheme();
-  const { busy, error, run } = useAction(onRefresh);
-  const [editing, setEditing] = useState<'business' | 'email' | 'phone' | null>(null);
+    const { busy, error, run } = useAction(onRefresh);
+  const [editing, setEditing] = useState<'business' | null>(null);
   const [adding, setAdding] = useState(false);
   const scrollTo = useScrollTo();
   const businessRef = useRef<View>(null);
@@ -95,33 +93,7 @@ export function BuyerAccount({ details, onRefresh }: { details: BuyerDetails; on
         <BuyerAddresses addresses={details.addresses} adding={adding} onAdding={setAdding} onRefresh={onRefresh} />
       </View>
 
-      <Card style={s.card}>
-        <Text style={s.title}>Sign-in</Text>
-        <Text style={s.contactHint}>Your phone number is what you sign in with.</Text>
-        <View style={s.contact}>
-          <View style={s.contactIcon}><Icon name="phone" size={18} color={colors.brandInk} /></View>
-          <View style={s.contactText}>
-            <Text style={s.contactValue} numberOfLines={1}>{details.phone ? formatPhone(details.phone) : 'No phone number'}</Text>
-            {details.phone ? <View style={s.badge}><Badge label="Verified" tone="success" /></View> : null}
-          </View>
-          {editing === 'phone' ? null : <Button label={details.phone ? 'Change' : 'Add'} variant="ghost" size="sm" onPress={() => setEditing('phone')} />}
-        </View>
-        {editing === 'phone' ? (
-          <PhoneChange current={details.phone} onDone={async () => { setEditing(null); await onRefresh(); }} onCancel={() => setEditing(null)} />
-        ) : null}
-        <View style={s.contact}>
-          <View style={s.contactIcon}><Icon name="mail" size={18} color={colors.brandInk} /></View>
-          <View style={s.contactText}>
-            <Text style={s.contactValue} numberOfLines={1} ellipsizeMode="middle">{details.email || 'No email yet'}</Text>
-            {details.email ? <View style={s.badge}><Badge label="Verified" tone="success" /></View> : null}
-          </View>
-          {editing === 'email' ? null : <Button label={details.email ? 'Change' : 'Add'} variant="ghost" size="sm" onPress={() => setEditing('email')} />}
-        </View>
-        {editing === 'email' ? (
-          <ChangeContact current={details.email}
-            onDone={async () => { setEditing(null); await onRefresh(); }} onCancel={() => setEditing(null)} />
-        ) : null}
-      </Card>
+      <SignInCard phone={details.phone} email={details.email} onRefresh={onRefresh} />
     </View>
   );
 }
@@ -154,10 +126,4 @@ const styles = (c: Record<ColorToken, string>) => ({
   label: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
   value: { flex: 1, textAlign: 'right' as const, fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
   valueEmpty: { color: c.inkMuted },
-  contact: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  contactIcon: { flexShrink: 0, width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
-  contactText: { flex: 1, minWidth: 0, gap: 4 },
-  badge: { alignSelf: 'flex-start' as const },
-  contactValue: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },
-  contactHint: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { Image, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
-import { produceImageUrl, type ProduceListing } from '../../../services/farmer.service';
+import { produceImageUrl, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { EditListing } from './EditListing';
 
 const kgText = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
-export function ListingCard({ listing: l, onRemove, onSaved }: { listing: ProduceListing; onRemove?: (id: string) => void; onSaved: () => Promise<void> }) {
+export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { listing: ProduceListing; /** This listing's orders. */ sales?: Sale[]; onRemove?: (id: string) => void; onSaved: () => Promise<void> }) {
   const [editing, setEditing] = useState(false);
+  const [history, setHistory] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const photo = l.imagePaths[0];
   const pct = (kg: number) => `${Math.min(100, (kg / l.weightKg) * 100)}%` as const;
   const soldOut = l.remainingKg <= 0;
+  const toCollect = sales.filter((x) => x.status === 'awaiting_delivery').length;
   if (editing) return <Card style={s.card}><EditListing listing={l} onDone={() => setEditing(false)} onSaved={onSaved} /></Card>;
   return (
     <Card style={s.card}>
@@ -27,7 +30,7 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
             <Text style={s.product} numberOfLines={1}>{l.product}</Text>
             <Badge label={`Grade ${l.grade}`} tone="success" />
           </View>
-          <Text style={s.meta}>{kgText(l.weightKg)} listed</Text>
+          <Text style={s.meta}>{kgText(l.weightKg)} listed · {new Date(l.createdAt).toLocaleDateString('en-GH', { day: 'numeric', month: 'short' })}</Text>
         </View>
       </View>
 
@@ -42,11 +45,14 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
           <Stat label="Left" value={kgText(l.remainingKg)} s={s} strong />
         </View>
       </View>
+      <Text style={s.meta}>
+        {sales.length === 0 ? 'No orders yet.' : `${sales.length} ${sales.length === 1 ? 'order' : 'orders'} · ${toCollect} to collect · ${sales.length - toCollect} delivered`}
+      </Text>
       {l.withdrawnKg > 0 ? <Text style={s.meta}>{kgText(l.withdrawnKg)} came off this listing after an offer was declined or lapsed.</Text> : null}
 
       <View style={s.foot}>
         <View style={s.footText}>
-          <Text style={s.status}>{soldOut ? 'Sold out' : l.soldKg > 0 ? 'Part sold' : 'Waiting for a buyer'}</Text>
+          <Badge label={soldOut ? 'Sold out' : l.soldKg > 0 ? 'Part sold' : 'Waiting for a buyer'} tone={soldOut ? 'success' : l.soldKg > 0 ? 'info' : 'warning'} />
         </View>
         <View style={s.money}>
           {l.earned > 0 ? (
@@ -63,13 +69,35 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
         </View>
       </View>
 
+      {history ? (
+        <View style={s.history}>
+          {sales.map((x) => (
+            <View key={x.id} style={s.sale}>
+              <View style={s.footText}>
+                <Text style={s.status}>{kgText(x.kg)} · {ghs(x.amount)}</Text>
+                <Text style={s.meta}>{new Date(x.createdAt).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' })} · {ghs(x.pricePerKg)}/kg</Text>
+              </View>
+              <Badge label={x.status === 'paid' ? 'Paid' : x.status === 'payable' ? 'Delivered' : 'To collect'} tone={x.status === 'paid' ? 'success' : 'warning'} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       <View style={s.actions}>
         {l.deliveredKg > 0 ? (
           <Text style={s.meta}>This produce has been delivered, so the listing can no longer be changed.</Text>
         ) : (
           <Button label="Edit" variant="tonal" size="sm" icon="edit" onPress={() => setEditing(true)} />
         )}
-        {onRemove && l.soldKg + l.withdrawnKg === 0 ? <Button label="Remove" variant="ghost" size="sm" onPress={() => onRemove(l.id)} /> : null}
+        {onRemove && sales.length === 0 && l.soldKg + l.withdrawnKg === 0 ? (
+          confirm ? (
+            <>
+              <Button label="Remove listing" variant="danger" size="sm" onPress={() => onRemove(l.id)} />
+              <Button label="Keep" variant="ghost" size="sm" onPress={() => setConfirm(false)} />
+            </>
+          ) : <Button label="Remove" variant="ghost" size="sm" onPress={() => setConfirm(true)} />
+        ) : null}
+        {sales.length > 0 ? <Button label={history ? 'Hide sales' : `Sales history (${sales.length})`} variant="ghost" size="sm" onPress={() => setHistory(!history)} /> : null}
       </View>
     </Card>
   );
@@ -107,5 +135,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   status: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink },
   money: { alignItems: 'flex-end' as const, gap: 2 },
   amount: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink, fontVariant: ['tabular-nums' as const] },
-  actions: { flexDirection: 'row' as const, gap: 8 },
+  actions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  history: { gap: 4 },
+  sale: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: c.borderSubtle },
 });

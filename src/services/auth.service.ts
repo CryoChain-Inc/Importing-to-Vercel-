@@ -1,5 +1,6 @@
 import { markCodeSent } from '../utils/codeTimer';
 import { isEmail, normalizePhone } from '../utils/format';
+import { clearOfflineCache } from './offlineCache';
 import { supabase } from './supabase';
 
 export type UserRole = 'pending' | 'farmer' | 'buyer' | 'agent' | 'driver' | 'ops';
@@ -88,5 +89,8 @@ export const authService = {
     throw new Error(body?.error ?? 'Could not delete the account. Please try again.');
   },
 
-  signOut: () => supabase.auth.signOut(),
+  signOut: async () => {
+    await clearOfflineCache().catch(() => undefined);
+    return supabase.auth.signOut();
+  },
 };
