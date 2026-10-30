@@ -1,3 +1,5 @@
+import { File } from 'expo-file-system';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const BUCKET = 'catalogue';
@@ -12,6 +14,10 @@ export interface PickedImage {
   fingerprint?: string | null;
 }
 
+/** File bytes. fetch() on a file:// URI can return an empty body on Android, so the phone reads the file directly. */
+export const readBytes = async (uri: string): Promise<ArrayBuffer> =>
+  Platform.OS === 'web' ? (await fetch(uri)).arrayBuffer() : new File(uri).arrayBuffer();
+
 /** True when both picks are the same picture: the same library item, or the same file bytes. */
 export function samePhoto(a: PickedImage, b: PickedImage): boolean {
   if (a.uri && a.uri === b.uri) return true;
@@ -23,7 +29,7 @@ export function samePhoto(a: PickedImage, b: PickedImage): boolean {
 /** Content hash used to spot a repeated upload. Falls back to a checksum when SHA-256 is unavailable. */
 export async function imageFingerprint(uri: string): Promise<string | null> {
   try {
-    const body = await (await fetch(uri)).arrayBuffer();
+    const body = await readBytes(uri);
     // Android can hand back an empty body for a file URI. Every empty body hashes the same, so it would flag different photos as duplicates.
     if (body.byteLength === 0) return null;
     const subtle = globalThis.crypto?.subtle;
@@ -55,7 +61,7 @@ export async function replaceImage(kind: 'categories' | 'products', id: string, 
   const type = img.mimeType ?? 'image/jpeg';
   const ext = EXT[type];
   if (!ext) throw new Error('Use a JPEG, PNG or WebP image.');
-  const body = await (await fetch(img.uri)).arrayBuffer();
+  const body = await readBytes(img.uri);
   const path = `${kind}/${id}/${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, body, { contentType: type });
   if (error) throw new Error('Could not upload the image (max 2 MB).');

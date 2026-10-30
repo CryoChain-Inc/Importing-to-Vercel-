@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
-import { samePhoto, type PickedImage } from './catalogueImage';
+import { readBytes, samePhoto, type PickedImage } from './catalogueImage';
 import { MIN_PHOTOS } from './farmer.service';
 import { isNetworkError } from './offlineCache';
 import { requireUserId, supabase } from './supabase';
@@ -100,7 +100,8 @@ async function upload(item: QueuedListing): Promise<string[]> {
   const paths: string[] = [];
   for (const [i, p] of item.photos.entries()) {
     const path = `${item.farmerId}/${item.id}-${i}.${EXT[p.mimeType]}`;
-    const body = await (await fetch(p.uri)).arrayBuffer();
+    const body = await readBytes(p.uri);
+    if (body.byteLength === 0) throw new Error('A photo could not be read. Pick it again.');
     const { error } = await supabase.storage.from(BUCKET).upload(path, body, { contentType: p.mimeType });
     // Already there from an earlier attempt that lost its reply.
     if (error && !/already exists|duplicate/i.test(error.message)) throw error;

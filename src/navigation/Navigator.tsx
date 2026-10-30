@@ -12,6 +12,7 @@ export type Route =
   | { name: 'verify'; identifier: string; kind: 'otp' }
   | { name: 'role'; identifier: string }
   | { name: 'workspace'; account: Account }
+  | { name: 'produce'; account: Account; product: string }
   | { name: 'home'; account: Account; role: Role; tab?: string };
 
 interface Nav {
@@ -37,7 +38,7 @@ const START: Route = !isWeb
       : window.location.pathname === '/payment/verify' && paymentReturnReference(window.location.href)
         ? { name: 'paymentResult', reference: paymentReturnReference(window.location.href)! }
         : { name: 'landing' };
-const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', emailVerified: '/email-verified', paymentResult: '/payment/verify', verify: '/verify', role: '/role', workspace: '/workspace', home: '/home' };
+const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', emailVerified: '/email-verified', paymentResult: '/payment/verify', verify: '/verify', role: '/role', workspace: '/workspace', produce: '/produce', home: '/home' };
 /** The ops console owns its URL (/ops/<section>?page=2), so entering it, or reloading on a deep link, keeps the address as is. */
 const pathFor = (r: Route) => (r.name === 'home' && r.role === 'ops' ? window.location.pathname + window.location.search : PATH[r.name]);
 
