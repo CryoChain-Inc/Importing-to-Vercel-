@@ -88,15 +88,30 @@ export interface DriverRoute {
   seenAt: string | null;
   lat: number | null;
   lng: number | null;
-  stops: { id: string; kind: 'pickup' | 'dropoff'; label: string; seq: number | null; state: 'pending' | 'done'; order: string }[];
+  stops: { id: string; kind: 'pickup' | 'dropoff'; label: string; seq: number | null; state: 'pending' | 'done'; order: string; reading: string | null }[];
 }
 
+const readingOf = (h: any): string | null => {
+  const row = Array.isArray(h) ? h[0] : h;
+  if (!row) return null;
+  const parts = [
+    row.recorded_kg != null ? `${Number(row.recorded_kg)} kg` : '',
+    row.grade ? `grade ${row.grade}` : '',
+    row.temperature_c != null ? `${Number(row.temperature_c)}°C` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+};
+
 export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
-  const [d, s] = await Promise.all([
-    supabase.from('drivers').select('id, plate_number, vehicle_type, profiles(display_name, phone), driver_locations(lat, lng, updated_at)'),
-    supabase.from('delivery_stops').select('id, driver_id, kind, label, seq, state, orders(code)').not('driver_id', 'is', null).order('seq', { nullsFirst: false }),
-  ]);
-  fail('Could not load drivers.')(d.error ?? s.error);
+  const drivers = supabase.from('drivers').select('id, plate_number, vehicle_type, profiles(display_name, phone), driver_locations(lat, lng, updated_at)');
+  const withReading = 'id, driver_id, kind, label, seq, state, orders(code), delivery_handovers(recorded_kg, grade, temperature_c)';
+  type StopQuery = { data: any[] | null; error: { message: string } | null };
+  let stops = await supabase.from('delivery_stops').select(withReading).not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
+  if (stops.error && /delivery_handovers|relationship|schema cache/i.test(stops.error.message)) {
+    stops = await supabase.from('delivery_stops').select('id, driver_id, kind, label, seq, state, orders(code)').not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
+  }
+  const d = await drivers;
+  fail('Could not load drivers.')(d.error ?? stops.error);
   return (d.data ?? []).map((r: any) => {
     const loc = Array.isArray(r.driver_locations) ? r.driver_locations[0] : r.driver_locations;
     return {
@@ -107,8 +122,8 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
       seenAt: loc?.updated_at ?? null,
       lat: loc ? Number(loc.lat) : null,
       lng: loc ? Number(loc.lng) : null,
-      stops: (s.data ?? []).filter((x: any) => x.driver_id === r.id)
-        .map((x: any) => ({ id: x.id, kind: x.kind, label: x.label, seq: x.seq, state: x.state, order: x.orders?.code ?? '' })),
+      stops: (stops.data ?? []).filter((x: any) => x.driver_id === r.id)
+        .map((x: any) => ({ id: x.id, kind: x.kind, label: x.label, seq: x.seq, state: x.state, order: x.orders?.code ?? '', reading: readingOf(x.delivery_handovers) })),
     };
   });
 }
