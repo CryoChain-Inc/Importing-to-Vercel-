@@ -8,7 +8,7 @@ import { FarmerHome } from '../farmer/screens/FarmerHome';
 /** Role workspace after sign-in. */
 export function HomeScreen({ account, role, tab }: { account: Account; role: Role; tab?: string }) {
   if (role === 'farmer') return <FarmerHome account={account} tab={tab} />;
-  if (role === 'buyer') return <BuyerHome account={account} tab={tab} />;
+  if (role === 'buyer') return <BuyerHome tab={tab} />;
   if (role === 'ops') return <OpsHome account={account} />;
   return <DriverHome account={account} />;
 }
