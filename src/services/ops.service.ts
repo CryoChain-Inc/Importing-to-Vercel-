@@ -1,4 +1,5 @@
 import { normalizePhone } from '../utils/format';
+import { GRADES, gradeOrderError, type Grade } from '../utils/gradeOrder';
 import { likeTerm, pageRange, type Paged } from './paging';
 import { removeStoredImage, replaceImage, type PickedImage } from './catalogueImage';
 import { supabase } from './supabase';
@@ -65,11 +66,9 @@ export interface PriceRow {
 export interface OpsConfig {
   minTemp: string;
   maxTemp: string;
-  payoutThreshold: string;
-  bankName: string;
-  accountName: string;
-  accountNumber: string;
   supportPhone: string;
+  supportEmail: string;
+  updatedAt: string;
 }
 
 const fail = (msg: string) => (error: unknown) => {
@@ -159,24 +158,40 @@ export async function fetchSupplyPage(page: number): Promise<Paged<SupplyRow>> {
   return { rows: (data ?? []).map((r) => toSupply(r, left)), total: count ?? 0 };
 }
 
-export async function fetchCatalogue(): Promise<{ categories: Category[]; products: Product[]; prices: PriceRow[] }> {
-  const [k, p, c, b] = await Promise.all([
-    supabase.from('categories').select('id, name, image_path, active').order('created_at', { ascending: false }),
-    supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)').order('updated_at', { ascending: false }),
-    supabase.from('crop_prices').select('product_id, grade, price, prev_price'),
-    supabase.from('buyer_prices').select('product_id, grade, price, prev_price'),
-  ]);
-  fail('Could not load prices.')(k.error ?? p.error ?? c.error ?? b.error);
-  const rows = (kind: PriceKind, d: typeof c.data): PriceRow[] => (d ?? []).map((r) => ({
+export async function fetchCategories(): Promise<Category[]> {
+  const { data, error } = await supabase.from('categories').select('id, name, image_path, active').order('created_at', { ascending: false });
+  fail('Could not load categories.')(error);
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active }));
+}
+
+export type PricedProduct = Product & { prices: PriceRow[] };
+
+/** One page of products (newest edit first) with their farmer and buyer prices, filtered by name and category. */
+export async function fetchProductsPage(page: number, q: string, categoryId = ''): Promise<Paged<PricedProduct>> {
+  const [from, to] = pageRange(page);
+  let query = supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)', { count: 'exact' });
+  if (q.trim()) query = query.ilike('name', likeTerm(q));
+  if (categoryId) query = query.eq('category_id', categoryId);
+  const { data, error, count } = await query.order('updated_at', { ascending: false }).order('id').range(from, to);
+  fail('Could not load products.')(error);
+  const ids = (data ?? []).map((r: any) => r.id as string);
+  const [c, b] = ids.length
+    ? await Promise.all([
+        supabase.from('crop_prices').select('product_id, grade, price, prev_price').in('product_id', ids),
+        supabase.from('buyer_prices').select('product_id, grade, price, prev_price').in('product_id', ids),
+      ])
+    : [null, null];
+  fail('Could not load prices.')(c?.error ?? b?.error);
+  const rows = (kind: PriceKind, d: NonNullable<typeof c>['data']): PriceRow[] => (d ?? []).map((r) => ({
     kind,
     productId: r.product_id,
     grade: r.grade,
     price: Number(r.price),
     prevPrice: r.prev_price == null ? null : Number(r.prev_price),
   }));
+  const prices = [...rows('farmer', c?.data ?? null), ...rows('buyer', b?.data ?? null)];
   return {
-    categories: (k.data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active })),
-    products: (p.data ?? []).map((r: any) => ({
+    rows: (data ?? []).map((r: any) => ({
       id: r.id,
       name: r.name,
       categoryId: r.category_id,
@@ -185,8 +200,9 @@ export async function fetchCatalogue(): Promise<{ categories: Category[]; produc
       imagePaths: r.image_paths ?? [],
       description: r.description ?? '',
       active: r.active,
+      prices: prices.filter((p) => p.productId === r.id),
     })),
-    prices: [...rows('farmer', c.data), ...rows('buyer', b.data)],
+    total: count ?? 0,
   };
 }
 
@@ -247,17 +263,20 @@ export async function saveProduct(p: ProductInput & { description: string; galle
   await Promise.all(dropped.map(removeStoredImage));
 }
 
-/** prev_price is set by a database trigger when the price changes. */
-export async function setPrice(kind: PriceKind, productId: string, grade: string, price: number): Promise<void> {
-  const { error } = await supabase
-    .from(PRICE_TABLE[kind])
-    .upsert({ product_id: productId, grade, price }, { onConflict: 'product_id,grade' });
-  fail('Could not save the price.')(error);
+/** Saves one kind of a product's prices (prev_price is set by a database trigger): a number sets the grade, null clears it. Grade order is checked here and again by the database. */
+export async function savePrices(productId: string, kind: PriceKind, prices: Record<Grade, number | null>): Promise<void> {
+  const bad = gradeOrderError(prices);
+  if (bad) throw new Error(bad);
+  const table = PRICE_TABLE[kind];
+  const rows = GRADES.flatMap((grade) => (prices[grade] != null ? [{ product_id: productId, grade, price: prices[grade] }] : []));
+  const cleared = GRADES.filter((g) => prices[g] == null);
+  if (rows.length) fail('Could not save the prices.')((await supabase.from(table).upsert(rows, { onConflict: 'product_id,grade' })).error);
+  if (cleared.length) fail('Could not clear a price.')((await supabase.from(table).delete().eq('product_id', productId).in('grade', cleared)).error);
 }
 
-export async function deletePrice(kind: PriceKind, productId: string, grade: string): Promise<void> {
-  const { error } = await supabase.from(PRICE_TABLE[kind]).delete().eq('product_id', productId).eq('grade', grade);
-  fail('Could not remove the price.')(error);
+/** Show or hide a category or product in the public catalogue. */
+export async function setVisibility(table: 'categories' | 'products', id: string, active: boolean): Promise<void> {
+  fail('Could not change visibility.')((await supabase.from(table).update({ active }).eq('id', id)).error);
 }
 
 export async function fetchConfig(): Promise<OpsConfig> {
@@ -267,11 +286,9 @@ export async function fetchConfig(): Promise<OpsConfig> {
   return {
     minTemp: s(data!.min_temp_c),
     maxTemp: s(data!.max_temp_c),
-    payoutThreshold: s(data!.payout_threshold_ghs),
-    bankName: s(data!.transfer_bank_name),
-    accountName: s(data!.transfer_account_name),
-    accountNumber: s(data!.transfer_account_number),
     supportPhone: s(data!.support_phone),
+    supportEmail: s(data!.support_email),
+    updatedAt: s(data!.updated_at),
   };
 }
 
@@ -283,15 +300,12 @@ export async function saveConfig(c: OpsConfig): Promise<void> {
     .update({
       min_temp_c: num(c.minTemp),
       max_temp_c: num(c.maxTemp),
-      payout_threshold_ghs: num(c.payoutThreshold),
-      transfer_bank_name: txt(c.bankName),
-      transfer_account_name: txt(c.accountName),
-      transfer_account_number: txt(c.accountNumber),
       support_phone: c.supportPhone.trim() ? normalizePhone(c.supportPhone) : null,
+      support_email: txt(c.supportEmail),
       updated_at: new Date().toISOString(),
     })
     .eq('id', true);
-  fail('Could not save settings (min temp must be below max; account number is digits only).')(error);
+  fail('Could not save settings (min temp must be below max).')(error);
 }
 
 export type StaffRole = 'driver' | 'ops';

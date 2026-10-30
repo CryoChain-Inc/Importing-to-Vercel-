@@ -37,7 +37,6 @@ export interface ProduceListing {
   /** Kg the farmer listed. */
   weightKg: number;
   createdAt: string;
-  point: string;
   grade: string;
   imagePaths: string[];
   estNet: number | null;
@@ -61,17 +60,17 @@ export interface Estimate {
   net: number;
 }
 
-const PRODUCE_BUCKET = 'produce';
-export const GRADES = ['A', 'B', 'C'];
-export const MIN_PHOTOS = 3;
-export const MAX_PHOTOS = 6;
-export const produceImageUrl = (path: string) => supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
-
 export interface CollectionPoint {
   id: string;
   name: string;
   address: string | null;
 }
+
+const PRODUCE_BUCKET = 'produce';
+export const GRADES = ['A', 'B', 'C'];
+export const MIN_PHOTOS = 3;
+export const MAX_PHOTOS = 6;
+export const produceImageUrl = (path: string) => supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
 
 const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, profiles(display_name, phone)';
 
@@ -149,7 +148,7 @@ export async function fetchListings(): Promise<ProduceListing[]> {
   const [listed, stock] = await Promise.all([
     supabase
       .from('produce_listings')
-      .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee, collection_points(name)')
+      .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee')
       .order('created_at', { ascending: false }),
     supabase.from('listing_stock').select('listing_id, sold_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out'),
   ]);
@@ -162,7 +161,6 @@ export async function fetchListings(): Promise<ProduceListing[]> {
       product: row.product,
       weightKg: Number(row.weight_kg),
       createdAt: row.created_at,
-      point: row.collection_points?.name ?? '',
       grade: row.grade,
       imagePaths: row.image_paths ?? [],
       estNet: row.est_net == null ? null : Number(row.est_net),
@@ -211,12 +209,6 @@ export async function fetchSales(): Promise<Sale[]> {
     deliveredAt: r.delivered_at,
     paidAt: r.paid_at,
   }));
-}
-
-export async function fetchCollectionPoints(): Promise<CollectionPoint[]> {
-  const { data, error } = await supabase.from('collection_points').select('id, name, address').eq('active', true).order('name');
-  if (error) throw new Error('Could not load collection points.');
-  return data ?? [];
 }
 
 export async function fetchProductNames(): Promise<string[]> {
@@ -275,7 +267,7 @@ async function uploadPhotos(farmerId: string, images: PickedImage[]): Promise<st
   return paths;
 }
 
-export async function createListing(pointId: string, product: string, weightKg: number, grade: string, images: PickedImage[]): Promise<void> {
+export async function createListing(product: string, weightKg: number, grade: string, images: PickedImage[]): Promise<void> {
   if (images.length < MIN_PHOTOS) throw new Error(`Add at least ${MIN_PHOTOS} photos.`);
   if (images.some((img, i) => images.slice(0, i).some((earlier) => samePhoto(earlier, img)))) {
     throw new Error('Each photo has to be a different picture.');
@@ -284,10 +276,10 @@ export async function createListing(pointId: string, product: string, weightKg: 
   const paths = await uploadPhotos(farmerId, images);
   const { error } = await supabase
     .from('produce_listings')
-    .insert({ farmer_id: farmerId, collection_point_id: pointId, product: product.trim(), weight_kg: weightKg, grade, image_paths: paths });
+    .insert({ farmer_id: farmerId, product: product.trim(), weight_kg: weightKg, grade, image_paths: paths });
   if (error) {
     await supabase.storage.from(PRODUCE_BUCKET).remove(paths);
-    throw new Error('Could not add the listing. Check your farm address and MoMo wallet, that the collection point is active and that the product has a published price.');
+    throw new Error('Could not add the listing. Check your farm address and MoMo wallet, and that the product has a published price.');
   }
 }
 
@@ -354,29 +346,21 @@ export interface Offer {
   /** What CryoChain pays this farmer for the allocation. */
   amount: number;
   status: 'offered' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'collected';
-  expiresAt: string;
+  /** When CryoChain collects it from the farm. */
+  pickupAt: string | null;
   createdAt: string;
 }
 
-/** Orders CryoChain wants to buy from this farmer. The buyer is never shown. */
+/** Pickups CryoChain has scheduled with this farmer. The buyer is never shown. */
 export async function fetchOffers(): Promise<Offer[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, grade, kg, amount, status, expires_at, created_at, products(name)')
+    .select('id, grade, kg, amount, status, pickup_at, created_at, products(name)')
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) throw new Error('Could not load your orders.');
   return (data ?? []).map((r: any) => ({
     id: r.id, product: r.products?.name ?? '', grade: r.grade, kg: Number(r.kg), amount: Number(r.amount),
-    status: r.status, expiresAt: r.expires_at, createdAt: r.created_at,
+    status: r.status, pickupAt: r.pickup_at, createdAt: r.created_at,
   }));
-}
-
-export async function respondToOffer(id: string, accept: boolean): Promise<void> {
-  const { error } = await supabase.rpc('respond_allocation', { p_id: id, p_accept: accept });
-  if (error?.message.includes('offer expired')) throw new Error('This offer has expired.');
-  if (error?.message.includes('offer not available')) throw new Error('This offer is no longer open.');
-  if (error) throw new Error('Could not send your answer. Please try again.');
-  // A decline re-allocates to another farmer, who needs their SMS now.
-  if (!accept) await supabase.functions.invoke('dispatch-sms').catch(() => undefined);
 }

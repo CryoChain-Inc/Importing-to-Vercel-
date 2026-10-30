@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "CryoChain",
+    "scheme": "cryochain",
     "slug": "cryochain-mobile",
     "version": "1.0.0",
     "orientation": "portrait",

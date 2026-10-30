@@ -11,10 +11,12 @@ interface Props {
   value: string;
   onChangeText: (v: string) => void;
   onSubmitEditing?: () => void;
+  label?: string;
+  error?: string;
 }
 
 /** Country-code picker (bottom sheet on phones, dialog on wide screens) plus the national number. */
-export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEditing }: Props) {
+export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEditing, label = 'Mobile number', error }: Props) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const wide = useIsWide();
@@ -32,8 +34,8 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
 
   return (
     <View style={s.container}>
-      <Text style={s.label}>Mobile number</Text>
-      <View style={[s.field, focused && s.focused]}>
+      <Text style={s.label}>{label}</Text>
+      <View style={[s.field, focused && s.focused, error ? s.errored : null]}>
         <Pressable
           onPress={() => setOpen(true)}
           accessibilityRole="button"
@@ -53,11 +55,13 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
           onSubmitEditing={onSubmitEditing}
           keyboardType="phone-pad"
           autoComplete="tel-national"
-          accessibilityLabel="Mobile number"
+          accessibilityLabel={label}
+          maxLength={15}
           placeholder={country.iso === 'GH' ? '24 123 4567' : 'Phone number'}
           placeholderTextColor={colors.inkMuted}
         />
       </View>
+      {error ? <Text style={s.error}>{error}</Text> : null}
 
       <Modal visible={open} transparent animationType={wide ? 'fade' : 'slide'} onRequestClose={close}>
         <KeyboardAvoidingView style={[s.overlay, wide && s.overlayWide]} behavior="padding">
@@ -117,6 +121,8 @@ const styles = (c: Record<ColorToken, string>) => ({
     backgroundColor: c.surfaceSunken,
   },
   focused: { borderColor: c.focusRing, backgroundColor: c.surfaceCard },
+  errored: { borderColor: c.dangerInk },
+  error: { fontFamily: fonts.sansRegular, fontSize: 12, color: c.dangerInk },
   code: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

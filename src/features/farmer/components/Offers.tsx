@@ -1,22 +1,18 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
-import { fetchOffers, respondToOffer, type Offer } from '../../../services/farmer.service';
+import { Badge, Card } from '../../../components/common';
+import { fetchOffers, type Offer } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-import { useAction } from '../../ops/components/useAction';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const TONE = { offered: 'warning', accepted: 'success', collected: 'success', declined: 'neutral', expired: 'neutral', cancelled: 'neutral' } as const;
-const LABEL = { offered: 'Waiting for you', accepted: 'Accepted', collected: 'Collected', declined: 'Declined', expired: 'Expired', cancelled: 'Cancelled' } as const;
+const TONE = { offered: 'success', accepted: 'success', collected: 'success', declined: 'neutral', expired: 'neutral', cancelled: 'neutral' } as const;
+const LABEL = { offered: 'Scheduled', accepted: 'Scheduled', collected: 'Collected', declined: 'Declined', expired: 'Expired', cancelled: 'Cancelled' } as const;
 
-/** Orders CryoChain wants from this farmer: how many kg, what it pays, and accept or decline. No buyer details. */
+/** Pickups CryoChain has scheduled with this farmer: how many kg, when, and what it pays. No buyer details. */
 export function Offers() {
   const s = useThemedStyles(styles);
   const [offers, setOffers] = useState<Offer[] | null>(null);
-  const load = useCallback(async () => { setOffers(await fetchOffers().catch(() => [])); }, []);
-  const { busy, error, run } = useAction(load);
 
   useEffect(() => {
     let live = true;
@@ -27,22 +23,17 @@ export function Offers() {
   }, []);
 
   if (!offers || offers.length === 0) return null;
-  const open = offers.filter((o) => o.status === 'offered' && new Date(o.expiresAt) > new Date());
+  const open = offers.filter((o) => o.status === 'accepted' && o.pickupAt);
   const rest = offers.filter((o) => !open.includes(o)).slice(0, 5);
 
   return (
     <View style={s.list}>
-      <Text style={s.title}>Orders for your produce</Text>
-      {error ? <Banner text={error} /> : null}
+      <Text style={s.title}>Scheduled pickups</Text>
       {open.map((o) => (
         <Card key={o.id} tone="tint" style={s.item}>
           <Text style={s.name}>{o.kg.toLocaleString('en-GH')} kg {o.product} · Grade {o.grade}</Text>
           <Text style={s.pay}>{ghs(o.amount)}</Text>
-          <Text style={s.meta}>You earn this when the produce is collected. Answer by {when(o.expiresAt)}.</Text>
-          <View style={s.actions}>
-            <Button label="Accept" loading={busy} onPress={() => run(() => respondToOffer(o.id, true))} style={s.grow} />
-            <Button label="Decline" variant="outline" disabled={busy} onPress={() => run(() => respondToOffer(o.id, false))} style={s.grow} />
-          </View>
+          <Text style={s.meta}>Pickup {when(o.pickupAt!)}. You earn this when the produce is collected.</Text>
         </Card>
       ))}
       {rest.map((o) => (
@@ -63,7 +54,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   item: { gap: 8 },
   row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   grow: { flex: 1 },
-  actions: { flexDirection: 'row' as const, gap: 10 },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   pay: { fontFamily: fonts.heading, fontSize: 26, color: c.ink, fontVariant: ['tabular-nums' as const] },

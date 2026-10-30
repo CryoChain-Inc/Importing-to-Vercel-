@@ -27,7 +27,7 @@ export function ListingCard({ listing: l, onRemove, onSaved }: { listing: Produc
             <Text style={s.product} numberOfLines={1}>{l.product}</Text>
             <Badge label={`Grade ${l.grade}`} tone="success" />
           </View>
-          <Text style={s.meta}>{kgText(l.weightKg)} listed{l.point ? ` · ${l.point}` : ''}</Text>
+          <Text style={s.meta}>{kgText(l.weightKg)} listed</Text>
         </View>
       </View>
 

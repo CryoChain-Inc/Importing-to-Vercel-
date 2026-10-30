@@ -4,6 +4,7 @@ import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LoadingScreen, ToastProvider } from './components/feedback';
+import { PaymentResultScreen } from './features/buyer/screens/PaymentResultScreen';
 import { EmailVerifiedScreen } from './features/auth/screens/EmailVerifiedScreen';
 import { LandingScreen } from './features/auth/screens/LandingScreen';
 import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
@@ -15,6 +16,8 @@ import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
 import { authService } from './services/auth.service';
 import { isSupabaseConfigured } from './services/supabase';
+import { onPaymentReturn } from './services/checkout';
+import { paymentReturnReference } from './utils/paymentReturn';
 import { verifyLinkStatus } from './utils/verifyLink';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
 
@@ -28,6 +31,8 @@ function Routes() {
       return <OpsLoginScreen />;
     case 'emailVerified':
       return <EmailVerifiedScreen ok={route.ok} />;
+    case 'paymentResult':
+      return <PaymentResultScreen reference={route.reference} />;
     case 'verify':
       return <VerifyScreen route={route} />;
     case 'role':
@@ -35,7 +40,7 @@ function Routes() {
     case 'workspace':
       return <WorkspaceScreen account={route.account} />;
     case 'home':
-      return <HomeScreen account={route.account} role={route.role} />;
+      return <HomeScreen account={route.account} role={route.role} tab={route.tab} />;
   }
 }
 
@@ -43,7 +48,7 @@ function Shell() {
   const { colors, isDark } = useTheme();
   const { route, reset } = useNav();
   const [restoring, setRestoring] = useState(isSupabaseConfigured);
-  const [startedOnVerified] = useState(route.name === 'emailVerified');
+  const [startedOnVerified] = useState(route.name === 'emailVerified' || route.name === 'paymentResult');
 
   // Resume a saved session so a reload doesn't send a signed-in user back to the login page.
   // The emailed confirmation link (web path or app deep link) shows its own screen instead.
@@ -51,6 +56,8 @@ function Shell() {
     const resume = async () => {
       const link = await Linking.getInitialURL();
       if (startedOnVerified) return;
+      const paid = link?.includes('payment/verify') ? paymentReturnReference(link) : null;
+      if (paid) return reset({ name: 'paymentResult', reference: paid });
       const status = verifyLinkStatus(link);
       if (status) return reset({ name: 'emailVerified', ok: status === 'ok' });
       const p = await authService.getProfile();
@@ -59,10 +66,13 @@ function Shell() {
     if (!isSupabaseConfigured) return;
     resume().catch(() => undefined).finally(() => setRestoring(false));
     const sub = Linking.addEventListener('url', (e) => {
+      const paid = e.url.includes('payment/verify') ? paymentReturnReference(e.url) : null;
+      if (paid) return reset({ name: 'paymentResult', reference: paid });
       const status = verifyLinkStatus(e.url);
       if (status) reset({ name: 'emailVerified', ok: status === 'ok' });
     });
-    return () => sub.remove();
+    const off = onPaymentReturn((reference) => reset({ name: 'paymentResult', reference }));
+    return () => { sub.remove(); off(); };
   }, [reset, startedOnVerified]);
 
   if (restoring) return <LoadingScreen message="Loading CryoChain..." />;

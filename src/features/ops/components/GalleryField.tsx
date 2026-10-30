@@ -1,9 +1,10 @@
 import * as ImagePicker from 'expo-image-picker';
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Button, Icon } from '../../../components/common';
 import { imageUrl, type PickedImage } from '../../../services/catalogueImage';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { CropModal } from './CropModal';
 
 export const GALLERY_MAX = 8;
 
@@ -14,13 +15,12 @@ export function GalleryField({ saved, picked, onChange }: {
   onChange: (next: { saved: string[]; picked: PickedImage[] }) => void;
 }) {
   const s = useThemedStyles(styles);
+  const [queue, setQueue] = useState<string[]>([]);
   const room = GALLERY_MAX - saved.length - picked.length;
 
   const choose = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: room, quality: 0.7 });
-    if (r.canceled) return;
-    const next = r.assets.slice(0, room).map((a) => ({ uri: a.uri, mimeType: a.mimeType }));
-    onChange({ saved, picked: [...picked, ...next] });
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: room, quality: 1 });
+    if (!r.canceled) setQueue(r.assets.slice(0, room).map((a) => a.uri));
   };
 
   const tile = (key: string, uri: string, onRemove: () => void) => (
@@ -42,7 +42,11 @@ export function GalleryField({ saved, picked, onChange }: {
         </ScrollView>
       ) : null}
       <Button label="Add photos" variant="outline" size="sm" icon="camera" disabled={room <= 0} onPress={choose} />
-      <Text style={s.meta}>{room > 0 ? `Buyers swipe through these on the product page. Up to ${GALLERY_MAX}, 2 MB each.` : `Photo limit reached (${GALLERY_MAX}).`}</Text>
+      <Text style={s.meta}>{room > 0 ? `Buyers swipe through these on the product page. Up to ${GALLERY_MAX}; each is cropped to a square.` : `Photo limit reached (${GALLERY_MAX}).`}</Text>
+      {queue.length ? (
+        <CropModal key={queue[0]} uri={queue[0]} onCancel={() => setQueue([])}
+          onDone={(img) => { onChange({ saved, picked: [...picked, img] }); setQueue(queue.slice(1)); }} />
+      ) : null}
     </View>
   );
 }
