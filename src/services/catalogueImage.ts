@@ -24,6 +24,8 @@ export function samePhoto(a: PickedImage, b: PickedImage): boolean {
 export async function imageFingerprint(uri: string): Promise<string | null> {
   try {
     const body = await (await fetch(uri)).arrayBuffer();
+    // Android can hand back an empty body for a file URI. Every empty body hashes the same, so it would flag different photos as duplicates.
+    if (body.byteLength === 0) return null;
     const subtle = globalThis.crypto?.subtle;
     if (subtle) {
       const digest = new Uint8Array(await subtle.digest('SHA-256', body));
