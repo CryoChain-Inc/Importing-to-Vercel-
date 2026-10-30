@@ -18,9 +18,9 @@ import { FarmerProfileCard } from '../components/FarmerProfileCard';
 import { PriceBoard } from '../components/PriceBoard';
 import { ProduceListings } from '../components/ProduceListings';
 
-type Tab = 'listings' | 'messages' | 'payments' | 'profile';
+export type Tab = 'listings' | 'messages' | 'payments' | 'profile';
 
-const TABS: { key: Tab; label: string; icon: IconName }[] = [
+export const TABS: { key: Tab; label: string; icon: IconName }[] = [
   { key: 'listings', label: 'Listings', icon: 'package' },
   { key: 'messages', label: 'Messages', icon: 'message' },
   { key: 'payments', label: 'Payments', icon: 'wallet' },
@@ -28,11 +28,11 @@ const TABS: { key: Tab; label: string; icon: IconName }[] = [
 ];
 
 /** Tab content for the farmer; TabShell supplies the phone bar and desktop rail. */
-export function FarmerHome({ account }: { account: Account }) {
-  const { reset } = useNav();
+export function FarmerHome({ account, tab: initialTab }: { account: Account; tab?: string }) {
+  const { reset, push } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
-  const [tab, setTab] = useState<Tab>('listings');
+  const [tab, setTab] = useState<Tab>(TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : 'listings');
   const [editing, setEditing] = useState<'details' | 'wallet' | null>(null);
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [listings, setListings] = useState<ProduceListing[]>([]);
@@ -115,7 +115,7 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} sales={sales} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={refresh} />
+              <ProduceListings listings={listings} sales={sales} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={refresh} onOpen={(product) => push({ name: 'produce', account, product })} />
             </>
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}

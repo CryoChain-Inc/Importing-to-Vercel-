@@ -3,7 +3,7 @@ import { enqueueListing, flushOutbox, queuedCount } from '../listingOutbox';
 import { supabase } from '../supabase';
 
 jest.mock('expo-file-system', () => {
-  class File { uri: string; constructor(...p: any[]) { this.uri = p.map((x) => x.uri ?? x).join('/'); } copy = jest.fn(async () => undefined); }
+  class File { uri: string; constructor(...p: any[]) { this.uri = p.map((x) => x.uri ?? x).join('/'); } copy = jest.fn(async () => undefined); arrayBuffer = async () => new ArrayBuffer(1); }
   class Directory { uri = 'dir'; exists = false; create = jest.fn(); delete = jest.fn(); }
   return { File, Directory, Paths: { document: { uri: 'doc' } } };
 });

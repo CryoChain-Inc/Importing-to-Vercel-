@@ -11,6 +11,7 @@ import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
 import { RoleScreen } from './features/auth/screens/RoleScreen';
 import { VerifyScreen, afterSignIn } from './features/auth/screens/VerifyScreen';
 import { WorkspaceScreen } from './features/auth/screens/WorkspaceScreen';
+import { ProduceDetail } from './features/farmer/screens/ProduceDetail';
 import { HomeScreen } from './features/home/HomeScreen';
 import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
@@ -39,6 +40,8 @@ function Routes() {
       return <RoleScreen />;
     case 'workspace':
       return <WorkspaceScreen account={route.account} />;
+    case 'produce':
+      return <ProduceDetail account={route.account} product={route.product} />;
     case 'home':
       return <HomeScreen account={route.account} role={route.role} tab={route.tab} />;
   }

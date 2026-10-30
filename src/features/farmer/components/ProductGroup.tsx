@@ -13,8 +13,8 @@ export interface Group {
   listings: ProduceListing[];
 }
 
-/** One product with all its grades rolled up. Tapping toggles the per-listing detail rendered by the parent. */
-export function ProductGroup({ group: g, open, onToggle }: { group: Group; open: boolean; onToggle: () => void }) {
+/** One product with all its grades rolled up. Tapping opens the product's detail page. */
+export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const sum = (f: (l: ProduceListing) => number) => g.listings.reduce((a, l) => a + f(l), 0);
@@ -27,7 +27,7 @@ export function ProductGroup({ group: g, open, onToggle }: { group: Group; open:
   const grades = [...new Set(g.listings.map((l) => l.grade))].sort();
   const label = `${g.product}, ${kgText(left)} left of ${kgText(listed)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: open }} onPress={onToggle}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onOpen}>
       <Card style={s.card}>
         <View style={s.top}>
           <View style={s.thumb}>
@@ -38,7 +38,7 @@ export function ProductGroup({ group: g, open, onToggle }: { group: Group; open:
             <Text style={s.meta} numberOfLines={1}>{g.category ? `${g.category} · ` : ''}{g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'}</Text>
             <View style={s.grades}>{grades.map((x) => <Badge key={x} label={`Grade ${x}`} tone="success" />)}</View>
           </View>
-          <View style={open ? s.chevOpen : undefined}><Icon name="chevronDown" size={22} color={colors.inkMuted} /></View>
+          <Icon name="chevronRight" size={22} color={colors.inkMuted} />
         </View>
         <View style={s.bar}><View style={[s.fill, { width: `${listed > 0 ? Math.min(100, (sold / listed) * 100) : 0}%` }]} /></View>
         <View style={s.legend}>
@@ -69,7 +69,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   product: { fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   grades: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginTop: 2 },
-  chevOpen: { transform: [{ rotate: '180deg' }] },
   bar: { height: 8, borderRadius: 4, overflow: 'hidden' as const, backgroundColor: c.surfaceSunken },
   fill: { position: 'absolute' as const, top: 0, bottom: 0, left: 0, backgroundColor: c.brand500 },
   legend: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 8 },

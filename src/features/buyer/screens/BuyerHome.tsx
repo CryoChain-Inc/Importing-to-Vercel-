@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Linking, Platform, ScrollView, View } from 'react-native';
 import { Badge, Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell, type TabDef } from '../../../components/layout';
@@ -7,7 +7,7 @@ import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { AccountFooter } from '../../auth/components/AccountFooter';
 import { CartProvider, useCart } from '../cart/CartProvider';
@@ -28,6 +28,29 @@ const TABS: TabDef<Tab>[] = [
   { key: 'account', label: 'Account', icon: 'user' },
 ];
 
+const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
+const TAB_KEYS = TABS.map((t) => t.key);
+const tabFromUrl = (): Tab | undefined => TAB_KEYS.find((k) => k === window.location.pathname.split('/')[2]);
+
+/** Current tab, mirrored into the URL as /buyer/<tab> on web so the address bar and Back/Forward follow the screen. Native keeps it in memory. */
+function useTabRoute(first: Tab): [Tab, (t: Tab) => void] {
+  const [tab, setTabState] = useState<Tab>(first);
+  const current = useRef(first);
+  useEffect(() => {
+    if (!isWeb) return;
+    window.history.replaceState(window.history.state, '', `/buyer/${first}`);
+    const onPop = () => { current.current = tabFromUrl() ?? first; setTabState(current.current); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [first]);
+  const setTab = useCallback((t: Tab) => {
+    if (isWeb && current.current !== t) window.history.pushState(window.history.state, '', `/buyer/${t}`);
+    current.current = t;
+    setTabState(t);
+  }, []);
+  return [tab, setTab];
+}
+
 interface Data {
   catalogue: buyer.CatalogueItem[];
   orders: buyer.Order[];
@@ -43,7 +66,7 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
-  const [tab, setTab] = useState<Tab>(firstTab ?? 'shop');
+  const [tab, setTab] = useTabRoute(firstTab ?? 'shop');
   // The order being paid. While set, the payment page replaces the tabs' content.
   const [paying, setPaying] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
@@ -79,26 +102,32 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
     Linking.getInitialURL().then(check);
     const sub = Linking.addEventListener('url', (e) => check(e.url));
     return () => sub.remove();
-  }, [load]);
+  }, [load, setTab]);
 
   const { lines } = useCart();
-  const donePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load]);
-  const leavePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load]);
+  const donePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load, setTab]);
+  const leavePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load, setTab]);
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
+
+  // Paying takes over the whole screen: no side rail or bottom bar.
+  if (paying) {
+    return (
+      <ScrollView style={s.full} contentContainerStyle={s.fullContent} keyboardShouldPersistTaps="handled">
+        <View style={s.fullInner}><Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} /></View>
+      </ScrollView>
+    );
+  }
 
   return (
     <TabShell tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
       <View style={s.header}>
-        <View style={s.headerText}>
-          <Text style={s.hello} numberOfLines={1}>Hello, {data?.details.name || account.name || 'buyer'}</Text>
-          {toPay ? <Badge label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`} tone="warning" /> : null}
-        </View>
+        {toPay ? <Badge label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`} tone="warning" /> : null}
       </View>
       {error ? <Banner text={error} /> : null}
       {data ? (
-        paying ? <Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} /> : <>
+        <>
           {tab === 'shop' ? (
-            <Shop items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
+            <Shop name={data.details.name || account.name || ''} items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
           ) : null}
           {tab === 'cart' ? (
             <Cart items={data.catalogue} addresses={data.details.addresses} onRefresh={load} onOrdered={setPaying} onShop={() => setTab('shop')} onAddAddress={() => setTab('account')} />
@@ -119,7 +148,8 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
+  full: { flex: 1, backgroundColor: c.bgApp },
+  fullContent: { flexGrow: 1, padding: 16, paddingBottom: 32 },
+  fullInner: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const },
   header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
-  headerText: { gap: 8, alignItems: 'flex-start' as const, flexShrink: 1 },
-  hello: { fontFamily: fonts.heading, fontSize: 26, lineHeight: 32, letterSpacing: -0.4, color: c.ink },
 });

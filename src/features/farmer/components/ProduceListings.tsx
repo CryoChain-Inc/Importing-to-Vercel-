@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon, Input, ProfileChecklist } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
 import { discardQueued, retryQueued, useOutbox } from '../../../services/listingOutbox';
-import { deleteListing, fetchProductCategories, type ProduceListing, type Sale } from '../../../services/farmer.service';
+import { fetchProductCategories, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ListingCard } from './ListingCard';
 import { ProductGroup, type Group } from './ProductGroup';
 import { NewListing } from './NewListing';
 
@@ -16,7 +14,7 @@ const FILTERS = [
 ] as const;
 
 /** Listing form is locked until the farm address and a wallet are saved (the database enforces this too). */
-export function ProduceListings({ listings, sales, pickup, addressReady, walletReady, onSetup, onChange }: {
+export function ProduceListings({ listings, sales, pickup, addressReady, walletReady, onSetup, onChange, onOpen }: {
   listings: ProduceListing[];
   sales: Sale[];
   /** Farm address shown as the pickup location. Empty until saved. */
@@ -25,27 +23,17 @@ export function ProduceListings({ listings, sales, pickup, addressReady, walletR
   walletReady: boolean;
   onSetup: (section: 'details' | 'wallet') => void;
   onChange: () => Promise<void>;
+  onOpen: (product: string) => void;
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active');
   const [shown, setShown] = useState(PAGE);
   const queued = useOutbox();
-  const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
-  const [openKey, setOpenKey] = useState<string | null>(null);
   const [cats, setCats] = useState<Record<string, string>>({});
   useEffect(() => { fetchProductCategories().then(setCats).catch(() => {}); }, []);
-  const remove = async (id: string) => {
-    setError(null);
-    try {
-      await deleteListing(id);
-      await onChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove that listing.');
-    }
-  };
   const active = FILTERS.find((f) => f.key === filter)!;
   // Group by product; a product is "on sale" while any of its listings has kg left.
   const groups = useMemo<Group[]>(() => {
@@ -62,7 +50,6 @@ export function ProduceListings({ listings, sales, pickup, addressReady, walletR
 
   return (
     <View style={s.wrap}>
-      {error ? <Banner text={error} /> : null}
       {addressReady && walletReady ? (
         <NewListing pickup={pickup} onCreated={onChange} />
       ) : (
@@ -100,7 +87,7 @@ export function ProduceListings({ listings, sales, pickup, addressReady, walletR
           const n = inTab(f).length;
           const on = f.key === filter;
           return (
-            <Pressable key={f.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { setFilter(f.key); setShown(PAGE); setOpenKey(null); }} style={[s.segBtn, on && s.segOn]}>
+            <Pressable key={f.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { setFilter(f.key); setShown(PAGE); }} style={[s.segBtn, on && s.segOn]}>
               <Text style={[s.segText, on && s.segTextOn]}>{f.label} <Text style={s.segCount}>{n}</Text></Text>
             </Pressable>
           );
@@ -128,15 +115,7 @@ export function ProduceListings({ listings, sales, pickup, addressReady, walletR
         </Card>
       ) : (
         <>
-          {rows.slice(0, shown).map((g) => {
-            const key = `${filter}:${g.product}`;
-            return (
-              <View key={key} style={s.group}>
-                <ProductGroup group={g} open={openKey === key} onToggle={() => setOpenKey(openKey === key ? null : key)} />
-                {openKey === key ? g.listings.map((l) => <ListingCard key={l.id} listing={l} sales={sales.filter((x) => x.listingId === l.id)} onRemove={remove} onSaved={onChange} />) : null}
-              </View>
-            );
-          })}
+          {rows.slice(0, shown).map((g) => <ProductGroup key={`${filter}:${g.product}`} group={g} onOpen={() => onOpen(g.product)} />)}
           {rows.length > shown ? <Button label={`Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown} products`} variant="outline" onPress={() => setShown(shown + PAGE)} /> : null}
         </>
       )}
@@ -155,7 +134,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   segText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
-  group: { gap: 10 },
   chips: { gap: 8, paddingRight: 4 },
   chip: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
   chipOn: { backgroundColor: c.brandTint },

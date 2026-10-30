@@ -41,6 +41,10 @@ function PriceSheet({ product, rows, onSaved, onClose }: { product: Product; row
     const e = badNumber ? null : gradeOrderError(nums(k));
     return e ? `${k === 'farmer' ? 'Farmer' : 'Buyer'} prices: ${e}` : null;
   }).filter(Boolean) as string[];
+  const inverted = badNumber ? [] : GRADES.filter((g) => {
+    const f = nums('farmer')[g], b = nums('buyer')[g];
+    return f !== null && b !== null && f > b;
+  });
   const dirty = KINDS.some((k) => GRADES.some((g) => text[k][g] !== initial[k][g]));
   const set = (k: PriceKind, g: Grade, v: string) => setText((t) => ({ ...t, [k]: { ...t[k], [g]: v } }));
 
@@ -48,7 +52,7 @@ function PriceSheet({ product, rows, onSaved, onClose }: { product: Product; row
     <Sheet title={product.name} subtitle="Prices per kg. Grade A farmer price shows on the public landing page; the previous price is kept to show the change." onClose={onClose}
       footer={<>
         <Button label="Cancel" variant="ghost" onPress={onClose} />
-        <Button label="Save prices" loading={busy} disabled={!dirty || badNumber || order.length > 0}
+        <Button label="Save prices" loading={busy} disabled={!dirty || badNumber || order.length > 0 || inverted.length > 0}
           onPress={() => run(async () => {
             for (const k of KINDS) if (GRADES.some((g) => text[k][g] !== initial[k][g])) await savePrices(product.id, k, nums(k));
             onClose();
@@ -80,6 +84,7 @@ function PriceSheet({ product, rows, onSaved, onClose }: { product: Product; row
         );
       })}
       {order.map((o) => <Text key={o} style={s.rule}>{o}</Text>)}
+      {inverted.length ? <Text style={s.rule}>Farmer price is higher than the buyer price for grade {inverted.join(', ')}. Fix it to save.</Text> : null}
       <Text style={s.hint}>Leave a box empty to remove that price. Grade A must cost more than B, and B more than C.</Text>
     </Sheet>
   );
