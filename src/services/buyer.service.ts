@@ -102,6 +102,19 @@ export interface CartLine {
   kg: number;
 }
 
+/** The signed-in buyer's saved cart. */
+export async function fetchCart(): Promise<CartLine[]> {
+  const { data, error } = await supabase.from('cart_lines').select('product_id, grade, kg');
+  fail('Could not load your cart.')(error);
+  return (data ?? []).map((r) => ({ productId: r.product_id, grade: r.grade, kg: Number(r.kg) }));
+}
+
+/** Replaces the saved cart with these lines (an empty list empties it). */
+export async function saveCart(lines: CartLine[]): Promise<void> {
+  const items = lines.map((l) => ({ product_id: l.productId, grade: l.grade, kg: l.kg }));
+  fail('Could not save your cart.')((await supabase.rpc('save_cart', { p_items: items })).error);
+}
+
 export interface Shortfall {
   productId: string;
   grade: string;
