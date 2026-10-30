@@ -1,12 +1,12 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card } from '../../../components/common';
+import { Badge, Card } from '../../../components/common';
 import { TripChat } from '../../truck/components/TripChat';
 import { TripProgress } from '../../truck/components/TripProgress';
 import type { TruckBooking } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { Empty } from '../../ops/components/OpsBits';
-import { BackButton, DetailCard, openMaps, openPhone } from './bits';
+import { BackButton, openMaps, openPhone, placed, QuickActions, RowCard } from './bits';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -25,7 +25,7 @@ export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past
       <Empty
         icon="truck"
         title={past ? 'No past trips' : 'No ongoing trips'}
-        hint={past ? 'Finished cold-truck bookings will be listed here.' : 'When a buyer is assigned to you, the trip shows up here. Open it for the route, the start code and messages.'}
+        hint={past ? 'Finished cold-truck bookings will be listed here.' : 'When a buyer is assigned to you, the trip shows up here.'}
       />
     );
   }
@@ -34,17 +34,13 @@ export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past
       {rows.map((t) => {
         const status = truckStatus(t);
         return (
-          <Card key={t.id} style={s.item}>
-            <View style={s.top}>
-              <Text style={s.name}>{t.code}</Text>
-              <Badge label={status.label} tone={status.tone} />
-            </View>
-            <Text style={s.meta}>{when(t.pickupAt)} · {t.purpose === 'pickup' ? 'Produce pickup' : 'Transfer'}</Text>
-            <Text style={s.meta}>Buyer {t.buyerName || 'Buyer'}</Text>
-            <Text style={s.meta}>From {t.pickupLabel}</Text>
-            <Text style={s.meta}>To {t.dropoffLabel}</Text>
-            <Button size="sm" label="Open trip" onPress={() => onOpen(t.id)} />
-          </Card>
+          <RowCard
+            key={t.id}
+            title={`${t.pickupLabel} → ${t.dropoffLabel}`}
+            sub={`${t.code} · ${when(t.pickupAt)}`}
+            right={past ? undefined : <Badge label={status.label} tone={status.tone} />}
+            onPress={() => onOpen(t.id)}
+          />
         );
       })}
     </View>
@@ -52,31 +48,44 @@ export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past
 }
 
 export function TruckDetail({ trip, onBack, onMessages }: { trip: TruckBooking; onBack?: () => void; onMessages: () => void }) {
+  const s = useThemedStyles(styles);
   const status = truckStatus(trip);
-  const placed = (lat: number, lng: number) => Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  const target = trip.startedAt
+    ? { label: 'Drop-off', lat: trip.dropoffLat, lng: trip.dropoffLng }
+    : { label: 'Pickup', lat: trip.pickupLat, lng: trip.pickupLng };
+  const actions = [
+    ...(trip.buyerPhone ? [{ icon: 'phone' as const, label: 'Call', onPress: () => openPhone(trip.buyerPhone) }] : []),
+    ...(placed(target.lat, target.lng) ? [{ icon: 'pin' as const, label: `Go to ${target.label.toLowerCase()}`, onPress: () => openMaps(target.lat, target.lng) }] : []),
+    { icon: 'message' as const, label: 'Chat', onPress: onMessages },
+  ];
   return (
-    <View style={{ gap: 12 }}>
+    <View style={s.stack}>
       {onBack ? <BackButton label="Cold truck" onPress={onBack} /> : null}
-      <DetailCard
-        title={`${trip.code} · ${status.label}`}
-        lines={[
-          when(trip.pickupAt),
-          `Buyer ${trip.buyerName || 'Buyer'}`,
-          trip.buyerPhone ? `Phone ${trip.buyerPhone}` : '',
-          `From ${trip.pickupLabel}`,
-          `To ${trip.dropoffLabel}`,
-          trip.distanceKm ? `${trip.distanceKm} km` : '',
-        ]}
-        actions={
-          <>
-            {trip.buyerPhone ? <Button size="sm" variant="outline" icon="phone" label="Call buyer" onPress={() => openPhone(trip.buyerPhone)} /> : null}
-            {placed(trip.pickupLat, trip.pickupLng) ? <Button size="sm" variant="outline" icon="pin" label="Pickup" onPress={() => openMaps(trip.pickupLat, trip.pickupLng)} /> : null}
-            {placed(trip.dropoffLat, trip.dropoffLng) ? <Button size="sm" variant="outline" icon="pin" label="Drop-off" onPress={() => openMaps(trip.dropoffLat, trip.dropoffLng)} /> : null}
-            <Button size="sm" icon="message" label="Messages" onPress={onMessages} />
-          </>
-        }
-      />
+      <Card style={s.card}>
+        <View style={s.top}>
+          <Text style={s.code}>{trip.code}</Text>
+          <Badge label={status.label} tone={status.tone} />
+        </View>
+        <View style={s.route}>
+          <Stop tag="From" text={trip.pickupLabel} />
+          <Stop tag="To" text={trip.dropoffLabel} />
+        </View>
+        <Text style={s.meta}>
+          {when(trip.pickupAt)}{trip.distanceKm ? ` · ${trip.distanceKm} km` : ''} · Buyer {trip.buyerName || 'Buyer'}
+        </Text>
+        <QuickActions items={actions} />
+      </Card>
       <TripProgress booking={trip} role="driver" />
+    </View>
+  );
+}
+
+function Stop({ tag, text }: { tag: string; text: string }) {
+  const s = useThemedStyles(styles);
+  return (
+    <View style={s.stop}>
+      <Text style={s.tag}>{tag}</Text>
+      <Text style={s.place}>{text}</Text>
     </View>
   );
 }
@@ -92,8 +101,13 @@ export function TruckMessages({ trip, onBack }: { trip: TruckBooking; onBack: ()
 
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 10 },
-  item: { gap: 8 },
+  stack: { gap: 14 },
+  card: { gap: 14 },
   top: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 8 },
-  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
+  code: { fontFamily: fonts.sansBold, fontSize: 14, color: c.inkMuted },
+  route: { gap: 12 },
+  stop: { gap: 2 },
+  tag: { fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase' as const, color: c.brandInk },
+  place: { fontFamily: fonts.heading, fontSize: 20, lineHeight: 26, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });
