@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
+import { Platform } from 'react-native';
 import { samePhoto, type PickedImage } from './catalogueImage';
 import { MIN_PHOTOS } from './farmer.service';
 import { isNetworkError } from './offlineCache';
@@ -53,8 +54,11 @@ function uuid() {
 }
 
 const folder = (id: string) => new Directory(Paths.document, 'outbox', id);
+// expo-file-system has no web implementation, and the offline queue is for the phone app only.
+const native = Platform.OS !== 'web';
+const dropFolder = (id: string) => { if (native && folder(id).exists) folder(id).delete(); };
 
-/** Validates, copies the photos into app storage and queues the listing. Works with no signal. */
+/** Validates, then on the phone copies the photos into app storage and queues the listing (works with no signal); on web uploads straight away. */
 export async function enqueueListing(product: string, weightKg: number, grade: string, images: PickedImage[]): Promise<void> {
   if (images.length < MIN_PHOTOS) throw new Error(`Add at least ${MIN_PHOTOS} photos.`);
   if (images.some((img, i) => images.slice(0, i).some((earlier) => samePhoto(earlier, img)))) {
@@ -64,6 +68,18 @@ export async function enqueueListing(product: string, weightKg: number, grade: s
   const farmerId = await requireUserId();
   await load();
   const id = uuid();
+  if (!native) {
+    // Web has no safe place to keep photos across a reload, so it never queues: upload now or tell the farmer.
+    const item = { id, farmerId, product: product.trim(), weightKg, grade, photos: images.map((img) => ({ uri: img.uri, mimeType: img.mimeType ?? 'image/jpeg' })), createdAt: new Date().toISOString() };
+    let refused: string | null;
+    try {
+      refused = await send(item);
+    } catch {
+      throw new Error('No internet connection. Connect and try again.');
+    }
+    if (refused) throw new Error(refused);
+    return;
+  }
   const dir = folder(id);
   try {
     dir.create({ intermediates: true, idempotent: true });
@@ -127,7 +143,7 @@ export async function flushOutbox(): Promise<number> {
         continue;
       }
       await commit(items.filter((i) => i.id !== item.id));
-      if (folder(item.id).exists) folder(item.id).delete();
+      dropFolder(item.id);
       sent++;
     }
   } catch {
@@ -148,7 +164,7 @@ export async function discardQueued(id: string) {
   await load();
   const item = items.find((i) => i.id === id);
   await commit(items.filter((i) => i.id !== id));
-  if (folder(id).exists) folder(id).delete();
+  dropFolder(id);
   // A refused listing may already have photos on the server.
   if (item?.error) supabase.storage.from(BUCKET).remove(item.photos.map((p, i) => `${item.farmerId}/${id}-${i}.${EXT[p.mimeType]}`)).catch(() => undefined);
 }

@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Badge, Button, Card, Icon, ProfileChecklist } from '../../../components/common';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Badge, Button, Card, Icon, Input, ProfileChecklist } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { discardQueued, retryQueued, useOutbox } from '../../../services/listingOutbox';
-import { deleteListing, type ProduceListing } from '../../../services/farmer.service';
+import { deleteListing, fetchProductCategories, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ListingCard } from './ListingCard';
+import { ProductGroup, type Group } from './ProductGroup';
 import { NewListing } from './NewListing';
 
-const PAGE = 4;
+const PAGE = 6;
 const FILTERS = [
   { key: 'active', label: 'On sale', has: (l: ProduceListing) => l.remainingKg > 0, empty: 'Nothing on sale right now.' },
   { key: 'sold', label: 'Sold out', has: (l: ProduceListing) => l.remainingKg <= 0, empty: 'Nothing has sold out yet.' },
 ] as const;
 
 /** Listing form is locked until the farm address and a wallet are saved (the database enforces this too). */
-export function ProduceListings({ listings, pickup, addressReady, walletReady, onSetup, onChange }: {
+export function ProduceListings({ listings, sales, pickup, addressReady, walletReady, onSetup, onChange }: {
   listings: ProduceListing[];
+  sales: Sale[];
   /** Farm address shown as the pickup location. Empty until saved. */
   pickup: string;
   addressReady: boolean;
@@ -28,11 +30,13 @@ export function ProduceListings({ listings, pickup, addressReady, walletReady, o
   const { colors } = useTheme();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active');
   const [shown, setShown] = useState(PAGE);
-  const [error, setError] = useState<string | null>(null);
   const queued = useOutbox();
-  const active = FILTERS.find((f) => f.key === filter)!;
-  const rows = listings.filter(active.has);
-
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [cats, setCats] = useState<Record<string, string>>({});
+  useEffect(() => { fetchProductCategories().then(setCats).catch(() => {}); }, []);
   const remove = async (id: string) => {
     setError(null);
     try {
@@ -42,6 +46,19 @@ export function ProduceListings({ listings, pickup, addressReady, walletReady, o
       setError(e instanceof Error ? e.message : 'Could not remove that listing.');
     }
   };
+  const active = FILTERS.find((f) => f.key === filter)!;
+  // Group by product; a product is "on sale" while any of its listings has kg left.
+  const groups = useMemo<Group[]>(() => {
+    const m = new Map<string, ProduceListing[]>();
+    for (const l of listings) m.set(l.product, [...(m.get(l.product) ?? []), l]);
+    return [...m].map(([product, ls]) => ({ product, category: cats[product], listings: ls.sort((a, b) => a.grade.localeCompare(b.grade)) }));
+  }, [listings, cats]);
+  const catNames = [...new Set(groups.map((g) => g.category).filter((x): x is string => !!x))].sort();
+  const needle = q.trim().toLowerCase();
+  const inTab = (f: (typeof FILTERS)[number]) => groups.filter((g) => g.listings.some(f.has));
+  const rows = inTab(active)
+    .filter((g) => (!cat || g.category === cat) && (!needle || g.product.toLowerCase().includes(needle)))
+    .map((g) => ({ ...g, listings: g.listings.filter(active.has) }));
 
   return (
     <View style={s.wrap}>
@@ -76,29 +93,51 @@ export function ProduceListings({ listings, pickup, addressReady, walletReady, o
 
       <View style={s.head}>
         <Text style={s.title}>Your listings</Text>
-        <Text style={s.copy}>{listings.length} total</Text>
+        <Text style={s.copy}>{groups.length} {groups.length === 1 ? 'product' : 'products'}</Text>
       </View>
       <View style={s.seg} accessibilityRole="tablist">
         {FILTERS.map((f) => {
-          const n = listings.filter(f.has).length;
+          const n = inTab(f).length;
           const on = f.key === filter;
           return (
-            <Pressable key={f.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { setFilter(f.key); setShown(PAGE); }} style={[s.segBtn, on && s.segOn]}>
+            <Pressable key={f.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { setFilter(f.key); setShown(PAGE); setOpenKey(null); }} style={[s.segBtn, on && s.segOn]}>
               <Text style={[s.segText, on && s.segTextOn]}>{f.label} <Text style={s.segCount}>{n}</Text></Text>
             </Pressable>
           );
         })}
       </View>
+      {groups.length > 0 ? (
+        <>
+          <Input label="Search produce" value={q} onChangeText={(v) => { setQ(v); setShown(PAGE); }} placeholder="e.g. Tomato" autoCorrect={false} returnKeyType="search" clearButtonMode="while-editing" />
+          {catNames.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">
+              {[null, ...catNames].map((c) => (
+                <Pressable key={c ?? 'all'} accessibilityRole="button" accessibilityState={{ selected: cat === c }} onPress={() => { setCat(c); setShown(PAGE); }} style={[s.chip, cat === c && s.chipOn]}>
+                  <Text style={[s.chipText, cat === c && s.chipTextOn]}>{c ?? 'All'}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+        </>
+      ) : null}
 
       {rows.length === 0 ? (
         <Card style={s.emptyCard}>
           <Icon name="package" size={26} color={colors.inkMuted} />
-          <Text style={s.copy}>{listings.length === 0 ? 'No produce listed yet.' : active.empty}</Text>
+          <Text style={s.copy}>{listings.length === 0 ? 'No produce listed yet.' : needle || cat ? 'No produce matches your search.' : active.empty}</Text>
         </Card>
       ) : (
         <>
-          {rows.slice(0, shown).map((l) => <ListingCard key={l.id} listing={l} onRemove={remove} onSaved={onChange} />)}
-          {rows.length > shown ? <Button label={`Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown}`} variant="outline" onPress={() => setShown(shown + PAGE)} /> : null}
+          {rows.slice(0, shown).map((g) => {
+            const key = `${filter}:${g.product}`;
+            return (
+              <View key={key} style={s.group}>
+                <ProductGroup group={g} open={openKey === key} onToggle={() => setOpenKey(openKey === key ? null : key)} />
+                {openKey === key ? g.listings.map((l) => <ListingCard key={l.id} listing={l} sales={sales.filter((x) => x.listingId === l.id)} onRemove={remove} onSaved={onChange} />) : null}
+              </View>
+            );
+          })}
+          {rows.length > shown ? <Button label={`Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown} products`} variant="outline" onPress={() => setShown(shown + PAGE)} /> : null}
         </>
       )}
     </View>
@@ -116,6 +155,12 @@ const styles = (c: Record<ColorToken, string>) => ({
   segText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
+  group: { gap: 10 },
+  chips: { gap: 8, paddingRight: 4 },
+  chip: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
+  chipOn: { backgroundColor: c.brandTint },
+  chipText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.inkMuted },
+  chipTextOn: { fontFamily: fonts.sansBold, color: c.brandInk },
   queued: { gap: 8 },
   actions: { flexDirection: 'row' as const, gap: 8 },
   emptyCard: { alignItems: 'center' as const, gap: 8, paddingVertical: 28 },

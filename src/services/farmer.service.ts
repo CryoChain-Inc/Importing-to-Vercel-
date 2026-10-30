@@ -179,6 +179,7 @@ async function loadListings(): Promise<ProduceListing[]> {
 
 export interface Sale {
   id: string;
+  listingId: string;
   product: string;
   grade: string;
   kg: number;
@@ -196,12 +197,13 @@ export const fetchSales = () => cached('fetchSales', loadSales);
 async function loadSales(): Promise<Sale[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, grade, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
+    .select('id, listing_id, grade, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
     .in('status', ['accepted', 'collected', 'offered'])
     .order('created_at', { ascending: false });
   if (error) throw new Error('Could not load your sales.');
   return (data ?? []).map((r: any) => ({
     id: r.id,
+    listingId: r.listing_id,
     product: r.products?.name ?? '',
     grade: r.grade,
     kg: Number(r.kg),
@@ -219,6 +221,16 @@ async function loadProductNames(): Promise<string[]> {
   const { data, error } = await supabase.from('products').select('name').eq('active', true).order('name');
   if (error) throw new Error('Could not load products.');
   return (data ?? []).map((r) => r.name);
+}
+
+/** Category name per product name, for grouping a farmer's listings. */
+export const fetchProductCategories = () => cached('fetchProductCategories', loadProductCategories);
+async function loadProductCategories(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from('products').select('name, categories(name)');
+  if (error) throw new Error('Could not load categories.');
+  const out: Record<string, string> = {};
+  for (const r of (data ?? []) as { name: string; categories?: { name?: string } | null }[]) if (r.categories?.name) out[r.name] = r.categories.name;
+  return out;
 }
 
 /** Grades that have a published farm-gate price, keyed by product name. */

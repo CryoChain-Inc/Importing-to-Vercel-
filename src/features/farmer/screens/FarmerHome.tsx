@@ -115,7 +115,7 @@ export function FarmerHome({ account }: { account: Account }) {
           {tab === 'listings' ? (
             <>
               <PriceBoard compact />
-              <ProduceListings listings={listings} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={refresh} />
+              <ProduceListings listings={listings} sales={sales} pickup={farmerPickup(farmer)} addressReady={addressReady} walletReady={walletReady} onSetup={setup} onChange={refresh} />
             </>
           ) : null}
           {tab === 'messages' ? <><Offers /><MessagesPanel listings={listings} /></> : null}
