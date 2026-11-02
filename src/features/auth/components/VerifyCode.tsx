@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { useToast } from '../../../components/feedback';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { errorMessage } from '../errors';
 import { useCountdown } from '../hooks/useCountdown';
@@ -22,18 +22,25 @@ export interface VerifyCodeProps {
 export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Confirm' }: VerifyCodeProps) {
   const s = useThemedStyles(styles);
   const [code, setCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expiresIn, restartExpiry] = useCountdown(identifier, EXPIRY_S);
   const [cooldown, restartCooldown] = useCountdown(identifier, COOLDOWN_S);
   const expired = expiresIn === 0;
+  const { show } = useToast();
+  const [failed, setFailed] = useState(false);
+
+  // Announced once, when the clock runs out; the screen itself then offers the next step.
+  useEffect(() => {
+    if (expired) show('That code has expired. Send a new one to continue.');
+  }, [expired, show]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
       await fn();
     } catch (e) {
-      setError(errorMessage(e));
+      show(errorMessage(e));
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -41,14 +48,17 @@ export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Conf
 
   const submit = () =>
     run(async () => {
-      setError(await onSubmit(code));
+      const message = await onSubmit(code);
+      if (message) show(message);
+      setFailed(!!message);
       setCode('');
     });
 
   const resend = () =>
     run(async () => {
       await onResend();
-      setError(null);
+      setFailed(false);
+      show('New code sent.', 'success');
       setCode('');
       restartExpiry();
       restartCooldown();
@@ -56,17 +66,25 @@ export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Conf
 
   return (
     <View style={s.wrap}>
-      {error ? <Banner text={error} /> : null}
-      {expired ? <Banner text="That code has expired. Request a new one." /> : null}
-      <OtpInput value={code} onChange={setCode} onSubmit={() => code.length === OTP_LENGTH && !expired && !busy && submit()} hasError={!!error} />
-      {expired ? null : <Text style={s.hint}>Code expires in {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, '0')}</Text>}
-      <Button label={submitLabel} size="lg" onPress={submit} loading={busy} disabled={code.length !== OTP_LENGTH || expired} />
-      <Button label={cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'} variant="ghost" onPress={resend} disabled={cooldown > 0 || busy} />
+      <OtpInput value={code} onChange={setCode} onSubmit={() => code.length === OTP_LENGTH && !expired && !busy && submit()} hasError={failed} />
+      <Text style={[s.hint, expired && s.expired]}>
+        {expired ? 'This code has expired' : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, '0')}`}
+      </Text>
+      {expired ? null : <Button label={submitLabel} size="lg" onPress={submit} loading={busy} disabled={code.length !== OTP_LENGTH} />}
+      <Button
+        label={cooldown > 0 ? `Resend code in ${cooldown}s` : expired ? 'Send a new code' : 'Resend code'}
+        variant={expired ? 'primary' : 'outline'}
+        size={expired ? 'lg' : 'md'}
+        onPress={resend}
+        loading={expired && busy}
+        disabled={cooldown > 0 || busy}
+      />
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 16 },
+  expired: { color: c.dangerInk },
   hint: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted, textAlign: 'center' as const },
 });

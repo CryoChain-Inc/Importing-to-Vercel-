@@ -9,7 +9,7 @@ import { VerifyCode } from '../components/VerifyCode';
 type VerifyRoute = Extract<Route, { name: 'verify' }>;
 
 // Wrong and expired codes share one message so the screen never reveals account state.
-const NEUTRAL = "We couldn't sign you in with that code. Check it and try again, or contact support if this keeps happening.";
+const NEUTRAL = "That code didn't work. Check the 6 digits, or request a new code.";
 
 export const afterSignIn = (account: Account): Route =>
   account.roles.length > 1 ? { name: 'workspace', account } : { name: 'home', account, role: account.roles[0] };
