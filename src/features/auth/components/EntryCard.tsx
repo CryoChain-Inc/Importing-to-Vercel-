@@ -9,6 +9,7 @@ import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { EMAIL_MAX, isEmail } from '../../../utils/format';
 import { errorMessage } from '../errors';
 import { PhoneField } from './PhoneField';
+import { SmsConsent } from './SmsConsent';
 
 /** The single front door: a phone number (with country code) or an email, then a one-time login code. */
 export function EntryCard() {
@@ -20,6 +21,8 @@ export function EntryCard() {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [smsOk, setSmsOk] = useState(false);
 
   const ready = viaEmail ? isEmail(email) : isNationalNumber(country, phone);
 
@@ -49,6 +52,7 @@ export function EntryCard() {
       ) : (
         <PhoneField country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
       )}
+      {viaEmail ? null : <SmsConsent checked={smsOk} onChange={setSmsOk} />}
       <Button label={viaEmail ? 'Continue' : 'Continue'} size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
       <TextLink label={viaEmail ? 'Use my phone number instead' : 'Use my email instead'} onPress={() => switchTo(!viaEmail)} />
       <Text style={s.note}>{"We'll send a 6-digit code to type in on the next screen. No password needed, and new accounts are set up the same way."}</Text>
