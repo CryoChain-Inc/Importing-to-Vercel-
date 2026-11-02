@@ -9,31 +9,37 @@ export function SmsConsent({ checked, onChange }: { checked: boolean; onChange: 
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   return (
-    <View style={s.row}>
-      <Pressable
-        onPress={() => onChange(!checked)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
-        accessibilityLabel="Agree to receive SMS messages from CryoChain"
-        hitSlop={8}
-        style={[s.box, checked && s.boxOn]}
-      >
-        {checked ? <Icon name="check" size={14} color={colors.surfaceCard} strokeWidth={3} /> : null}
-      </Pressable>
-      <Text style={s.text}>
-        Optional: I agree to get SMS pickup alerts from CryoChain. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.{' '}
+    <View style={s.wrap}>
+    <Text style={s.fine}>
+      Signing in sends a one-time verification code from CryoChain by SMS. This is required for login and is not a marketing message. Message & data rates may apply.
+    </Text>
+    <Pressable
+      onPress={() => onChange(!checked)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel="Agree to receive SMS messages from CryoChain about your orders"
+      hitSlop={6}
+      style={s.row}
+    >
+      <View style={[s.box, checked && s.boxOn]}>
+        {checked ? <Icon name="check" size={11} color={colors.surfaceCard} strokeWidth={3} /> : null}
+      </View>
+      <Text style={s.fine}>
+        Text me order updates (optional). Frequency varies, rates may apply. Reply STOP to opt out.{' '}
         <Text accessibilityRole="link" style={s.link} onPress={() => Linking.openURL(`${SITE}/terms.html`)}>Terms</Text>
         {' · '}
-        <Text accessibilityRole="link" style={s.link} onPress={() => Linking.openURL(`${SITE}/privacy.html`)}>Privacy</Text>
+        <Text accessibilityRole="link" style={s.link} onPress={() => Linking.openURL(`${SITE}/privacy.html`)}>Privacy Policy</Text>
       </Text>
+    </Pressable>
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  row: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10 },
-  box: { width: 22, height: 22, marginTop: 1, borderRadius: 6, borderWidth: 1.5, borderColor: c.borderStrong, alignItems: 'center' as const, justifyContent: 'center' as const },
+  wrap: { gap: 10 },
+  row: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8 },
+  box: { width: 16, height: 16, marginTop: 1, borderRadius: 4, borderWidth: 1.5, borderColor: c.borderStrong, backgroundColor: c.surfaceCard, alignItems: 'center' as const, justifyContent: 'center' as const },
   boxOn: { backgroundColor: c.brand600, borderColor: c.brand600 },
-  text: { flex: 1, fontFamily: fonts.sansRegular, fontSize: 12, lineHeight: 17, color: c.inkMuted },
+  fine: { flex: 1, fontFamily: fonts.sansRegular, fontSize: 12, lineHeight: 17, color: c.inkMuted },
   link: { fontFamily: fonts.sansMedium, color: c.brandInk, textDecorationLine: 'underline' as const },
 });
