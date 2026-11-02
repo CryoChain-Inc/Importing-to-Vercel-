@@ -55,7 +55,7 @@ export const darkColors: Record<ColorToken, string> = {
   brand900: '#06150e',
   brandTint: '#10291d',
   brandInk: '#7cf0a8',
-  onBrand: '#ffffff',
+  onBrand: '#052e16',
   harvestFill: '#f8a63a',
   onHarvest: '#2b1700',
   harvestTint: '#2a1d0a',
