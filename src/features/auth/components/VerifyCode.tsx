@@ -72,6 +72,7 @@ export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Conf
       </Text>
       {expired ? null : <Button label={submitLabel} size="lg" onPress={submit} loading={busy} disabled={code.length !== OTP_LENGTH} />}
       <Button
+        key={expired ? 'expired' : 'live'}
         label={cooldown > 0 ? `Resend code in ${cooldown}s` : expired ? 'Send a new code' : 'Resend code'}
         variant={expired ? 'primary' : 'outline'}
         size={expired ? 'lg' : 'md'}

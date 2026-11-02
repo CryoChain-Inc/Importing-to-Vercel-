@@ -28,7 +28,11 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
   const s = useThemedStyles(styles);
   const off = disabled || loading;
   const isPrimary = variant === 'primary';
-  const textColor = isPrimary ? (off ? colors.ink : colors.onBrand) : off ? colors.inkMuted : (colors[TEXT[variant]] ?? colors.ink);
+  const textColor = isPrimary
+  ? colors.onBrand
+  : off
+    ? colors.inkMuted
+    : (colors[TEXT[variant]] ?? colors.ink);;
   const fill = isPrimary;
 
   return (
@@ -53,15 +57,27 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
       ]}
     >
       <View style={s.row}>
-        {loading ? (
-          <ActivityIndicator size="small" color={textColor} />
-        ) : (
-          <>
-            <Text style={[s.text, size === 'sm' && s.textSm, { color: textColor }]}>{label}</Text>
-            {icon ? <Icon name={icon} size={18} color={textColor} /> : null}
-          </>
-        )}
-      </View>
+  {loading && (
+    <ActivityIndicator
+      size="small"
+      color={textColor}
+    />
+  )}
+
+  <Text
+    style={[
+      s.text,
+      size === 'sm' && s.textSm,
+      { color: textColor },
+    ]}
+  >
+    {label}
+  </Text>
+
+  {!loading && icon ? (
+    <Icon name={icon} size={18} color={textColor} />
+  ) : null}
+</View>
     </Pressable>
   );
 }
