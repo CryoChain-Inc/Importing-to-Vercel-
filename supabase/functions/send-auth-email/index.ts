@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
   const code = email_data.token;
   // With secure email change off, token_hash pairs with the new address (Supabase names the hashes the other way round).
   const link = change && email_data.token_hash
-    ? `${Deno.env.get('SUPABASE_URL')}/auth/v1/verify?${new URLSearchParams({
+    ? `${Deno.env.get('PUBLIC_API_URL') ?? Deno.env.get('SUPABASE_URL')}/auth/v1/verify?${new URLSearchParams({
         token: email_data.token_hash,
         type: 'email_change',
         ...(email_data.redirect_to ? { redirect_to: email_data.redirect_to } : {}),
