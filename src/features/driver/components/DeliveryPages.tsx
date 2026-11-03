@@ -1,9 +1,11 @@
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Linking, Text, View } from 'react-native';
 import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { completeStop } from '../../../services/driver.route.service';
-import { recordHandover, type DeliveryOrder, type DropoffStop, type PickupStop } from '../../../services/driver.deliveries.service';
+import { recordHandover, uploadHandoverMedia, type DeliveryOrder, type DropoffStop, type HandoverMediaKind, type PickupStop } from '../../../services/driver.deliveries.service';
+import type { PickedImage } from '../../../services/catalogueImage';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { NOTE_MAX, parseReading } from '../reading';
 import { Empty } from '../../ops/components/OpsBits';
@@ -126,14 +128,14 @@ export function PickupPage({
           </>
         }
       />
-      {done ? <SavedReading kg={pickup.recordedKg} grade={pickup.recordedGrade} temp={pickup.temperatureC} note={pickup.note} /> : (
+      {done ? <SavedReading kg={pickup.recordedKg} grade={pickup.recordedGrade} temp={pickup.temperatureC} note={pickup.note} mediaUrl={pickup.mediaUrl} mediaKind={pickup.mediaKind} /> : (
         <ReadingForm
           kind="pickup"
+          stopId={pickup.stopId}
           range={range}
-          initial={{ kg: pickup.recordedKg, grade: pickup.recordedGrade, temp: pickup.temperatureC, note: pickup.note }}
+          initial={{ kg: pickup.recordedKg, grade: pickup.recordedGrade, temp: pickup.temperatureC, note: pickup.note, mediaPath: pickup.mediaPath, mediaKind: pickup.mediaKind, mediaUrl: pickup.mediaUrl }}
           blocked={false}
           completeLabel="Mark collected"
-          onSave={(reading) => recordHandover(pickup.stopId, reading)}
           onComplete={() => completeStop(pickup.stopId)}
           onChange={onChange}
         />
@@ -174,15 +176,15 @@ export function DropoffPage({
           {p.state === 'pending' ? ' · still to collect' : ''}
         </Text>
       ))}
-      {done ? <SavedReading kg={null} grade={null} temp={dropoff.temperatureC} note={dropoff.note} /> : (
+      {done ? <SavedReading kg={null} grade={null} temp={dropoff.temperatureC} note={dropoff.note} mediaUrl={dropoff.mediaUrl} mediaKind={dropoff.mediaKind} /> : (
         <ReadingForm
           kind="dropoff"
+          stopId={dropoff.stopId}
           range={range}
-          initial={{ kg: null, grade: null, temp: dropoff.temperatureC, note: dropoff.note }}
+          initial={{ kg: null, grade: null, temp: dropoff.temperatureC, note: dropoff.note, mediaPath: dropoff.mediaPath, mediaKind: dropoff.mediaKind, mediaUrl: dropoff.mediaUrl }}
           blocked={waiting}
           blockedText="Collect every farmer's produce before delivering this order."
           completeLabel="Mark delivered"
-          onSave={(reading) => recordHandover(dropoff.stopId, reading)}
           onComplete={() => completeStop(dropoff.stopId)}
           onChange={onChange}
         />
@@ -191,7 +193,10 @@ export function DropoffPage({
   );
 }
 
-function SavedReading({ kg, grade, temp, note }: { kg: number | null; grade: string | null; temp: number | null; note: string }) {
+function SavedReading({ kg, grade, temp, note, mediaUrl, mediaKind }: {
+  kg: number | null; grade: string | null; temp: number | null; note: string;
+  mediaUrl: string | null; mediaKind: HandoverMediaKind | null;
+}) {
   const s = useThemedStyles(styles);
   return (
     <Card style={s.item}>
@@ -199,20 +204,27 @@ function SavedReading({ kg, grade, temp, note }: { kg: number | null; grade: str
       {kg != null ? <Text style={s.meta}>{kgText(kg)} · grade {grade}</Text> : null}
       <Text style={s.meta}>{temp == null ? 'No temperature recorded' : `${temp} °C`}</Text>
       {note ? <Text style={s.meta}>{note}</Text> : null}
+      {mediaUrl ? <MediaPreview uri={mediaUrl} kind={mediaKind ?? 'photo'} /> : null}
     </Card>
   );
 }
 
+function MediaPreview({ uri, kind }: { uri: string; kind: HandoverMediaKind }) {
+  const s = useThemedStyles(styles);
+  if (kind === 'video') return <Button size="sm" variant="outline" label="Open video" onPress={() => Linking.openURL(uri)} />;
+  return <Image source={{ uri }} style={s.thumb} accessibilityLabel="Stop photo" />;
+}
+
 function ReadingForm({
-  kind, range, initial, blocked, blockedText, completeLabel, onSave, onComplete, onChange,
+  kind, stopId, range, initial, blocked, blockedText, completeLabel, onComplete, onChange,
 }: {
   kind: 'pickup' | 'dropoff';
+  stopId: string;
   range: { min: number | null; max: number | null };
-  initial: { kg: number | null; grade: string | null; temp: number | null; note: string };
+  initial: { kg: number | null; grade: string | null; temp: number | null; note: string; mediaPath: string | null; mediaKind: HandoverMediaKind | null; mediaUrl: string | null };
   blocked: boolean;
   blockedText?: string;
   completeLabel: string;
-  onSave: (reading: { kg: number | null; grade: string | null; temp: number; note: string | null }) => Promise<void>;
   onComplete: () => Promise<void>;
   onChange: () => Promise<void>;
 }) {
@@ -222,16 +234,21 @@ function ReadingForm({
   const [grade, setGrade] = useState(initial.grade ?? '');
   const [temp, setTemp] = useState(initial.temp == null ? '' : String(initial.temp));
   const [note, setNote] = useState(initial.note);
+  const [picked, setPicked] = useState<PickedImage | null>(null);
   const [tried, setTried] = useState(false);
   useEffect(() => {
     setKg(initial.kg == null ? '' : String(initial.kg));
     setGrade(initial.grade ?? '');
     setTemp(initial.temp == null ? '' : String(initial.temp));
     setNote(initial.note);
-  }, [initial.kg, initial.grade, initial.temp, initial.note]);
+    setPicked(null);
+  }, [initial.kg, initial.grade, initial.temp, initial.note, initial.mediaPath]);
 
   const parsed = parseReading({ kind, kg, grade, temp, note, min: range.min, max: range.max });
+  const hasMedia = Boolean(picked || initial.mediaPath);
   const clean = parsed.ok
+    && !picked
+    && Boolean(initial.mediaPath)
     && initial.temp === parsed.value.temp
     && initial.kg === parsed.value.kg
     && (initial.grade ?? null) === parsed.value.grade
@@ -239,10 +256,21 @@ function ReadingForm({
   const lo = range.min ?? -100;
   const hi = range.max ?? 100;
 
+  const choose = async (from: 'camera' | 'library') => {
+    if (from === 'camera') {
+      const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+      if (!granted) return;
+    }
+    const r = from === 'camera'
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], videoMaxDuration: 30, quality: 0.6 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], videoMaxDuration: 30, quality: 0.6 });
+    if (!r.canceled && r.assets[0]) setPicked({ uri: r.assets[0].uri, mimeType: r.assets[0].mimeType, assetId: r.assets[0].assetId });
+  };
+
   return (
     <Card style={s.item}>
       <Text style={s.name}>{kind === 'pickup' ? 'What you collected' : 'Temperature on arrival'}</Text>
-      <Text style={s.meta}>Allowed temperature is {lo} to {hi} °C. This stays as you save it once the stop is done.</Text>
+      <Text style={s.meta}>Allowed temperature is {lo} to {hi} °C. Add a photo or a short video. This stays as you save it once the stop is done.</Text>
       {kind === 'pickup' ? (
         <>
           <Input label="Kilos collected" value={kg} onChangeText={setKg} keyboardType="decimal-pad" maxLength={8} />
@@ -251,14 +279,23 @@ function ReadingForm({
       ) : null}
       <Input label="Temperature (°C)" value={temp} onChangeText={setTemp} keyboardType="numbers-and-punctuation" maxLength={6} />
       <Input label="Condition notes" value={note} onChangeText={setNote} maxLength={NOTE_MAX} hint={`${note.length}/${NOTE_MAX}`} />
+      <View style={s.actions}>
+        <Button size="sm" variant="outline" label="Take photo or video" onPress={() => choose('camera')} />
+        <Button size="sm" variant="outline" label="Upload" onPress={() => choose('library')} />
+      </View>
+      {picked ? <MediaPreview uri={picked.uri} kind={(picked.mimeType || '').startsWith('video/') ? 'video' : 'photo'} /> : initial.mediaUrl ? <MediaPreview uri={initial.mediaUrl} kind={initial.mediaKind ?? 'photo'} /> : <Text style={s.meta}>No photo or video yet.</Text>}
       {tried && !parsed.ok ? <Banner text={parsed.error} /> : null}
+      {tried && parsed.ok && !hasMedia ? <Banner text="Add a photo or a short video of this stop." /> : null}
       {error ? <Banner text={error} /> : null}
       {blocked && blockedText ? <Banner tone="info" text={blockedText} /> : null}
       <View style={s.actions}>
         <Button size="sm" label="Save reading" loading={busy} disabled={clean} onPress={() => {
           setTried(true);
-          if (!parsed.ok) return;
-          run(() => onSave(parsed.value));
+          if (!parsed.ok || !hasMedia) return;
+          run(async () => {
+            const media = picked ? await uploadHandoverMedia(stopId, picked) : { path: initial.mediaPath as string, kind: initial.mediaKind as HandoverMediaKind };
+            await recordHandover(stopId, { ...parsed.value, mediaPath: media.path, mediaKind: media.kind });
+          });
         }} />
         <Button size="sm" variant="outline" label={completeLabel} loading={busy} disabled={!clean || blocked} onPress={() => run(onComplete)} />
       </View>
@@ -274,4 +311,5 @@ const styles = (c: Record<ColorToken, string>) => ({
   section: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink, marginTop: 4 },
   name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
+  thumb: { width: 160, height: 160, borderRadius: 14, backgroundColor: c.surfaceSunken },
 });

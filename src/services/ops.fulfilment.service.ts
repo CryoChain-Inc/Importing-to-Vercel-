@@ -5,6 +5,7 @@ const fail = (msg: string) => (error: unknown) => {
 };
 
 export type AllocationStatus = 'offered' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'collected';
+export type MediaKind = 'photo' | 'video';
 
 export interface BoardAllocation {
   id: string;
@@ -16,6 +17,13 @@ export interface BoardAllocation {
   status: AllocationStatus;
   expiresAt: string;
   kmToBuyer: number | null;
+  farmerPhotos: string[];
+  capturePhoto: string | null;
+  takenKg: number | null;
+  takenGrade: string | null;
+  temperatureC: number | null;
+  driverMediaUrl: string | null;
+  driverMediaKind: MediaKind | null;
 }
 
 export interface BoardStop {
@@ -26,6 +34,21 @@ export interface BoardStop {
   state: 'pending' | 'done';
   doneAt: string | null;
   driver: string;
+  lat: number | null;
+  lng: number | null;
+  allocationId: string | null;
+  takenKg: number | null;
+  takenGrade: string | null;
+  temperatureC: number | null;
+  mediaUrl: string | null;
+  mediaKind: MediaKind | null;
+}
+
+export interface BoardDriver {
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  seenAt: string | null;
 }
 
 export interface BoardOrder {
@@ -36,47 +59,147 @@ export interface BoardOrder {
   state: 'awaiting_payment' | 'paid' | 'cancelled';
   createdAt: string;
   address: string;
+  itemKg: number;
   items: string[];
   allocations: BoardAllocation[];
   stops: BoardStop[];
+  driver: BoardDriver | null;
 }
 
-/** Every cart order with who supplies it, what we pay them and where the driver is in the route. */
+const one = (v: any) => (Array.isArray(v) ? v[0] : v) ?? null;
+const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
+
+const BOARD = `id, code, amount, state, created_at, delivery_address,
+  buyers(organization_name),
+  order_items(grade, kg, products(name)),
+  order_allocations(id, listing_id, grade, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name),
+    produce_listings(image_paths, captures(recorded_kg, grade, photo_path))),
+  delivery_stops(id, kind, label, seq, state, done_at, lat, lng, allocation_id, driver_id,
+    delivery_handovers(recorded_kg, grade, temperature_c, note, media_path, media_kind),
+    drivers(id, profiles(display_name), driver_locations(lat, lng, updated_at)))`;
+
+const BOARD_NO_MEDIA = BOARD.replace(', media_path, media_kind', '');
+const BOARD_BASE = `id, code, amount, state, created_at, delivery_address, buyers(organization_name),
+  order_items(grade, kg, products(name)),
+  order_allocations(id, grade, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name)),
+  delivery_stops(id, kind, label, seq, state, done_at, drivers(profiles(display_name)))`;
+
+async function signed(bucket: string, path: string | null | undefined): Promise<string | null> {
+  if (!path) return null;
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
+  return data?.signedUrl ?? null;
+}
+
+function publicProduce(path: string) {
+  return supabase.storage.from('produce').getPublicUrl(path).data.publicUrl;
+}
+
+function handoverOf(s: any) {
+  return one(s?.delivery_handovers);
+}
+
+function locOf(drivers: any): BoardDriver {
+  const d = one(drivers);
+  const loc = one(d?.driver_locations);
+  return {
+    name: one(d?.profiles)?.display_name || '',
+    lat: loc ? Number(loc.lat) : null,
+    lng: loc ? Number(loc.lng) : null,
+    seenAt: loc?.updated_at ?? null,
+  };
+}
+
+function driverOf(stopsRaw: any[]): BoardDriver | null {
+  let best: BoardDriver | null = null;
+  for (const s of stopsRaw) {
+    const d = locOf(s.drivers);
+    if (!d.name && d.lat == null) continue;
+    if (!best || (d.lat != null && best.lat == null) || (d.seenAt && (!best.seenAt || d.seenAt > best.seenAt))) best = d;
+  }
+  return best;
+}
+
+/** Every cart order with who supplies it, driver readings, listing photos and where the truck is. */
 export async function fetchBoard(): Promise<BoardOrder[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`id, code, amount, state, created_at, delivery_address, buyers(organization_name),
-      order_items(grade, kg, products(name)),
-      order_allocations(id, grade, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name)),
-      delivery_stops(id, kind, label, seq, state, done_at, drivers(profiles(display_name)))`)
-    .not('delivery_address', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  fail('Could not load orders.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    code: r.code,
-    buyer: r.buyers?.organization_name || 'Buyer',
-    amount: Number(r.amount),
-    state: r.state,
-    createdAt: r.created_at,
-    address: r.delivery_address ?? '',
-    items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} ${i.grade} · ${Number(i.kg).toLocaleString('en-GH')} kg`),
-    allocations: (r.order_allocations ?? []).map((a: any) => ({
-      id: a.id,
-      product: a.products?.name ?? '',
-      grade: a.grade,
-      farmer: a.profiles?.display_name || 'Farmer',
-      kg: Number(a.kg),
-      amount: Number(a.amount),
-      status: a.status,
-      expiresAt: a.expires_at,
-      kmToBuyer: a.km_to_buyer == null ? null : Number(a.km_to_buyer),
-    })),
-    stops: (r.delivery_stops ?? [])
-      .map((s: any) => ({ id: s.id, kind: s.kind, label: s.label, seq: s.seq, state: s.state, doneAt: s.done_at, driver: s.drivers?.profiles?.display_name ?? '' }))
-      .sort((a: BoardStop, b: BoardStop) => (a.seq ?? 999) - (b.seq ?? 999)),
+  let res = await supabase.from('orders').select(BOARD).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100);
+  if (res.error && /media_path|media_kind|delivery_handovers|produce_listings|captures|driver_locations|listing_id/i.test(res.error.message)) {
+    res = await supabase.from('orders').select(BOARD_NO_MEDIA).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100);
+  }
+  if (res.error) {
+    res = await supabase.from('orders').select(BOARD_BASE).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100);
+  }
+  fail('Could not load orders.')(res.error);
+
+  const rows = await Promise.all((res.data ?? []).map(async (r: any) => {
+    const stopsRaw = r.delivery_stops ?? [];
+    const stops: BoardStop[] = await Promise.all(stopsRaw.map(async (s: any) => {
+      const h = handoverOf(s);
+      const d = locOf(s.drivers);
+      const kind = h?.media_kind === 'video' ? 'video' : h?.media_kind === 'photo' ? 'photo' : null;
+      return {
+        id: s.id,
+        kind: s.kind,
+        label: s.label,
+        seq: s.seq,
+        state: s.state,
+        doneAt: s.done_at,
+        driver: d.name,
+        lat: num(s.lat),
+        lng: num(s.lng),
+        allocationId: s.allocation_id ?? null,
+        takenKg: num(h?.recorded_kg),
+        takenGrade: h?.grade ?? null,
+        temperatureC: num(h?.temperature_c),
+        mediaUrl: await signed('deliveries', h?.media_path),
+        mediaKind: kind as MediaKind | null,
+      };
+    }));
+    stops.sort((a, b) => (a.seq ?? 999) - (b.seq ?? 999));
+
+    const byAlloc = new Map(stops.filter((s) => s.allocationId).map((s) => [s.allocationId as string, s]));
+    const liveDriver = driverOf(stopsRaw);
+
+    const allocations: BoardAllocation[] = await Promise.all((r.order_allocations ?? []).map(async (a: any) => {
+      const listing = one(a.produce_listings);
+      const capture = one(listing?.captures);
+      const stop = byAlloc.get(a.id);
+      const photos = ((listing?.image_paths ?? []) as string[]).map(publicProduce);
+      return {
+        id: a.id,
+        product: a.products?.name ?? '',
+        grade: a.grade,
+        farmer: one(a.profiles)?.display_name || 'Farmer',
+        kg: Number(a.kg),
+        amount: Number(a.amount),
+        status: a.status,
+        expiresAt: a.expires_at,
+        kmToBuyer: a.km_to_buyer == null ? null : Number(a.km_to_buyer),
+        farmerPhotos: photos,
+        capturePhoto: await signed('captures', capture?.photo_path),
+        takenKg: stop?.takenKg ?? (capture ? num(capture.recorded_kg) : null),
+        takenGrade: stop?.takenGrade ?? capture?.grade ?? null,
+        temperatureC: stop?.temperatureC ?? null,
+        driverMediaUrl: stop?.mediaUrl ?? null,
+        driverMediaKind: stop?.mediaKind ?? null,
+      };
+    }));
+
+    return {
+      id: r.id,
+      code: r.code,
+      buyer: r.buyers?.organization_name || 'Buyer',
+      amount: Number(r.amount),
+      state: r.state,
+      createdAt: r.created_at,
+      address: r.delivery_address ?? '',
+      itemKg: (r.order_items ?? []).reduce((n: number, i: any) => n + Number(i.kg || 0), 0),
+      items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} ${i.grade} · ${Number(i.kg).toLocaleString('en-GH')} kg`),
+      allocations,
+      stops,
+      driver: liveDriver,
+    } satisfies BoardOrder;
   }));
+  return rows;
 }
 
 export interface DriverRoute {
