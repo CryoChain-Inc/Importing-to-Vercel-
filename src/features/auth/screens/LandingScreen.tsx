@@ -1,5 +1,5 @@
-import React from 'react';
-import { KeyboardAvoidingView, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Keyboard, Platform, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brand } from '../../../components/common/Brand';
 import { ThemeToggle } from '../../../components/common/ThemeToggle';
@@ -9,12 +9,51 @@ import { EntryCard } from '../components/EntryCard';
 import { StoryCarousel } from '../components/StoryCarousel';
 
 const SHEET_OVERLAP = 28;
+// Artwork left showing above the sheet while a field is in use.
+const PEEK = 96;
 
 export function LandingScreen() {
   const wide = useIsWide();
   const s = useThemedStyles(styles);
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [sheetH, setSheetH] = useState(0);
+  const [kb, setKb] = useState(0);
+  const [lift] = useState(() => new Animated.Value(0));
+  const blurTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const heroH = Math.max(360, Math.min(height * 0.56, 520));
+
+  // The sheet is moved with a transform only, so nothing re-lays-out while the keyboard opens (that was the Android jitter).
+  // Native: the keyboard events drive it once. Web has none, so field focus stands in, debounced across field switches.
+  const go = useCallback(
+    (open: boolean) => Animated.timing(lift, { toValue: open ? 1 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(),
+    [lift],
+  );
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+      setKb(e.endCoordinates.height);
+      go(true);
+    });
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => go(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [go]);
+  useEffect(() => () => clearTimeout(blurTimer.current), []);
+  const onFieldFocus = Platform.OS === 'web'
+    ? (focused: boolean) => {
+        clearTimeout(blurTimer.current);
+        blurTimer.current = setTimeout(() => go(focused), focused ? 0 : 150);
+      }
+    : undefined;
+
+  // Rise until the sheet's top sits PEEK below the status bar, but never so far that its bottom (the button) drops under the keyboard.
+  const natural = heroH - SHEET_OVERLAP;
+  const top = Math.min(natural, Math.max(insets.top + PEEK, height - (kb || 300) - sheetH));
+  const rise = lift.interpolate({ inputRange: [0, 1], outputRange: [0, top - natural] });
 
   if (wide) {
     return (
@@ -35,20 +74,20 @@ export function LandingScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={s.root} behavior="padding">
+    <View style={s.root}>
       <ScrollView style={s.root} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" bounces={false} overScrollMode="never">
         <View>
-          <StoryCarousel style={{ height: Math.max(360, Math.min(height * 0.56, 520)) }} dotsBottom={SHEET_OVERLAP + 14} />
+          <StoryCarousel style={{ height: heroH }} dotsBottom={SHEET_OVERLAP + 14} />
           <View pointerEvents="box-none" style={[s.topBar, { top: insets.top + 8 }]}>
             <ThemeToggle />
           </View>
         </View>
-        <View style={s.sheet}>
+        <Animated.View onLayout={(e) => setSheetH(e.nativeEvent.layout.height)} style={[s.sheet, { transform: [{ translateY: rise }] }]}>
           <Text accessibilityRole="header" style={s.title}>Log in or sign up</Text>
-          <EntryCard />
-        </View>
+          <EntryCard onFieldFocus={onFieldFocus} />
+        </Animated.View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

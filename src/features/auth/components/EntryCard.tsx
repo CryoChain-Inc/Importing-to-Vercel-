@@ -12,7 +12,7 @@ import { PhoneField } from './PhoneField';
 import { SITE } from './AccountFooter';
 
 /** The single front door: a phone number (with country code) or an email, then a one-time login code. */
-export function EntryCard() {
+export function EntryCard({ onFieldFocus }: { onFieldFocus?: (focused: boolean) => void }) {
   const { push } = useNav();
   const s = useThemedStyles(styles);
   const [viaEmail, setViaEmail] = useState(false);
@@ -46,9 +46,9 @@ export function EntryCard() {
     <View style={s.card}>
       {error ? <Banner text={error} /> : null}
       {viaEmail ? (
-        <Input label="Email" value={email} onChangeText={setEmail} maxLength={EMAIL_MAX} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" onSubmitEditing={() => ready && submit()} />
+        <Input label="Email" onFocus={() => onFieldFocus?.(true)} onBlur={() => onFieldFocus?.(false)} value={email} onChangeText={setEmail} maxLength={EMAIL_MAX} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" onSubmitEditing={() => ready && submit()} />
       ) : (
-        <PhoneField country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
+        <PhoneField onFocus={() => onFieldFocus?.(true)} onBlur={() => onFieldFocus?.(false)} country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
       )}
       <Button label="Continue" size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
       <TextLink label={viaEmail ? 'Use my phone number instead' : 'Use my email instead'} onPress={() => switchTo(!viaEmail)} />
