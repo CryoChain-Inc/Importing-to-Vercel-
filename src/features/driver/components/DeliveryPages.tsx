@@ -182,9 +182,9 @@ export function PickupPage({
           kind="pickup"
           stopId={pickup.stopId}
           range={range}
-          initial={{ kg: pickup.recordedKg ?? pickup.expectedKg, grade: pickup.recordedGrade ?? pickup.expectedGrade, temp: pickup.temperatureC, note: pickup.note, mediaPath: pickup.mediaPath, mediaKind: pickup.mediaKind, mediaUrl: pickup.mediaUrl }}
+          initial={{ kg: pickup.recordedKg, grade: pickup.recordedGrade, temp: pickup.temperatureC, note: pickup.note, mediaPath: pickup.mediaPath, mediaKind: pickup.mediaKind, mediaUrl: pickup.mediaUrl }}
           blocked={false}
-          completeLabel="Mark collected"
+          completeLabel="Confirm pickup"
           onComplete={() => completeStop(pickup.stopId)}
           onChange={onChange}
         />
@@ -236,7 +236,7 @@ export function DropoffPage({
           initial={{ kg: null, grade: null, temp: dropoff.temperatureC, note: dropoff.note, mediaPath: dropoff.mediaPath, mediaKind: dropoff.mediaKind, mediaUrl: dropoff.mediaUrl }}
           blocked={waiting > 0}
           blockedText="Collect every farmer's produce before delivering this order."
-          completeLabel="Mark delivered"
+          completeLabel="Confirm delivery"
           onComplete={() => completeStop(dropoff.stopId)}
           onChange={onChange}
         />
@@ -293,7 +293,6 @@ function ReadingForm({
   const [temp, setTemp] = useState(initial.temp == null ? '' : String(initial.temp));
   const [note, setNote] = useState(initial.note);
   const [picked, setPicked] = useState<PickedImage | null>(null);
-  const [tried, setTried] = useState(false);
   useEffect(() => {
     setKg(initial.kg == null ? '' : String(initial.kg));
     setGrade(initial.grade ?? '');
@@ -304,13 +303,7 @@ function ReadingForm({
 
   const parsed = parseReading({ kind, kg, grade, temp, note, min: range.min, max: range.max });
   const hasMedia = Boolean(picked || initial.mediaPath);
-  const clean = parsed.ok
-    && !picked
-    && Boolean(initial.mediaPath)
-    && initial.temp === parsed.value.temp
-    && initial.kg === parsed.value.kg
-    && (initial.grade ?? null) === parsed.value.grade
-    && (initial.note.trim() || null) === parsed.value.note;
+  const ready = Boolean(parsed.ok && hasMedia && !blocked);
   const lo = range.min ?? -100;
   const hi = range.max ?? 100;
 
@@ -342,21 +335,24 @@ function ReadingForm({
         <Button size="sm" variant="outline" label="Upload" onPress={() => choose('library')} />
       </View>
       {picked ? <MediaPreview uri={picked.uri} kind={(picked.mimeType || '').startsWith('video/') ? 'video' : 'photo'} /> : initial.mediaUrl ? <MediaPreview uri={initial.mediaUrl} kind={initial.mediaKind ?? 'photo'} /> : <Text style={s.meta}>No photo or video yet.</Text>}
-      {tried && !parsed.ok ? <Banner text={parsed.error} /> : null}
-      {tried && parsed.ok && !hasMedia ? <Banner text="Add a photo or a short video of this stop." /> : null}
       {error ? <Banner text={error} /> : null}
       {blocked && blockedText ? <Banner tone="info" text={blockedText} /> : null}
-      <View style={s.actions}>
-        <Button size="sm" label="Save reading" loading={busy} disabled={clean} onPress={() => {
-          setTried(true);
+      <Button
+        size="lg"
+        label={completeLabel}
+        icon="check"
+        loading={busy}
+        disabled={!ready}
+        onPress={() => {
           if (!parsed.ok || !hasMedia) return;
+          const value = parsed.value;
           run(async () => {
             const media = picked ? await uploadHandoverMedia(stopId, picked) : { path: initial.mediaPath as string, kind: initial.mediaKind as HandoverMediaKind };
-            await recordHandover(stopId, { ...parsed.value, mediaPath: media.path, mediaKind: media.kind });
+            await recordHandover(stopId, { ...value, mediaPath: media.path, mediaKind: media.kind });
+            await onComplete();
           });
-        }} />
-        <Button size="sm" variant="outline" label={completeLabel} loading={busy} disabled={!clean || blocked} onPress={() => run(onComplete)} />
-      </View>
+        }}
+      />
     </Card>
   );
 }
