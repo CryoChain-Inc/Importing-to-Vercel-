@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Icon } from '../../../components/common';
+import { fieldStyles } from '../../../components/common/Input';
 import { useIsWide } from '../../../components/layout';
 import { COUNTRIES, type Country } from '../../../data/countries';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
@@ -13,10 +14,12 @@ interface Props {
   onSubmitEditing?: () => void;
   label?: string;
   error?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 /** Country-code picker (bottom sheet on phones, dialog on wide screens) plus the national number. */
-export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEditing, label = 'Mobile number', error }: Props) {
+export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEditing, label = 'Mobile number', error, onFocus, onBlur }: Props) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const wide = useIsWide();
@@ -34,8 +37,8 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
 
   return (
     <View style={s.container}>
-      <Text style={s.label}>{label}</Text>
       <View style={[s.field, focused && s.focused, error ? s.errored : null]}>
+        <Text pointerEvents="none" style={[s.label, error ? s.labelErr : null]}>{label}</Text>
         <Pressable
           onPress={() => setOpen(true)}
           accessibilityRole="button"
@@ -50,8 +53,14 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
           style={[s.input, { outlineStyle: 'none' } as object]}
           value={value}
           onChangeText={onChangeText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onFocus={() => {
+            setFocused(true);
+            onFocus?.();
+          }}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
           onSubmitEditing={onSubmitEditing}
           keyboardType="phone-pad"
           autoComplete="tel-national"
@@ -108,38 +117,26 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
+  ...fieldStyles(c),
+  field: { ...fieldStyles(c).field, minHeight: 70, paddingTop: 24, paddingBottom: 8 },
   container: { gap: 6, width: '100%' as const },
-  label: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.ink },
-  field: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    minHeight: TOUCH + 4,
-    borderWidth: 1.5,
-    borderColor: c.borderStrong,
-    borderRadius: 12,
-    paddingRight: 14,
-    backgroundColor: c.surfaceSunken,
-  },
-  focused: { borderColor: c.focusRing, backgroundColor: c.surfaceCard },
-  errored: { borderColor: c.dangerInk },
-  error: { fontFamily: fonts.sansRegular, fontSize: 12, color: c.dangerInk },
+  label: { position: 'absolute' as const, top: 9, left: 16, fontFamily: fonts.sansMedium, fontSize: 12, lineHeight: 16, color: c.inkMuted },
+    labelErr: { color: c.dangerInk },
+  error: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.dangerInk, paddingHorizontal: 4 },
   code: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    alignSelf: 'stretch' as const,
-    paddingLeft: 12,
-    paddingRight: 10,
+    height: 36,
+    paddingRight: 12,
     marginRight: 12,
-    borderTopLeftRadius: 10,
-    borderBottomLeftRadius: 10,
     borderRightWidth: 1,
-    borderRightColor: c.borderStrong,
+    borderRightColor: c.borderSubtle,
   },
   pressed: { opacity: 0.6 },
   flag: { fontSize: 22 },
   dial: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },
-  input: { flex: 1, minHeight: TOUCH, fontSize: 16, fontFamily: fonts.sansMedium, color: c.ink },
+  input: { flex: 1, height: 36, padding: 0, fontSize: 17, fontFamily: fonts.sansMedium, color: c.ink },
   overlay: { flex: 1, justifyContent: 'flex-end' as const },
   overlayWide: { justifyContent: 'center' as const, alignItems: 'center' as const },
   backdrop: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5,8,6,0.55)' },

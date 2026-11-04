@@ -6,7 +6,7 @@ import { authService } from '../../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
 // The public site hosts the policies; Google Play also needs these URLs in the store listing.
-const SITE = 'https://www.cryochain.co';
+export const SITE = 'https://www.cryochain.co';
 
 /** Privacy / terms links plus a two-step "delete my account" for farmers and buyers. */
 export function AccountFooter({ onDeleted }: { onDeleted: () => void }) {

@@ -71,10 +71,11 @@ export async function applyTransferEvent(event: string, data: { reference: strin
 
 /**
  * Where Paystack sends the buyer after paying: the app's URL scheme in the app, /payment/verify on the web.
- * APP_URL wins; without it the page that started the payment (Origin header) is used, so web payments still come back.
+ * On the web the page that started the payment (Origin header) wins, so the buyer always lands back where they paid
+ * (localhost, preview or production); APP_URL is only the fallback when no Origin is sent.
  */
 export function callbackUrl(req: Request, native: boolean): string {
   if (native) return 'cryochain://payment/verify';
-  const base = (Deno.env.get('APP_URL') || req.headers.get('origin') || '').replace(/\/$/, '');
+  const base = (req.headers.get('origin') || Deno.env.get('APP_URL') || '').replace(/\/$/, '');
   return base ? `${base}/payment/verify` : '';
 }

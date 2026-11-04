@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, type IconName } from '../../../components/common';
+import { Button, type IconName } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
@@ -12,8 +12,9 @@ import { fetchDriverTrips, type TruckBooking } from '../../../services/truck.ser
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import type { Account } from '../../../types/auth';
 import { Empty } from '../../ops/components/OpsBits';
-import { DeliveryList, DeliveryOrderPage, DropoffPage, PickupPage } from '../components/DeliveryPages';
-import { TruckDetail, TruckList, TruckMessages } from '../components/TruckPages';
+import { DeliveryList, DeliveryOrderPage, DropoffPage, nextStop, PickupPage } from '../components/DeliveryPages';
+import { NextCard, SectionLabel } from '../components/bits';
+import { truckStatus, TruckDetail, TruckList, TruckMessages } from '../components/TruckPages';
 import { useDriverLocation } from '../useDriverLocation';
 
 const PING_MS = 30000;
@@ -21,17 +22,17 @@ type Tab = 'home' | 'truck' | 'delivery';
 const TABS: Tab[] = ['home', 'truck', 'delivery'];
 
 const TITLES: Record<Tab, [string, string]> = {
-  home: ['Home', 'Your current cold-truck booking and product delivery.'],
-  truck: ['Cold truck', 'The booking you are on, and trips you have finished.'],
-  delivery: ['Product delivery', 'The order you are delivering, and ones you have finished.'],
+  home: ['Home', "Here's what needs you now."],
+  truck: ['Cold truck', ''],
+  delivery: ['Delivery', ''],
 };
 
 const heading = (tab: Tab, view: string): [string, string] => {
-  if (view === 'trip') return ['Past trip', 'Route and what happened on this booking.'];
-  if (view === 'messages') return ['Messages', 'Talk to the buyer about this trip.'];
-  if (view === 'order') return ['Past delivery', 'Farmers, buyer and what was recorded.'];
-  if (view === 'pickup') return ['Pickup', 'Who you collect from, and the reading you take there.'];
-  if (view === 'dropoff') return ['Drop-off', 'Where the produce goes, and the temperature on arrival.'];
+  if (view === 'trip') return ['Trip', ''];
+  if (view === 'messages') return ['Chat', ''];
+  if (view === 'order') return ['Delivery', ''];
+  if (view === 'pickup') return ['Pickup', ''];
+  if (view === 'dropoff') return ['Drop-off', ''];
   return TITLES[tab];
 };
 
@@ -129,6 +130,8 @@ export function DriverHome({ account }: { account: Account }) {
           order={currentOrder}
           onTruck={() => go('truck')}
           onDelivery={() => go('delivery')}
+          onPickup={(stopId) => currentOrder && go('delivery', { view: 'pickup', id: stopId, order: currentOrder.id })}
+          onDropoff={() => currentOrder && go('delivery', { view: 'dropoff', id: currentOrder.id })}
           onSignOut={() => authService.signOut().finally(() => reset({ name: 'landing' }))}
         />
       ) : null}
@@ -179,32 +182,42 @@ function Missing({ label, onBack }: { label: string; onBack: () => void }) {
 }
 
 function Home({
-  trip, order, onTruck, onDelivery, onSignOut,
+  trip, order, onTruck, onDelivery, onPickup, onDropoff, onSignOut,
 }: {
   trip: TruckBooking | null;
   order: DeliveryOrder | null;
   onTruck: () => void;
   onDelivery: () => void;
+  onPickup: (stopId: string) => void;
+  onDropoff: () => void;
   onSignOut: () => void;
 }) {
   const s = useThemedStyles(styles);
+  const next = order ? nextStop(order) : null;
   return (
     <View style={s.list}>
-      {trip ? (
-        <Card style={s.item}>
-          <Text style={s.name}>Cold truck · {trip.code}</Text>
-          <Text style={s.meta}>{trip.buyerName || 'Buyer'} · {trip.pickupLabel}</Text>
-          <Button size="sm" label="Open booking" onPress={onTruck} />
-        </Card>
-      ) : <Empty icon="truck" title="No cold-truck booking" hint="When a buyer is assigned to you, that one trip opens under Cold truck." />}
       {order ? (
-        <Card style={s.item}>
-          <Text style={s.name}>Product delivery · {order.code}</Text>
-          <Text style={s.meta}>{order.buyerName} · {order.pickups.length} farmer{order.pickups.length === 1 ? '' : 's'}</Text>
-          <Button size="sm" label="Open delivery" onPress={onDelivery} />
-        </Card>
-      ) : <Empty icon="package" title="No product delivery" hint="A paid order near you is added under Delivery once your location is on." />}
-      <Button label="Sign out" icon="logOut" variant="ghost" size="sm" onPress={onSignOut} />
+        <NextCard
+          eyebrow={`Delivery · ${order.code}`}
+          title={next?.kind === 'pickup' ? `Collect from ${next.pickup.farmerName}` : next?.kind === 'dropoff' ? `Deliver to ${order.buyerName}` : 'All stops done'}
+          lines={[next?.kind === 'pickup' ? next.pickup.place : order.address, `${order.pickups.length} farmer${order.pickups.length === 1 ? '' : 's'} · buyer ${order.buyerName}`]}
+          label={next?.kind === 'pickup' ? 'Start pickup' : next?.kind === 'dropoff' ? 'Deliver now' : 'View route'}
+          onPress={next?.kind === 'pickup' ? () => onPickup(next.pickup.stopId) : next?.kind === 'dropoff' ? onDropoff : onDelivery}
+        />
+      ) : null}
+      {trip ? (
+        <NextCard
+          eyebrow={`Cold truck · ${trip.code}`}
+          title={`${trip.pickupLabel} → ${trip.dropoffLabel}`}
+          lines={[`${truckStatus(trip).label} · Buyer ${trip.buyerName || 'Buyer'}`]}
+          label={trip.startedAt ? 'Continue trip' : 'Open trip'}
+          onPress={onTruck}
+        />
+      ) : null}
+      {!trip && !order ? (
+        <Empty icon="truck" title="Nothing assigned yet" hint="Keep location on. New deliveries and truck bookings appear here as soon as they are yours." />
+      ) : null}
+      <Button label="Sign out" icon="logOut" variant="ghost" size="sm" onPress={onSignOut} style={{ alignSelf: 'center' }} />
     </View>
   );
 }
@@ -221,13 +234,11 @@ function TruckHome({
   const s = useThemedStyles(styles);
   return (
     <View style={s.list}>
-      <Text style={s.section}>Current booking</Text>
       {trip ? <TruckDetail trip={trip} onMessages={() => onMessages(trip.id)} /> : (
-        <Empty icon="truck" title="No trip right now" hint="You have one cold-truck booking at a time. It shows here when a buyer is assigned to you." />
+        <Empty icon="truck" title="No trip right now" hint="Your next cold-truck booking shows here once a buyer is assigned." />
       )}
-      {also.length > 0 ? <TruckList trips={also} past={false} onOpen={onOpen} /> : null}
-      <Text style={s.section}>Past bookings</Text>
-      {past.length === 0 ? <Text style={s.meta}>Finished bookings will be listed here.</Text> : <TruckList trips={past} past onOpen={onOpen} />}
+      {also.length > 0 ? <><SectionLabel text="Up next · not started" /><TruckList trips={also} past={false} onOpen={onOpen} /></> : null}
+      {past.length > 0 ? <><SectionLabel text="Past trips" /><TruckList trips={past} past onOpen={onOpen} /></> : null}
     </View>
   );
 }
@@ -245,13 +256,11 @@ function DeliveryHome({
   const s = useThemedStyles(styles);
   return (
     <View style={s.list}>
-      <Text style={s.section}>Current delivery</Text>
       {order ? <DeliveryOrderPage order={order} onPickup={onPickup} onDropoff={onDropoff} /> : (
-        <Empty icon="package" title="No delivery right now" hint="You deliver one order at a time. Farmers to collect from, and the buyer, show here." />
+        <Empty icon="package" title="No delivery right now" hint="Paid orders near you are assigned here while your location is on." />
       )}
-      {also.length > 0 ? <DeliveryList orders={also} past={false} onOpen={onOpen} /> : null}
-      <Text style={s.section}>Past deliveries</Text>
-      {past.length === 0 ? <Text style={s.meta}>Finished deliveries will be listed here.</Text> : <DeliveryList orders={past} past onOpen={onOpen} />}
+      {also.length > 0 ? <><SectionLabel text="Up next · not started" /><DeliveryList orders={also} past={false} onOpen={onOpen} /></> : null}
+      {past.length > 0 ? <><SectionLabel text={`Delivered · ${past.length}`} /><DeliveryList orders={past} past onOpen={onOpen} /></> : null}
     </View>
   );
 }
@@ -261,8 +270,4 @@ const styles = (c: Record<ColorToken, string>) => ({
   title: { fontFamily: fonts.heading, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.ink },
   sub: { fontFamily: fonts.sansRegular, fontSize: 14, color: c.inkMuted },
   list: { gap: 14 },
-  section: { fontFamily: fonts.sansBold, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase' as const, color: c.inkMuted },
-  item: { gap: 8 },
-  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
-  meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

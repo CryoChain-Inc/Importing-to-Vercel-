@@ -1,172 +1,117 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  LayoutAnimation,
-  Platform,
-  ScrollView,
-  Text,
-  View,
-  type LayoutChangeEvent,
-} from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Icon, type IconName } from '../../../components/common';
-import { TopBar, useIsWide } from '../../../components/layout';
-import { FOOD_ASSETS } from '../../../assets/food';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Keyboard, Platform, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Brand } from '../../../components/common/Brand';
+import { ThemeToggle } from '../../../components/common/ThemeToggle';
+import { useIsWide } from '../../../components/layout';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { EntryCard } from '../components/EntryCard';
+import { StoryCarousel } from '../components/StoryCarousel';
 
-const POINTS: { icon: IconName; text: string }[] = [
-  { icon: 'package', text: 'Weighed and graded at the farm gate' },
-  { icon: 'shield', text: 'Kept cold from collection to delivery' },
-  { icon: 'wallet', text: 'Farmers paid per consignment' },
-];
+const SHEET_OVERLAP = 28;
+// Artwork left showing above the sheet while a field is in use.
+const PEEK = 96;
 
-// The artwork is 2:3 with the van in its lower half; keep that band in view at any crop.
-const PHOTO_MIN = 240;
-const IMG_RATIO = 1.5;
-const FOCUS = 0.68;
-
-function Photo({ wide }: { wide: boolean }) {
+export function LandingScreen() {
+  const wide = useIsWide();
   const s = useThemedStyles(styles);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  const onLayout = (e: LayoutChangeEvent) =>
-    setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
-  const imgH = box.w * IMG_RATIO;
-  const top = Math.min(0, Math.max(box.h - imgH, box.h * 0.55 - imgH * FOCUS));
-  return (
-    <View style={[s.photo, wide ? s.photoWide : s.photoNarrow]} onLayout={onLayout}>
-      {box.w > 0 ? (
-        <Image
-          source={FOOD_ASSETS.coldChainTrackingHero}
-          accessibilityLabel="A refrigerated van carrying fresh vegetables along a glowing route between farms"
-          style={{ position: 'absolute', left: 0, width: box.w, height: imgH, top }}
-        />
-      ) : null}
-      {wide ? (
-        <>
-          <Svg style={s.scrim} width="100%" height="100%" preserveAspectRatio="none">
-            <Defs>
-              <LinearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0.55" stopColor="#050806" stopOpacity="0" />
-                <Stop offset="1" stopColor="#050806" stopOpacity="0.9" />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#scrim)" />
-          </Svg>
-          <View style={s.points}>
-            {POINTS.map((p) => (
-              <View key={p.text} style={s.point}>
-                <Icon name={p.icon} size={18} color="#7cf0a8" />
-                <Text style={s.pointText}>{p.text}</Text>
-              </View>
-            ))}
-          </View>
-        </>
-      ) : null}
-    </View>
-  );
-}
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [sheetH, setSheetH] = useState(0);
+  const [kb, setKb] = useState(0);
+  const [lift] = useState(() => new Animated.Value(0));
+  const blurTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const heroH = Math.max(360, Math.min(height * 0.56, 520));
 
-/** True while the keyboard is up; the form card then rides up over the artwork. */
-function useKeyboardOpen() {
-  const [open, setOpen] = useState(false);
+  // The sheet is moved with a transform only, so nothing re-lays-out while the keyboard opens (that was the Android jitter).
+  // Native: the keyboard events drive it once. Web has none, so field focus stands in, debounced across field switches.
+  const go = useCallback(
+    (open: boolean) => Animated.timing(lift, { toValue: open ? 1 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(),
+    [lift],
+  );
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const ios = Platform.OS === 'ios';
-    const on = (v: boolean) => () => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setOpen(v);
-    };
-    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', on(true));
-    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', on(false));
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+      setKb(e.endCoordinates.height);
+      go(true);
+    });
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => go(false));
     return () => {
       show.remove();
       hide.remove();
     };
-  }, []);
-  return open;
-}
+  }, [go]);
+  useEffect(() => () => clearTimeout(blurTimer.current), []);
+  const onFieldFocus = Platform.OS === 'web'
+    ? (focused: boolean) => {
+        clearTimeout(blurTimer.current);
+        blurTimer.current = setTimeout(() => go(focused), focused ? 0 : 150);
+      }
+    : undefined;
 
-export function LandingScreen() {
-  const wide = useIsWide();
-  const typing = useKeyboardOpen();
-  const s = useThemedStyles(styles);
+  // Rise until the sheet's top sits PEEK below the status bar, but never so far that its bottom (the button) drops under the keyboard.
+  const natural = heroH - SHEET_OVERLAP;
+  const top = Math.min(natural, Math.max(insets.top + PEEK, height - (kb || 300) - sheetH));
+  const rise = lift.interpolate({ inputRange: [0, 1], outputRange: [0, top - natural] });
 
-  const headline = (
-    <Text style={[s.h1, wide && s.h1Wide]}>
-      Fresh from the farm to your business, kept cold all the way.
-    </Text>
-  );
+  if (wide) {
+    return (
+      <View style={s.root}>
+        <View style={s.wideCol}>
+          <View style={s.wideForm}>
+            <View style={s.wideBar}><Brand /><ThemeToggle /></View>
+            <View style={s.wideBody}>
+              <Text accessibilityRole="header" style={s.h1Wide}>Fresh from the farm to your business, kept cold all the way.</Text>
+              <Text style={s.lead}>Log in or sign up to start. New here? We set up your account with your first code.</Text>
+              <EntryCard />
+            </View>
+          </View>
+          <StoryCarousel style={s.wideHero} dotsBottom={28} />
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <KeyboardAvoidingView style={s.root} behavior="padding">
-      <ScrollView
-        style={s.root}
-        contentContainerStyle={s.scroll}
-        keyboardShouldPersistTaps="handled"
-        bounces={false}
-        overScrollMode="never"
-      >
-        <View style={[s.col, wide && s.colWide]}>
-          <TopBar />
-          {wide ? (
-            <View style={s.split}>
-              <View style={s.left}>
-                {headline}
-                <Text style={s.lead}>
-                  CryoChain links farmers and buyers. Sign in or create an account to start.
-                </Text>
-                <EntryCard />
-              </View>
-              <Photo wide />
-            </View>
-          ) : (
-            <>
-              {headline}
-              <Photo wide={false} />
-              <View style={[s.cardLift, typing && s.cardLifted]}>
-                <EntryCard />
-              </View>
-            </>
-          )}
+    <View style={s.root}>
+      <ScrollView style={s.root} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" bounces={false} overScrollMode="never">
+        <View>
+          <StoryCarousel style={{ height: heroH }} dotsBottom={SHEET_OVERLAP + 14} />
+          <View pointerEvents="box-none" style={[s.topBar, { top: insets.top + 8 }]}>
+            <ThemeToggle />
+          </View>
         </View>
+        <Animated.View onLayout={(e) => setSheetH(e.nativeEvent.layout.height)} style={[s.sheet, { transform: [{ translateY: rise }] }]}>
+          <Text accessibilityRole="header" style={s.title}>Log in or sign up</Text>
+          <EntryCard onFieldFocus={onFieldFocus} />
+        </Animated.View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   root: { flex: 1, backgroundColor: c.bgApp },
   scroll: { flexGrow: 1 },
-  col: {
-    flex: 1,
-    width: '100%' as const,
-    maxWidth: 1200,
-    alignSelf: 'center' as const,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 14,
+  topBar: { position: 'absolute' as const, right: 16 },
+  sheet: {
+    flexGrow: 1,
+    marginTop: -SHEET_OVERLAP,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: c.bgApp,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 28,
+    gap: 16,
   },
-  colWide: { paddingHorizontal: 40, paddingBottom: 40, gap: 24 },
-  split: { flex: 1, flexDirection: 'row' as const, gap: 56, minHeight: 520 },
-  left: { flex: 1, justifyContent: 'center' as const, gap: 20, maxWidth: 520 },
-  h1: {
-    fontFamily: fonts.heading,
-    fontSize: 26,
-    lineHeight: 31,
-    letterSpacing: -0.6,
-    color: c.ink,
-  },
-  h1Wide: { fontSize: 48, lineHeight: 52, letterSpacing: -1.4 },
+  title: { fontFamily: fonts.sansBold, fontSize: 18, lineHeight: 24, color: c.inkMuted, textAlign: 'center' as const },
+  wideCol: { flex: 1, flexDirection: 'row' as const, width: '100%' as const, maxWidth: 1280, alignSelf: 'center' as const, padding: 32, gap: 64 },
+  wideForm: { flex: 1, justifyContent: 'space-between' as const, paddingVertical: 8 },
+  wideBody: { gap: 20, maxWidth: 460, paddingBottom: 24 },
+  h1Wide: { fontFamily: fonts.heading, fontSize: 44, lineHeight: 48, letterSpacing: -1.3, color: c.ink },
   lead: { fontFamily: fonts.sansRegular, fontSize: 16, lineHeight: 24, color: c.inkMuted },
-  photo: { overflow: 'hidden' as const, backgroundColor: '#0b0f0d' },
-  photoNarrow: { flex: 1, minHeight: PHOTO_MIN, borderRadius: 20 },
-  cardLift: { zIndex: 1 },
-  cardLifted: { marginTop: -PHOTO_MIN / 2 },
-  photoWide: { flex: 1.1, borderRadius: 32 },
-  scrim: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
-  points: { position: 'absolute' as const, left: 28, right: 28, bottom: 28, gap: 10 },
-  point: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  pointText: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: '#f1f5f2' },
+  wideHero: { flex: 1, minHeight: 560, borderRadius: 32 },
+  wideBar: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
 });
