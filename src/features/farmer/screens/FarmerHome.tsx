@@ -95,11 +95,12 @@ export function FarmerHome({ account, tab: initialTab }: { account: Account; tab
     setEditing(null);
   };
 
+  const first = (farmer?.name || account.name || 'farmer').split(' ')[0];
   return (
     <TabShell tabs={TABS} tab={tab} onSelect={select}>
       <View style={s.header}>
         <View style={s.headerText}>
-          <Text style={s.hello}>{TABS.find((t) => t.key === tab)?.label}</Text>
+          <Text style={s.hello}>{tab === 'listings' ? `Hello, ${first}` : TABS.find((t) => t.key === tab)?.label}</Text>
           <Text style={s.sub}>{tab === 'listings' ? 'Your produce, from listing to payout.' : SUB[tab]}</Text>
         </View>
         {loaded && farmer && !(walletReady && addressReady) ? <Badge label={addressReady ? 'Wallet needed' : walletReady ? 'Address needed' : 'Setup needed'} tone="warning" /> : null}

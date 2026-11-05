@@ -27,8 +27,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "description": "CryoChain connects farmers, buyers and cold-chain drivers to move fresh produce."
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-font",
@@ -55,6 +54,7 @@
         }
       ]
     ],
+    "scheme": "cryochain",
     "extra": {
       "eas": {
         "projectId": "7d7afd4a-cdc9-4b29-8192-817993ad7b63"

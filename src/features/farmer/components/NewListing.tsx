@@ -35,10 +35,8 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
   const grade = gradeOptions.length > 0 && !gradeOptions.includes(gradePick) ? gradeOptions[0] : gradePick;
   const key = `${chosen}|${weightKg}|${grade}`;
   const validKg = Number.isFinite(weightKg) && weightKg > 0;
+  const estimate = computed.key === key ? computed.value : null;
   const blockedOnPrice = priced ? !gradeOptions.includes(grade) : false;
-  // Keep showing the last estimate while a new one loads so the card never unmounts and shifts the layout.
-  const estimate = validKg && !blockedOnPrice ? computed.value : null;
-  const pending = computed.key !== key;
   const photosShort = Math.max(0, MIN_PHOTOS - photos.length);
   const ready = chosen.length > 1 && validKg && photosShort === 0 && !blockedOnPrice && (priced !== null || pricesFailed);
   const hint = blockedOnPrice ? `No published price for ${chosen} yet. Pick another product.` : photosShort > 0 ? `Add ${photosShort} more photo${photosShort === 1 ? '' : 's'} to continue.` : !validKg ? 'Enter the weight you have ready.' : null;
@@ -138,6 +136,7 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
               })}
             </View>
           ) : null}
+          {blockedOnPrice ? <Text style={s.meta}>No published price for {chosen} yet. Go back and pick another product.</Text> : null}
           <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
           <View style={s.quick}>
             {[50, 100, 500].map((n) => (
@@ -146,7 +145,13 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
               </Pressable>
             ))}
           </View>
-          <EstimateCard s={s} estimate={estimate} loading={validKg && !blockedOnPrice && pending} lines={2} detail={estimate ? `${ghs(estimate.pricePerKg)}/kg` : blockedOnPrice ? `No published price for ${chosen} yet. Go back and pick another product.` : 'Enter your weight and we will show what you get.'} />
+          {estimate ? (
+            <View style={s.estimate}>
+              <Text style={s.meta}>You get about</Text>
+              <Text style={s.net}>{ghs(estimate.net)}</Text>
+              <Text style={s.meta}>{ghs(estimate.pricePerKg)}/kg</Text>
+            </View>
+          ) : null}
         </>
       ) : null}
 
@@ -166,7 +171,13 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
             <Row label="Weight" value={`${weightKg.toLocaleString('en-GH')} kg`} s={s} />
             <Row label="Photos" value={String(photos.length)} s={s} last />
           </View>
-          <EstimateCard s={s} estimate={estimate} loading={validKg && !blockedOnPrice && pending} lines={4} detail={estimate ? `${ghs(estimate.pricePerKg)}/kg · ${(estimate.feeRate * 100).toFixed(1)}% collection fee ${ghs(estimate.fee)}. Final amount follows the weight and grade recorded at collection.` : 'Final amount follows the weight and grade recorded at collection.'} />
+          {estimate ? (
+            <View style={s.estimate}>
+              <Text style={s.meta}>You get about</Text>
+              <Text style={s.net}>{ghs(estimate.net)}</Text>
+              <Text style={s.meta}>{ghs(estimate.pricePerKg)}/kg · {(estimate.feeRate * 100).toFixed(1)}% collection fee {ghs(estimate.fee)}. Final amount follows the weight and grade recorded at collection.</Text>
+            </View>
+          ) : null}
           <View style={s.pickup}>
             <Icon name="pin" size={18} color={colors.brandInk} />
             <View style={s.pickupText}>
@@ -178,22 +189,6 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
         </>
       ) : null}
     </Sheet>
-  );
-}
-
-/** Fixed-size card with three states in the same footprint: placeholder (no weight), skeleton (first load), value (dimmed while refreshing). */
-function EstimateCard({ s, estimate, loading, detail, lines }: { s: ReturnType<typeof styles>; estimate: Estimate | null; loading: boolean; detail: string; lines: number }) {
-  const first = loading && !estimate;
-  return (
-    <View style={s.estimate} accessibilityLiveRegion="polite">
-      <Text style={s.meta}>You get about</Text>
-      <View style={s.netBox}>
-        {first ? <Skeleton width={150} height={30} radius={8} /> : <Text style={[s.net, !estimate && s.placeholder, loading && s.pending]}>{ghs(estimate ? estimate.net : 0)}</Text>}
-      </View>
-      <View style={{ height: lines * 18 }}>
-        {first ? <><Skeleton width="70%" height={12} style={{ marginTop: 3 }} /><Skeleton width="45%" height={12} style={{ marginTop: 6 }} /></> : <Text style={[s.meta, loading && s.pending]} numberOfLines={lines}>{detail}</Text>}
-      </View>
-    </View>
   );
 }
 
@@ -223,11 +218,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   quick: { flexDirection: 'row' as const, gap: 8 },
   add: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
   addText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink, fontVariant: ['tabular-nums' as const] },
-  estimate: { gap: 4, padding: 16, borderRadius: 16, backgroundColor: c.surfaceSunken },
-  netBox: { height: 36, justifyContent: 'center' as const },
-  placeholder: { opacity: 0.25 },
-  pending: { opacity: 0.6 },
-  net: { fontFamily: fonts.heading, fontSize: 30, lineHeight: 36, letterSpacing: -0.5, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  estimate: { gap: 2, padding: 16, borderRadius: 16, backgroundColor: c.surfaceSunken },
+  net: { fontFamily: fonts.heading, fontSize: 30, letterSpacing: -0.5, color: c.ink, fontVariant: ['tabular-nums' as const] },
   summary: { borderRadius: 16, borderWidth: 1, borderColor: c.borderSubtle, paddingHorizontal: 16 },
   row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 12, paddingVertical: 14 },
   rowLine: { borderBottomWidth: 1, borderBottomColor: c.borderSubtle },
