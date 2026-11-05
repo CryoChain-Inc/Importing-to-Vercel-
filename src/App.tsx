@@ -3,8 +3,7 @@ import { Linking } from 'react-native';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LoadingScreen, ToastProvider, WelcomeDialog } from './components/feedback';
+import { LoadingScreen, ToastProvider } from './components/feedback';
 import { PaymentResultScreen } from './features/buyer/screens/PaymentResultScreen';
 import { EmailVerifiedScreen } from './features/auth/screens/EmailVerifiedScreen';
 import { LandingScreen } from './features/auth/screens/LandingScreen';
@@ -79,27 +78,11 @@ function Shell() {
     return () => { sub.remove(); off(); };
   }, [reset, startedOnVerified]);
 
-  // Greets each account once per device, right after its first sign-in or sign-up.
-  const account = route.name === 'home' || route.name === 'workspace' ? route.account : null;
-  const [welcome, setWelcome] = useState<string | null>(null);
-  useEffect(() => {
-    if (!account) return;
-    const key = `welcomed:${account.id}`;
-    AsyncStorage.getItem(key)
-      .then((seen) => {
-        if (seen) return;
-        setWelcome(account.name?.split(' ')[0] ?? '');
-        return AsyncStorage.setItem(key, '1');
-      })
-      .catch(() => undefined);
-  }, [account?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   if (restoring) return <LoadingScreen message="Loading CryoChain..." />;
   return (
-    <SafeAreaView role="main" style={{ flex: 1, backgroundColor: colors.bgApp }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bgApp }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Routes />
-      {welcome !== null ? <WelcomeDialog name={welcome} onClose={() => setWelcome(null)} /> : null}
     </SafeAreaView>
   );
 }
