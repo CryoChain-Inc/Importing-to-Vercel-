@@ -96,7 +96,7 @@ function Shell() {
 
   if (restoring) return <LoadingScreen message="Loading CryoChain..." />;
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bgApp }}>
+    <SafeAreaView role="main" style={{ flex: 1, backgroundColor: colors.bgApp }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Routes />
       {welcome !== null ? <WelcomeDialog name={welcome} onClose={() => setWelcome(null)} /> : null}
