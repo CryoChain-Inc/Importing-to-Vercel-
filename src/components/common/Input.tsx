@@ -1,7 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { Animated, Easing, Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Platform, Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { Icon } from './Icon';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
+
+// Chrome paints autofilled inputs light blue, ignoring the theme. Repaint them in the theme's own colours.
+function useAutofillTheme(bg: string, ink: string) {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    let el = document.getElementById('autofill-theme') as HTMLStyleElement | null;
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'autofill-theme';
+      document.head.appendChild(el);
+    }
+    el.textContent = `input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px ${bg} inset !important;-webkit-text-fill-color:${ink} !important;caret-color:${ink};transition:background-color 600000s 0s;animation:autofill-start 1ms}@keyframes autofill-start{from{opacity:1}to{opacity:1}}`;
+  }, [bg, ink]);
+}
 
 export interface InputProps extends TextInputProps {
   label: string;
@@ -14,10 +28,21 @@ export interface InputProps extends TextInputProps {
 export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onChangeText, maxLength, secureTextEntry, placeholder, ...rest }: InputProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
+  useAutofillTheme(colors.fieldBg, colors.ink);
   const [focused, setFocused] = useState(false);
   const [shown, setShown] = useState(false);
+  const [autofilled, setAutofilled] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  // React never hears about browser autofill, so lift the label when the animation above fires.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = inputRef.current as unknown as HTMLElement | null;
+    const on = (e: AnimationEvent) => e.animationName === 'autofill-start' && setAutofilled(true);
+    node?.addEventListener('animationstart', on);
+    return () => node?.removeEventListener('animationstart', on);
+  }, []);
   // The label rests inside the field like a placeholder, then lifts to the top edge once there is something to label.
-  const lifted = focused || !!(rest.value ?? rest.defaultValue) || !!rest.multiline;
+  const lifted = focused || autofilled || !!(rest.value ?? rest.defaultValue) || !!rest.multiline;
   const [t] = useState(() => new Animated.Value(lifted ? 1 : 0));
   useEffect(() => {
     Animated.timing(t, { toValue: lifted ? 1 : 0, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -39,6 +64,7 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onCh
         </Animated.Text>
         {prefix && lifted ? <Text style={s.prefix}>{prefix}</Text> : null}
         <TextInput
+          ref={inputRef}
           accessibilityLabel={label}
           style={[s.input, rest.multiline ? s.multiline : null, { outlineStyle: 'none' } as object, style]}
           placeholder={lifted ? placeholder : undefined}
