@@ -25,6 +25,12 @@ export function CropModal({ uri, onCancel, onDone }: { uri: string; onCancel: ()
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Gesture handlers read the latest values from here instead of closing over stale state.
+  const [live] = useState({ view, size, frame });
+  useEffect(() => { Object.assign(live, { view, size, frame }); });
+  // New photo in the same dialog (so the sheet doesn't re-open): drop the old photo's size and last save state.
+  const [seen, setSeen] = useState(uri);
+  if (seen !== uri) { setSeen(uri); setSize(null); setBusy(false); setError(null); }
   // Scale at zoom 1: the short side exactly fills the frame.
   const base = size ? frame / Math.min(size.w, size.h) : 1;
   useEffect(() => {
@@ -38,12 +44,41 @@ export function CropModal({ uri, onCancel, onDone }: { uri: string; onCancel: ()
 
   const pan = useMemo(() => {
     const from = { x: 0, y: 0 };
+    const pinch = { d: 0, zoom: 1 };
+    const zoomed = (v: { x: number; y: number; zoom: number }, z: number, sz: Size) => {
+      const { frame } = live;
+      const b0 = frame / Math.min(sz.w, sz.h);
+      const cx = (frame / 2 - v.x) / (b0 * v.zoom);
+      const cy = (frame / 2 - v.y) / (b0 * v.zoom);
+      return place(frame / 2 - cx * b0 * z, frame / 2 - cy * b0 * z, z, sz, frame);
+    };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => setView((v) => { from.x = v.x; from.y = v.y; return v; }),
-      onPanResponderMove: (_, g) => { if (size) setView((v) => place(from.x + g.dx, from.y + g.dy, v.zoom, size, frame)); },
+      // The sheet body is a ScrollView: refuse to hand the gesture back, or Android cancels pinches.
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: () => { pinch.d = 0; from.x = live.view.x; from.y = live.view.y; },
+      onPanResponderMove: (e, g) => {
+        const { size, frame } = live;
+        if (!size) return;
+        const t = e.nativeEvent.touches;
+        if (t.length >= 2) {
+          // Two fingers: pinch to zoom around the frame centre.
+          const d = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+          if (!pinch.d) { pinch.d = d; pinch.zoom = live.view.zoom; return; }
+          const z = Math.min(MAX_ZOOM, Math.max(1, pinch.zoom * (d / pinch.d)));
+          setView((v) => zoomed(v, z, size));
+        } else if (pinch.d) {
+          // Back to one finger: re-anchor so the image doesn't jump.
+          pinch.d = 0;
+          from.x = live.view.x - g.dx;
+          from.y = live.view.y - g.dy;
+        } else {
+          setView((v) => place(from.x + g.dx, from.y + g.dy, v.zoom, size, frame));
+        }
+      },
     });
-  }, [size, frame]);
+  }, [live]);
 
   const zoomTo = (next: number) => {
     if (!size) return;
