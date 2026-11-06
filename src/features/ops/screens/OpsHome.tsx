@@ -38,7 +38,7 @@ const TITLES: Record<string, [string, string]> = {
   decisions: ['Decision register', 'Exceptions the system could not settle by itself.'],
   payments: ['Payments', 'Money received from buyers.'],
   payouts: ['Farmer payouts', 'Delivered orders to pay, payout runs and what has been sent.'],
-  trucks: ['Cold trucks', 'Bookings, the price per kilometre, and the driver assigned to each trip.'],
+  trucks: ['Cold trucks', 'Hour packages, bookings, and the driver you allot to each trip.'],
   prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
   team: ['Team', 'Drivers and operations staff.'],
   settings: ['Settings', 'Temperature limits, payout rules and support contact.'],

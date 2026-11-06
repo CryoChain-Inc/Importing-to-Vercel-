@@ -5,6 +5,7 @@ import { TripChat } from '../../truck/components/TripChat';
 import { TripProgress } from '../../truck/components/TripProgress';
 import type { TruckBooking } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { hoursLabel } from '../../../utils/duration';
 import { Empty } from '../../ops/components/OpsBits';
 import { BackButton, openMaps, openPhone, placed, QuickActions, RowCard } from './bits';
 
@@ -25,7 +26,7 @@ export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past
       <Empty
         icon="truck"
         title={past ? 'No past trips' : 'No ongoing trips'}
-        hint={past ? 'Finished cold-truck bookings will be listed here.' : 'When a buyer is assigned to you, the trip shows up here.'}
+        hint={past ? 'Finished cold-truck bookings will be listed here.' : 'When operations allots you to a booking, the trip shows up here.'}
       />
     );
   }
@@ -71,7 +72,7 @@ export function TruckDetail({ trip, onBack, onMessages }: { trip: TruckBooking; 
           <Stop tag="To" text={trip.dropoffLabel} />
         </View>
         <Text style={s.meta}>
-          {when(trip.pickupAt)}{trip.distanceKm ? ` · ${trip.distanceKm} km` : ''} · Buyer {trip.buyerName || 'Buyer'}
+          {when(trip.pickupAt)}{trip.bookedHours ? ` · ${hoursLabel(trip.bookedHours)}` : ''} · Buyer {trip.buyerName || 'Buyer'}
         </Text>
         <QuickActions items={actions} />
       </Card>

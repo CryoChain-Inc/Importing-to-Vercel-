@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
-import { Badge, Button, Card, Icon } from '../../../components/common';
+import { Badge, Button, Card, ChoiceChips, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
-  bookTruck, cancelTruckBooking, fetchTruckBookings, payTruck, quoteTruck,
-  type Place, type TruckBooking, type TruckPurpose, type TruckQuote,
+  bookTruck, cancelTruckBooking, fetchTruckBookings, fetchTruckHourRates, payTruck, quoteTruck,
+  type Place, type TruckBooking, type TruckHourRate, type TruckPurpose, type TruckQuote,
 } from '../../../services/truck.service';
 import type { TransferDetails } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { hoursLabel } from '../../../utils/duration';
 import { ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 import { labelFor, searchPlaces } from './places';
@@ -23,16 +24,25 @@ const nextHour = () => {
   return d;
 };
 
-const stamp = (d: Date) => {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+const pad = (n: number) => String(n).padStart(2, '0');
+const dateOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const timeOf = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const mergeWhen = (date: string, time: string, fallback: Date) => {
+  const next = new Date(`${date}T${time}`);
+  return Number.isNaN(next.getTime()) ? fallback : next;
 };
 
-/** Book a cold truck from one place to another, then pay the way a lot is paid. */
+const fieldStyle = (colors: { ink: string; surfaceSunken: string; borderStrong: string }) => ({
+  fontFamily: 'inherit', fontSize: 15, width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12,
+  border: `1.5px solid ${colors.borderStrong}`, background: colors.surfaceSunken, color: colors.ink,
+});
+
+/** Book a cold truck for a chosen hour package, date, time, pickup and drop-off. */
 export function TruckBooking({ transfer }: { transfer: TransferDetails | null }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [bookings, setBookings] = useState<TruckBooking[]>([]);
+  const [rates, setRates] = useState<TruckHourRate[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<TruckPurpose>('transfer');
   const [active, setActive] = useState<'pickup' | 'dropoff'>('pickup');
@@ -41,14 +51,18 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Place[]>([]);
   const [when, setWhen] = useState<Date>(() => nextHour());
+  const [hours, setHours] = useState<number | null>(null);
   const [quote, setQuote] = useState<TruckQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [locateError, setLocateError] = useState<string | null>(null);
   const { busy, error, run } = useAction(async () => { await load(); });
+  const hourOptions = rates.map((r) => hoursLabel(r.hours));
 
   const load = async () => {
     try {
-      setBookings(await fetchTruckBookings());
+      const [rows, packages] = await Promise.all([fetchTruckBookings(), fetchTruckHourRates()]);
+      setBookings(rows);
+      setRates(packages);
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not load your truck bookings.');
@@ -71,14 +85,14 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
   }, [query]);
 
   useEffect(() => {
-    if (!pickup || !dropoff) { setQuote(null); setQuoteError(null); return; }
+    if (!hours) { setQuote(null); setQuoteError(null); return; }
     let live = true;
-    quoteTruck(pickup, dropoff).then(
+    quoteTruck(hours).then(
       (q) => { if (live) { setQuote(q); setQuoteError(null); } },
-      (e) => { if (live) { setQuote(null); setQuoteError(e instanceof Error ? e.message : 'Could not price that trip.'); } },
+      (e) => { if (live) { setQuote(null); setQuoteError(e instanceof Error ? e.message : 'Could not price that booking.'); } },
     );
     return () => { live = false; };
-  }, [pickup, dropoff]);
+  }, [hours]);
 
   const focusStop = (which: 'pickup' | 'dropoff') => {
     setActive(which);
@@ -117,12 +131,15 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
     }
   };
 
+  const ready = Boolean(pickup && dropoff && quote && hours && when.getTime() >= Date.now() - 10 * 60 * 1000);
+
   const book = () => run(async () => {
-    if (!pickup || !dropoff || !quote) return;
-    const id = await bookTruck({ purpose, pickup, dropoff, pickupAt: when });
+    if (!pickup || !dropoff || !quote || !hours) return;
+    const id = await bookTruck({ purpose, pickup, dropoff, pickupAt: when, hours });
     setPickup(null);
     setDropoff(null);
     setQuote(null);
+    setHours(null);
     await load();
     await payTruck(id);
   });
@@ -130,7 +147,7 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
   return (
     <View style={s.list}>
       <Text style={s.title}>Book a cold truck</Text>
-      <Text style={s.lead}>A chilled truck for a one-way trip. You choose the places and the time. The fare is the distance times the rate operations has set.</Text>
+      <Text style={s.lead}>Choose how many hours you need, when the truck should arrive, and the pickup and drop-off. Operations allots a driver after you book. The fare is the hour package, not distance.</Text>
       {loadError ? <Banner text={loadError} /> : null}
       {error ? <Banner text={error} /> : null}
 
@@ -138,6 +155,65 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
         <Purpose on={purpose === 'transfer'} icon="truck" title="Transfer" copy="Move produce you already have." onPress={() => setPurpose('transfer')} />
         <Purpose on={purpose === 'pickup'} icon="package" title="Pick up" copy="Collect produce and bring it to you." onPress={() => setPurpose('pickup')} />
       </View>
+
+      <Card style={s.form}>
+        <Text style={s.label}>Hours</Text>
+        <Text style={s.meta}>Packages operations has published. You pay this rate for the booking.</Text>
+        {rates.length === 0 ? <Banner tone="info" text="Operations has not published hour packages yet." /> : (
+          <ChoiceChips
+            label="How long do you need the truck?"
+            options={hourOptions}
+            value={hours ? hoursLabel(hours) : ''}
+            onChange={(label) => {
+              const hit = rates.find((r) => hoursLabel(r.hours) === label);
+              setHours(hit ? hit.hours : null);
+            }}
+          />
+        )}
+        {rates.map((r) => (
+          <Text key={r.id} style={s.meta}>{hoursLabel(r.hours)} · {ghs(r.price)}</Text>
+        ))}
+      </Card>
+
+      <Card style={s.form}>
+        <Text style={s.label}>Date and time</Text>
+        <Text style={s.meta}>When the truck should arrive at the pickup.</Text>
+        <View style={s.when}>
+          {Platform.OS === 'web' ? (
+            <>
+              {React.createElement('input', {
+                type: 'date',
+                value: dateOf(when),
+                onChange: (e: { target: { value: string } }) => e.target.value && setWhen(mergeWhen(e.target.value, timeOf(when), when)),
+                style: fieldStyle(colors),
+              })}
+              {React.createElement('input', {
+                type: 'time',
+                value: timeOf(when),
+                onChange: (e: { target: { value: string } }) => e.target.value && setWhen(mergeWhen(dateOf(when), e.target.value, when)),
+                style: fieldStyle(colors),
+              })}
+            </>
+          ) : (
+            <>
+              <TextInput
+                value={dateOf(when)}
+                onChangeText={(v) => setWhen(mergeWhen(v, timeOf(when), when))}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.inkMuted}
+                style={[s.search, { outlineStyle: 'none' } as object]}
+              />
+              <TextInput
+                value={timeOf(when)}
+                onChangeText={(v) => setWhen(mergeWhen(dateOf(when), v, when))}
+                placeholder="HH:MM"
+                placeholderTextColor={colors.inkMuted}
+                style={[s.search, { outlineStyle: 'none' } as object]}
+              />
+            </>
+          )}
+        </View>
+      </Card>
 
       <Card style={s.form}>
         <View style={s.stops}>
@@ -170,38 +246,14 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
         />
       </Card>
 
-      <Card style={s.form}>
-        <Text style={s.label}>Pickup time</Text>
-        <Text style={s.meta}>When the truck should arrive at the pickup.</Text>
-        {Platform.OS === 'web' ? (
-          React.createElement('input', {
-            type: 'datetime-local',
-            value: stamp(when),
-            onChange: (e: { target: { value: string } }) => e.target.value && setWhen(new Date(e.target.value)),
-            style: {
-              fontFamily: 'inherit', fontSize: 15, width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12,
-              border: `1.5px solid ${colors.borderStrong}`, background: colors.surfaceSunken, color: colors.ink,
-            },
-          })
-        ) : (
-          <TextInput
-            value={stamp(when).replace('T', ' ')}
-            onChangeText={(v) => { const d = new Date(v.replace(' ', 'T')); if (!Number.isNaN(d.getTime())) setWhen(d); }}
-            placeholder="YYYY-MM-DD HH:MM"
-            placeholderTextColor={colors.inkMuted}
-            style={[s.search, { outlineStyle: 'none' } as object]}
-          />
-        )}
-      </Card>
-
       <Card style={s.fare}>
         <Text style={s.fareLabel}>Trip fare</Text>
         <Text style={s.fareAmount}>{quote ? ghs(quote.amount) : '—'}</Text>
         <Text style={s.meta}>
-          {quote ? `${quote.distanceKm.toLocaleString('en-GH', { maximumFractionDigits: 1 })} km · ${ghs(quote.pricePerKm)} per km` : 'Choose both places to see the fare.'}
+          {quote ? `${hoursLabel(quote.hours)} · ${ghs(quote.price)}` : 'Choose an hour package to see the fare.'}
         </Text>
         {quoteError ? <Banner text={quoteError} /> : null}
-        <Button label="Book this truck" loading={busy} disabled={!quote || when.getTime() < Date.now() - 10 * 60 * 1000} onPress={book} />
+        <Button label="Book this truck" loading={busy} disabled={!ready} onPress={book} />
       </Card>
 
       <Text style={s.title}>Your trips</Text>
@@ -214,9 +266,9 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
           </View>
           <Text style={s.meta}>{b.pickupLabel}</Text>
           <Text style={s.meta}>to {b.dropoffLabel}</Text>
-          <Text style={s.meta}>{new Date(b.pickupAt).toLocaleString('en-GH')} · {b.distanceKm} km</Text>
+          <Text style={s.meta}>{new Date(b.pickupAt).toLocaleString('en-GH')}{b.bookedHours ? ` · ${hoursLabel(b.bookedHours)}` : ''}</Text>
           <Text style={s.total}>{ghs(b.amount)}</Text>
-          {b.driverName || b.driverPlate ? <Text style={s.meta}>Driver {b.driverName || 'Assigned'}{b.driverVehicle ? ` · ${b.driverVehicle}` : ''}{b.driverPlate ? ` · ${b.driverPlate}` : ''}{b.driverPhone ? ` · ${b.driverPhone}` : ''}</Text> : <Text style={s.meta}>No driver is free for this time yet.</Text>}
+          {b.driverName || b.driverPlate ? <Text style={s.meta}>Driver {b.driverName || 'Assigned'}{b.driverVehicle ? ` · ${b.driverVehicle}` : ''}{b.driverPlate ? ` · ${b.driverPlate}` : ''}{b.driverPhone ? ` · ${b.driverPhone}` : ''}</Text> : <Text style={s.meta}>Operations will allot a driver for this booking.</Text>}
           {b.state === 'awaiting_payment' ? (
             <>
               {b.payment === 'failed' || b.payment === 'abandoned' ? <Banner text="The last payment was not completed. You can try again." /> : null}
@@ -279,6 +331,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   purposeOn: { borderColor: c.brand500, backgroundColor: c.brandTint },
   purposeTitle: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
   form: { gap: 10 },
+  when: { gap: 8 },
   stops: { gap: 8, position: 'relative' as const },
   spine: { position: 'absolute' as const, left: 15, top: 24, bottom: 24, width: 2, backgroundColor: c.borderStrong },
   stop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1.5, borderColor: 'transparent' },

@@ -8,6 +8,7 @@ import {
   completeTruckTrip, fetchStartCode, fetchTripLive, reportTruckLocation, startTruckTrip, type TruckBooking,
 } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { elapsedLabel, hoursLabel } from '../../../utils/duration';
 
 const placed = (lat: number, lng: number) => Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 
@@ -24,6 +25,7 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sharing, setSharing] = useState<'pending' | 'on' | 'off'>('pending');
+  const [now, setNow] = useState(Date.now());
   const paid = booking.state === 'paid';
   const started = paid && !!startedAt;
   const ended = !!completedAt;
@@ -64,6 +66,12 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
     const timer = setInterval(tick, 5000);
     return () => { live = false; clearInterval(timer); };
   }, [booking.id, ended, paid, role]);
+
+  useEffect(() => {
+    if (!started || ended) return;
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, [started, ended]);
 
   useEffect(() => {
     if (role !== 'driver' || !started || ended) return;
@@ -124,31 +132,38 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
       {from && to ? <TripMap pickup={from} dropoff={to} driver={started ? driver : null} height={220} /> : null}
       {paid && !started && role === 'buyer' ? (
         <View style={s.codeBox}>
-          <Text style={s.k}>Share this code with your driver</Text>
+          <Text style={s.k}>Give this code to the driver at pickup</Text>
           <Text style={s.code}>{code ?? '————'}</Text>
-          <Text style={s.meta}>{code ? 'The trip starts, and live location begins, only after the driver enters it.' : 'The start code appears after the latest database update is applied.'}</Text>
+          <Text style={s.meta}>{code ? 'Time on the truck starts only after the driver enters this code at the pickup.' : 'The start code appears after the latest database update is applied.'}</Text>
         </View>
       ) : null}
       {paid && !started && role === 'driver' ? (
         <View style={s.form}>
+          <Text style={s.meta}>When you reach the pickup, ask the buyer for this code. Entering it starts the billed time.</Text>
           <Input label="Start code from the buyer" value={entry} onChangeText={setEntry} keyboardType="number-pad" maxLength={4} />
           {error ? <Banner text={error} /> : null}
           <Button label="Start trip" size="sm" loading={busy} disabled={entry.trim().length !== 4} onPress={begin} />
         </View>
       ) : null}
+      {started && startedAt ? (
+        <Text style={s.clock}>
+          {ended ? 'Time on this trip' : 'Time running'} · {elapsedLabel(startedAt, completedAt, now)}
+          {booking.bookedHours ? ` of ${hoursLabel(booking.bookedHours)} booked` : ''}
+        </Text>
+      ) : null}
       {started && !ended && role === 'buyer' ? <Text style={s.meta}>{driver && seenAt ? `Driver location updated ${new Date(seenAt).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}.` : 'Waiting for the driver’s location.'}</Text> : null}
-      {started && !ended && role === 'driver' ? <Text style={s.meta}>{sharing === 'off' ? 'Allow location so the buyer can follow the truck.' : 'Trip started. Your location is shared with the buyer.'}</Text> : null}
+      {started && !ended && role === 'driver' ? <Text style={s.meta}>{sharing === 'off' ? 'Allow location so the buyer can follow the truck.' : 'Trip started. Your location is shared with the buyer. End the trip when you reach the drop-off — that stops the clock.'}</Text> : null}
       {started && !ended && role === 'driver' ? (
         confirmEnd ? (
           <View style={s.form}>
-            <Text style={s.meta}>End this trip? The buyer will see it as finished, and live location stops.</Text>
+            <Text style={s.meta}>End this trip at the drop-off? Billed time stops, the buyer will see it as finished, and live location stops.</Text>
             {error ? <Banner text={error} /> : null}
             <Button label="End trip" size="sm" loading={busy} onPress={finish} />
             <Button label="Keep going" size="sm" variant="outline" disabled={busy} onPress={() => { setConfirmEnd(false); setError(null); }} />
           </View>
         ) : <Button label="End trip" size="sm" variant="outline" onPress={() => setConfirmEnd(true)} />
       ) : null}
-      {ended ? <Text style={s.meta}>{role === 'driver' ? 'Trip ended.' : 'The driver ended this trip.'}</Text> : null}
+      {ended ? <Text style={s.meta}>{role === 'driver' ? 'Trip ended. The clock has stopped.' : 'The driver ended this trip. The clock has stopped.'}</Text> : null}
       {!paid && role === 'driver' ? <Text style={s.meta}>The start code is available after the buyer pays.</Text> : null}
     </View>
   );
@@ -160,5 +175,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   codeBox: { gap: 4, padding: 12, borderRadius: 14, backgroundColor: c.surfaceSunken, alignSelf: 'stretch' as const },
   k: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted },
   code: { fontFamily: fonts.heading, fontSize: 32, letterSpacing: 6, color: c.ink },
+  clock: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

@@ -11,9 +11,15 @@ export interface Place {
   lng: number;
 }
 
+export interface TruckHourRate {
+  id: string;
+  hours: number;
+  price: number;
+}
+
 export interface TruckQuote {
-  distanceKm: number;
-  pricePerKm: number;
+  hours: number;
+  price: number;
   amount: number;
 }
 
@@ -24,7 +30,8 @@ export interface TruckBooking {
   pickupLabel: string;
   dropoffLabel: string;
   distanceKm: number;
-  pricePerKm: number;
+  bookedHours: number;
+  hourlyPrice: number;
   amount: number;
   pickupAt: string;
   driverId: string;
@@ -40,6 +47,7 @@ export interface TruckBooking {
   dropoffLng: number;
   startedAt: string | null;
   completedAt: string | null;
+  elapsedMinutes: number | null;
   driverLat: number | null;
   driverLng: number | null;
   driverSeenAt: string | null;
@@ -60,8 +68,9 @@ const mapBooking = (r: any): TruckBooking => ({
   purpose: r.purpose,
   pickupLabel: r.pickup_label,
   dropoffLabel: r.dropoff_label,
-  distanceKm: Number(r.distance_km),
-  pricePerKm: Number(r.price_per_km),
+  distanceKm: Number(r.distance_km ?? 0),
+  bookedHours: Number(r.booked_hours ?? 0),
+  hourlyPrice: Number(r.hourly_price ?? r.amount ?? 0),
   amount: Number(r.amount),
   pickupAt: r.pickup_at,
   driverId: r.driver_id ?? '',
@@ -77,6 +86,7 @@ const mapBooking = (r: any): TruckBooking => ({
   dropoffLng: Number(r.dropoff_lng ?? 0),
   startedAt: r.started_at ?? null,
   completedAt: r.completed_at ?? null,
+  elapsedMinutes: r.elapsed_minutes == null ? null : Number(r.elapsed_minutes),
   driverLat: r.driver_lat == null ? null : Number(r.driver_lat),
   driverLng: r.driver_lng == null ? null : Number(r.driver_lng),
   driverSeenAt: r.driver_seen_at ?? null,
@@ -87,9 +97,11 @@ const mapBooking = (r: any): TruckBooking => ({
 
 const COORDS = ', pickup_lat, pickup_lng, dropoff_lat, dropoff_lng';
 const LIVE = ', started_at, driver_lat, driver_lng, driver_seen_at';
+const HOURS = ', booked_hours, hourly_price, elapsed_minutes';
 const ENDED = ', completed_at';
-const BOOKING_COLUMNS = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at, truck_payments(status, created_at)${COORDS}${LIVE}${ENDED}`;
-const BOOKING_COLUMNS_BASE = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at, truck_payments(status, created_at)${COORDS}`;
+const CORE = `id, code, purpose, pickup_label, dropoff_label, distance_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at`;
+const BOOKING_COLUMNS = `${CORE}, truck_payments(status, created_at)${COORDS}${LIVE}${HOURS}${ENDED}`;
+const BOOKING_COLUMNS_BASE = `id, code, purpose, pickup_label, dropoff_label, distance_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at, truck_payments(status, created_at)${COORDS}`;
 
 async function selectBookings(columns: string, filter?: { driverId: string }) {
   let query = supabase.from('truck_bookings').select(columns).order(filter ? 'pickup_at' : 'created_at', { ascending: !!filter });
@@ -97,10 +109,22 @@ async function selectBookings(columns: string, filter?: { driverId: string }) {
   return query;
 }
 
+export async function fetchTruckHourRates(): Promise<TruckHourRate[]> {
+  const { data, error } = await supabase.rpc('list_truck_hour_rates');
+  rpcError(error, {
+    'not signed in': 'Sign in again to continue.',
+    'Could not find the function': 'Hour packages are not available yet. Apply the latest database update, then try again.',
+  }, 'Could not load hour packages.');
+  return (data ?? []).map((r: any) => ({ id: r.id, hours: Number(r.hours), price: Number(r.price) }));
+}
+
 export async function fetchTruckBookings(): Promise<TruckBooking[]> {
   let { data, error } = await selectBookings(BOOKING_COLUMNS);
+  if (error && /booked_hours|hourly_price|elapsed_minutes/.test(error.message)) {
+    ({ data, error } = await selectBookings(BOOKING_COLUMNS.replace(HOURS, '')));
+  }
   if (error && /completed_at/.test(error.message)) {
-    ({ data, error } = await selectBookings(BOOKING_COLUMNS.replace(ENDED, '')));
+    ({ data, error } = await selectBookings(BOOKING_COLUMNS.replace(ENDED, '').replace(HOURS, '')));
   }
   if (error && /buyer_name|buyer_phone|driver_id|started_at|driver_lat|driver_seen_at/.test(error.message)) {
     ({ data, error } = await selectBookings(BOOKING_COLUMNS_BASE));
@@ -109,17 +133,20 @@ export async function fetchTruckBookings(): Promise<TruckBooking[]> {
   return (data ?? []).map(mapBooking);
 }
 
-/** Trips assigned to the signed-in driver, including ones still awaiting payment so the buyer can reach them. */
+/** Trips operations assigned to the signed-in driver. */
 export async function fetchDriverTrips(): Promise<TruckBooking[]> {
   const id = await requireUserId();
-  const tripColumns = `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_id, driver_name, driver_phone, driver_plate, driver_vehicle, buyer_name, buyer_phone, state, created_at${COORDS}${LIVE}${ENDED}`;
+  const tripColumns = `${CORE}${COORDS}${LIVE}${HOURS}${ENDED}`;
   let { data, error } = await selectBookings(tripColumns, { driverId: id });
+  if (error && /booked_hours|hourly_price|elapsed_minutes/.test(error.message)) {
+    ({ data, error } = await selectBookings(tripColumns.replace(HOURS, ''), { driverId: id }));
+  }
   if (error && /completed_at/.test(error.message)) {
-    ({ data, error } = await selectBookings(tripColumns.replace(ENDED, ''), { driverId: id }));
+    ({ data, error } = await selectBookings(tripColumns.replace(ENDED, '').replace(HOURS, ''), { driverId: id }));
   }
   if (error && /buyer_name|buyer_phone|driver_id|started_at|driver_lat|driver_seen_at/.test(error.message)) {
     ({ data, error } = await selectBookings(
-      `id, code, purpose, pickup_label, dropoff_label, distance_km, price_per_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at${COORDS}`,
+      `id, code, purpose, pickup_label, dropoff_label, distance_km, amount, pickup_at, driver_name, driver_phone, driver_plate, driver_vehicle, state, created_at${COORDS}`,
       { driverId: id },
     ));
   }
@@ -127,18 +154,16 @@ export async function fetchDriverTrips(): Promise<TruckBooking[]> {
   return (data ?? []).map(mapBooking);
 }
 
-export async function quoteTruck(from: Place, to: Place): Promise<TruckQuote> {
-  const { data, error } = await supabase.rpc('truck_quote', {
-    p_lat1: from.lat, p_lng1: from.lng, p_lat2: to.lat, p_lng2: to.lng,
-  });
+export async function quoteTruck(hours: number): Promise<TruckQuote> {
+  const { data, error } = await supabase.rpc('truck_quote', { p_hours: hours });
   rpcError(error, {
     'not signed in': 'Sign in again to continue.',
-    'different places': 'Choose two different places.',
-    'price per kilometre': 'Operations has not set a price per kilometre yet.',
+    'number of hours': 'Choose how many hours you need.',
+    'not available': 'That hour package is no longer available.',
     'Could not find the function': 'Truck booking is not available yet. Apply the latest database update, then try again.',
-  }, 'Could not price that trip.');
+  }, 'Could not price that booking.');
   const row = Array.isArray(data) ? data[0] : data;
-  return { distanceKm: Number(row.distance_km), pricePerKm: Number(row.price_per_km), amount: Number(row.amount) };
+  return { hours: Number(row.hours), price: Number(row.price), amount: Number(row.amount) };
 }
 
 export async function bookTruck(input: {
@@ -146,6 +171,7 @@ export async function bookTruck(input: {
   pickup: Place;
   dropoff: Place;
   pickupAt: Date;
+  hours: number;
 }): Promise<string> {
   await requireUserId();
   const { data, error } = await supabase.rpc('book_truck', {
@@ -157,6 +183,7 @@ export async function bookTruck(input: {
     p_dropoff_lat: input.dropoff.lat,
     p_dropoff_lng: input.dropoff.lng,
     p_pickup_at: input.pickupAt.toISOString(),
+    p_hours: input.hours,
   });
   rpcError(error, {
     'buyers only': 'Only a buyer can book a truck.',
@@ -164,7 +191,8 @@ export async function bookTruck(input: {
     'in the future': 'Choose a pickup time that is still ahead.',
     'both places': 'Enter a pickup and a drop-off.',
     'different places': 'Choose two different places.',
-    'price per kilometre': 'Operations has not set a price per kilometre yet.',
+    'number of hours': 'Choose how many hours you need.',
+    'not available': 'That hour package is no longer available.',
     'Could not find the function': 'Truck booking is not available yet. Apply the latest database update, then try again.',
   }, 'Could not book that truck.');
   return data as string;
@@ -218,7 +246,7 @@ export async function startTruckTrip(bookingId: string, code: string): Promise<v
   }, 'Could not start that trip.');
 }
 
-/** The assigned driver ends a trip that has already started. */
+/** The assigned driver ends a trip that has already started. Billed time stops here. */
 export async function completeTruckTrip(bookingId: string): Promise<void> {
   await requireUserId();
   const { error } = await supabase.rpc('complete_truck_trip', { p_booking_id: bookingId });
@@ -236,8 +264,11 @@ export async function reportTruckLocation(bookingId: string, lat: number, lng: n
   if (error && !/has not started|not valid/.test(error.message)) throw new Error('Could not share your location.');
 }
 
-export async function fetchTripLive(bookingId: string): Promise<{ startedAt: string | null; completedAt: string | null; driverLat: number | null; driverLng: number | null; driverSeenAt: string | null } | null> {
-  let { data, error } = await supabase.from('truck_bookings').select('started_at, completed_at, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle();
+export async function fetchTripLive(bookingId: string): Promise<{ startedAt: string | null; completedAt: string | null; elapsedMinutes: number | null; driverLat: number | null; driverLng: number | null; driverSeenAt: string | null } | null> {
+  let { data, error } = await supabase.from('truck_bookings').select('started_at, completed_at, elapsed_minutes, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle();
+  if (error && /elapsed_minutes/.test(error.message)) {
+    ({ data, error } = await supabase.from('truck_bookings').select('started_at, completed_at, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle());
+  }
   if (error && /completed_at/.test(error.message)) {
     ({ data, error } = await supabase.from('truck_bookings').select('started_at, driver_lat, driver_lng, driver_seen_at').eq('id', bookingId).maybeSingle());
   }
@@ -245,6 +276,7 @@ export async function fetchTripLive(bookingId: string): Promise<{ startedAt: str
   return {
     startedAt: data.started_at,
     completedAt: data.completed_at ?? null,
+    elapsedMinutes: (data as { elapsed_minutes?: number | null }).elapsed_minutes == null ? null : Number((data as { elapsed_minutes?: number | null }).elapsed_minutes),
     driverLat: data.driver_lat == null ? null : Number(data.driver_lat),
     driverLng: data.driver_lng == null ? null : Number(data.driver_lng),
     driverSeenAt: data.driver_seen_at,
