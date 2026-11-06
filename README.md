@@ -40,7 +40,7 @@ Buyer builds cart  ->  checks availability  ->  stock held 30 min  ->  pays via 
 
 Anything the system can't settle on its own lands in the **Decisions** tab for ops: not enough supply, no farmer price set, no driver available, SMS failed, allocation error.
 
-Pricing is split by role: buyers see only the buyer price, farmers only what they are paid (`farmer_price x kg`). Ops sees both.
+Pricing is split by role: buyers see only the buyer price, farmers only what they are paid (`farmer_price x quantity`). Ops sets one base price per product unit; the buyer price is base + the buyer markup % and the farmer price is base − the farmer discount % (both in Ops Settings, default 20%). Ops sees all three.
 
 ### Cold truck booking (separate from orders)
 

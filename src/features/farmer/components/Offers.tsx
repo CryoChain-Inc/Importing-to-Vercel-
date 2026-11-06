@@ -9,7 +9,7 @@ const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'nume
 const TONE = { offered: 'success', accepted: 'success', collected: 'success', declined: 'neutral', expired: 'neutral', cancelled: 'neutral' } as const;
 const LABEL = { offered: 'Scheduled', accepted: 'Scheduled', collected: 'Collected', declined: 'Declined', expired: 'Expired', cancelled: 'Cancelled' } as const;
 
-/** Pickups CryoChain has scheduled with this farmer: how many kg, when, and what it pays. No buyer details. */
+/** Pickups CryoChain has scheduled with this farmer: how many units, when, and what it pays. No buyer details. */
 export function Offers() {
   const s = useThemedStyles(styles);
   const [offers, setOffers] = useState<Offer[] | null>(null);
@@ -31,7 +31,7 @@ export function Offers() {
       <Text style={s.title}>Scheduled pickups</Text>
       {open.map((o) => (
         <Card key={o.id} tone="tint" style={s.item}>
-          <Text style={s.name}>{o.kg.toLocaleString('en-GH')} kg {o.product} · Grade {o.grade}</Text>
+          <Text style={s.name}>{o.kg.toLocaleString('en-GH')} {o.unit} {o.product}</Text>
           <Text style={s.pay}>{ghs(o.amount)}</Text>
           <Text style={s.meta}>Pickup {when(o.pickupAt!)}. You earn this when the produce is collected.</Text>
         </Card>
@@ -39,7 +39,7 @@ export function Offers() {
       {rest.map((o) => (
         <Card key={o.id} style={s.row}>
           <View style={s.grow}>
-            <Text style={s.name}>{o.kg.toLocaleString('en-GH')} kg {o.product} · {ghs(o.amount)}</Text>
+            <Text style={s.name}>{o.kg.toLocaleString('en-GH')} {o.unit} {o.product} · {ghs(o.amount)}</Text>
             <Text style={s.meta}>{when(o.createdAt)}</Text>
           </View>
           <Badge label={LABEL[o.status]} tone={TONE[o.status]} />

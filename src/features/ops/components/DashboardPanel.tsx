@@ -4,15 +4,14 @@ import { Badge, Icon, type IconName } from '../../../components/common';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { boardFilter, orderTrack } from '../orderTrack';
-import { supplyByProduct, type OpsCore } from '../data';
-import { Empty, Hero, kg, SectionTitle, Stat, StatGrid, when } from './OpsBits';
+import type { OpsCore } from '../data';
+import { Empty, Hero, SectionTitle, Stat, StatGrid, when } from './OpsBits';
 import { ProductSupply } from './SupplyPanel';
 
 /** Overview: supply listed, money in, and what needs doing next. */
 export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: string) => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const listed = data.supply.reduce((n, r) => n + r.weightKg, 0);
   const received = data.orders.filter((o) => o.state === 'paid').reduce((n, o) => n + o.amount, 0);
   const moving = data.board.filter((o) => boardFilter(o).stage === 'moving');
   const todo: { tab: string; icon: IconName; label: string; n: number }[] = [
@@ -25,11 +24,11 @@ export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: stri
   return (
     <View style={s.wrap}>
       {noListings ? (
-        <Empty icon="leaf" title="No produce listed yet" hint="No farmer has listed produce. Stock, kilos and products will show up here when they do." />
+        <Empty icon="leaf" title="No produce listed yet" hint="No farmer has listed produce. Stock, quantities and products will show up here when they do." />
       ) : (
-        <Hero label="Listed by farmers" value={kg(listed)} cells={[
-          { label: 'Products', value: String(supplyByProduct(data.supply).length) },
-          { label: 'Listings', value: String(data.supply.length) },
+        <Hero label="Listed by farmers" value={String(data.supply.length)} cells={[
+          { label: 'Products', value: String(new Set(data.supply.map((r) => r.product)).size) },
+          { label: 'Still to sell', value: String(data.supply.filter((r) => r.remainingKg > 0).length) },
         ]} />
       )}
       <StatGrid>
@@ -60,7 +59,7 @@ export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: stri
                   <Text style={s.liveMeta}>
                     {o.driver?.name ? `Driver ${o.driver.name}` : 'No driver yet'}
                     {t.next ? ` · going to ${t.next.label}` : ''}
-                    {` · ${t.collectedKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} of ${t.orderedKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg taken`}
+                    {` · ${t.collectedKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} of ${t.orderedKg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} taken`}
                   </Text>
                   {o.driver?.seenAt ? <Text style={s.liveMeta}>Last seen {when(o.driver.seenAt)}</Text> : null}
                 </View>

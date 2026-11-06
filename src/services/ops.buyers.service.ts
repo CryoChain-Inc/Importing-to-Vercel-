@@ -11,7 +11,7 @@ export interface OrderRow {
   buyerId: string;
   buyer: string;
   buyerPhone: string;
-  /** What was bought, e.g. "Tomatoes A · 40 kg". */
+  /** What was bought, e.g. "Tomatoes · 40 kg". */
   items: string[];
 }
 
@@ -19,7 +19,7 @@ const fail = (msg: string) => (error: unknown) => {
   if (error) throw new Error(msg);
 };
 
-const ORDER_COLS = 'id, code, amount, state, created_at, paid_at, buyer_id, buyers(organization_name, profiles(phone)), order_items(grade, kg, products(name))';
+const ORDER_COLS = 'id, code, amount, state, created_at, paid_at, buyer_id, buyers(organization_name, profiles(phone)), order_items(unit, kg, products(name))';
 
 const toOrder = (r: any): OrderRow => ({
     id: r.id,
@@ -31,7 +31,7 @@ const toOrder = (r: any): OrderRow => ({
   buyerId: r.buyer_id,
   buyer: r.buyers?.organization_name ?? 'Unknown buyer',
   buyerPhone: r.buyers?.profiles?.phone ?? '',
-  items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} ${i.grade} · ${Number(i.kg).toLocaleString('en-GH')} kg`),
+  items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} · ${Number(i.kg).toLocaleString('en-GH')} ${i.unit}`),
 });
 
 export async function fetchOrders(): Promise<OrderRow[]> {

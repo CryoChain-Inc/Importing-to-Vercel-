@@ -4,9 +4,9 @@ import { Badge, Card, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { fetchFarmersPage } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { formatPhone } from '../../../utils/format';
+import { fmtQty, formatPhone } from '../../../utils/format';
 import type { PageProps } from '../useOpsLocation';
-import { Empty, kg, Pager, PanelSkeleton, useServerPage } from './OpsBits';
+import { Empty, Pager, PanelSkeleton, useServerPage } from './OpsBits';
 
 /** Farmers with a search box; open one for contact details, wallet state and everything they have listed. */
 export function FarmersPanel({ params, setParams, rev }: PageProps) {
@@ -24,7 +24,6 @@ export function FarmersPanel({ params, setParams, rev }: PageProps) {
       {!loading && rows.length === 0 ? <Text style={s.meta}>No farmer matches “{q}”.</Text> : null}
       {rows.map((f) => {
         const mine = f.listings;
-        const listed = mine.reduce((n, r) => n + r.weightKg, 0);
         const on = open === f.id;
         return (
           <Card key={f.id} style={s.item}>
@@ -32,7 +31,7 @@ export function FarmersPanel({ params, setParams, rev }: PageProps) {
               <View style={s.avatar}><Text style={s.avatarText}>{f.name.slice(0, 1).toUpperCase()}</Text></View>
               <View style={s.grow}>
                 <Text style={s.name} numberOfLines={1}>{f.name}</Text>
-                <Text style={s.meta} numberOfLines={1}>{[f.locality, `${mine.length} listing${mine.length === 1 ? '' : 's'}`, kg(listed)].filter(Boolean).join(' · ')}</Text>
+                <Text style={s.meta} numberOfLines={1}>{[f.locality, `${mine.length} listing${mine.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</Text>
               </View>
               <Badge label={f.walletVerified ? 'Wallet verified' : f.walletReady ? 'Wallet saved' : 'No wallet'} tone={f.walletVerified ? 'success' : f.walletReady ? 'info' : 'warning'} />
               <Icon name="chevronDown" size={18} color={colors.inkMuted} />
@@ -46,8 +45,8 @@ export function FarmersPanel({ params, setParams, rev }: PageProps) {
                 <Text style={s.sub}>Listings</Text>
                 {mine.length === 0 ? <Text style={s.meta}>Nothing listed yet.</Text> : mine.slice(0, 5).map((r) => (
                   <View key={r.id} style={s.listing}>
-                    <Text style={s.value}>{r.product} · {kg(r.weightKg)}</Text>
-                    <Badge label={`Grade ${r.grade}`} tone="neutral" />
+                    <Text style={s.value}>{r.product} · {fmtQty(r.weightKg, r.unit)}</Text>
+                    <Badge label={r.unit} tone="neutral" />
                   </View>
                 ))}
                 {mine.length > 5 ? <Text style={s.meta}>and {mine.length - 5} more. See the Supply page for the full list.</Text> : null}

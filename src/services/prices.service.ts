@@ -7,27 +7,21 @@ export interface PriceBoardData {
   updatedAt: string | null;
 }
 
-/** Public farmer prices. The database only returns Grade A to signed-out visitors. */
-export async function fetchPrices(gradeAOnly = false): Promise<PriceBoardData> {
-  let q = supabase
-    .from('crop_prices')
-    .select('product_id, grade, unit, price, prev_price, updated_at, products!inner(name, image_path, categories(name))')
-    .eq('products.active', true)
-    .order('updated_at', { ascending: false });
-  if (gradeAOnly) q = q.eq('grade', 'A');
-  const { data, error } = await q;
+/** Farm-gate prices per product unit (buyer prices are never part of this). Open to signed-out visitors. */
+export async function fetchPrices(): Promise<PriceBoardData> {
+  const { data, error } = await supabase.rpc('price_board');
   if (error) throw new Error('Could not load prices.');
   const rows = data ?? [];
-  const prices = rows.map((r: any): CropPrice => ({
-    id: `${r.product_id}-${r.grade}`,
-    crop: r.products.name,
-    grade: r.grade,
+  const prices: CropPrice[] = rows.map((r: any): CropPrice => ({
+    id: `${r.product_id}-${r.unit}`,
+    crop: r.product_name,
     unit: r.unit,
     price: Number(r.price),
     changePct: r.prev_price ? ((Number(r.price) - Number(r.prev_price)) / Number(r.prev_price)) * 100 : 0,
-    category: r.products.categories?.name ?? '',
-    imageUrl: imageUrl(r.products.image_path),
+    category: r.category_name ?? '',
+    imageUrl: imageUrl(r.image_path),
   }));
-  prices.sort((a, b) => a.crop.localeCompare(b.crop) || a.grade.localeCompare(b.grade));
-  return { prices, updatedAt: rows[0]?.updated_at ?? null };
+  prices.sort((a, b) => a.crop.localeCompare(b.crop));
+  const updatedAt = rows.reduce((m: string | null, r: any) => (!m || r.updated_at > m ? r.updated_at : m), null);
+  return { prices, updatedAt };
 }

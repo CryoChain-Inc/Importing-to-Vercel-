@@ -57,8 +57,8 @@ export function EarningsPanel({ sales, farmer, onWallet }: { sales: Sale[]; farm
           return (
             <Card key={x.id} style={s.row}>
               <View style={s.rowText}>
-                <Text style={s.product}>{x.product} · Grade {x.grade}</Text>
-                <Text style={s.meta}>{x.kg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg at {ghs(x.pricePerKg)}/kg</Text>
+                <Text style={s.product}>{x.product} · {x.unit}</Text>
+                <Text style={s.meta}>{x.kg.toLocaleString('en-GH', { maximumFractionDigits: 2 })} {x.unit} at {ghs(x.pricePerKg)}/{x.unit}</Text>
                 <Text style={s.meta}>
                   {x.status === 'paid' && x.paidAt ? `Paid ${new Date(x.paidAt).toLocaleDateString('en-GH')}` : x.deliveredAt ? `Delivered ${new Date(x.deliveredAt).toLocaleDateString('en-GH')}` : `Ordered ${new Date(x.createdAt).toLocaleDateString('en-GH')}`}
                 </Text>

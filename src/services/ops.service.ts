@@ -1,5 +1,4 @@
 import { normalizePhone } from '../utils/format';
-import { GRADES, gradeOrderError, type Grade } from '../utils/gradeOrder';
 import { likeTerm, pageRange, type Paged } from './paging';
 import { removeStoredImage, replaceImage, type PickedImage } from './catalogueImage';
 import { supabase } from './supabase';
@@ -28,8 +27,8 @@ export interface SupplyRow {
   pointId: string | null;
   /** Storage paths of the farmer's photos in the produce bucket. */
   imagePaths: string[];
-  /** Grade the farmer declared. */
-  grade: 'A' | 'B' | 'C';
+  /** Unit the farmer listed in; weightKg and remainingKg are quantities in this unit. */
+  unit: string;
   createdAt: string;
 }
 
@@ -49,27 +48,29 @@ export interface Product {
   /** Extra gallery photos shown on the buyer's product page, after the cover. */
   imagePaths: string[];
   description: string;
-  active: boolean;
-}
-
-export type PriceKind = 'farmer' | 'buyer';
-const PRICE_TABLE: Record<PriceKind, 'crop_prices' | 'buyer_prices'> = { farmer: 'crop_prices', buyer: 'buyer_prices' };
-
-export interface PriceRow {
-  kind: PriceKind;
-  productId: string;
-  grade: 'A' | 'B' | 'C';
-  price: number;
+  /** Comma-separated local or alternative names, matched by search. */
+  aliases: string;
+  /** The one unit this product is listed, ordered, collected and paid in. */
+  unit: string;
+  /** Base price per unit; buyer and farmer prices are derived from it. Null until ops set one (not for sale until then). */
+  price: number | null;
   prevPrice: number | null;
+  active: boolean;
 }
 
 export interface OpsConfig {
   minTemp: string;
   maxTemp: string;
+  /** Percent added to a unit's base price for buyers. */
+  buyerMarkupPct: string;
+  /** Percent taken off a unit's base price for farmers. */
+  farmerDiscountPct: string;
   supportPhone: string;
   supportEmail: string;
   updatedAt: string;
 }
+
+const one = (v: any) => (Array.isArray(v) ? v[0] : v) ?? null;
 
 const fail = (msg: string) => (error: unknown) => {
   if (error) throw new Error(msg);
@@ -94,7 +95,7 @@ export async function fetchFarmers(): Promise<FarmerRow[]> {
   return (data ?? []).map(toFarmer);
 }
 
-export interface FarmerListing { id: string; product: string; grade: 'A' | 'B' | 'C'; weightKg: number }
+export interface FarmerListing { id: string; product: string; unit: string; weightKg: number }
 
 /** One page of farmers (newest first, optionally matching a search) with everything each has listed. */
 export async function fetchFarmersPage(page: number, q: string): Promise<Paged<FarmerRow & { listings: FarmerListing[] }>> {
@@ -108,18 +109,18 @@ export async function fetchFarmersPage(page: number, q: string): Promise<Paged<F
   fail('Could not load farmers.')(error);
   const farmers = (data ?? []).map(toFarmer);
   const ids = farmers.map((f) => f.id);
-  const listed = ids.length ? await supabase.from('produce_listings').select('id, product, grade, weight_kg, farmer_id').in('farmer_id', ids).order('created_at', { ascending: false }) : null;
+  const listed = ids.length ? await supabase.from('produce_listings').select('id, product, unit, weight_kg, farmer_id').in('farmer_id', ids).order('created_at', { ascending: false }) : null;
   fail('Could not load farmers.')(listed?.error);
   return {
     rows: farmers.map((f) => ({
       ...f,
-      listings: (listed?.data ?? []).filter((l: any) => l.farmer_id === f.id).map((l: any) => ({ id: l.id, product: l.product, grade: l.grade ?? 'A', weightKg: Number(l.weight_kg) })),
+      listings: (listed?.data ?? []).filter((l: any) => l.farmer_id === f.id).map((l: any) => ({ id: l.id, product: l.product, unit: l.unit, weightKg: Number(l.weight_kg) })),
     })),
     total: count ?? 0,
   };
 }
 
-const SUPPLY_COLS = 'id, product, grade, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)';
+const SUPPLY_COLS = 'id, product, unit, weight_kg, image_paths, created_at, farmer_id, collection_point_id, farmers(locality, profiles(display_name)), collection_points(name)';
 
 const toSupply = (r: any, left: Map<string, number>): SupplyRow => ({
   id: r.id,
@@ -132,7 +133,7 @@ const toSupply = (r: any, left: Map<string, number>): SupplyRow => ({
   point: r.collection_points?.name ?? '—',
   pointId: r.collection_point_id,
   imagePaths: r.image_paths ?? [],
-  grade: r.grade ?? 'A',
+  unit: r.unit,
   createdAt: r.created_at,
 });
 
@@ -164,32 +165,17 @@ export async function fetchCategories(): Promise<Category[]> {
   return (data ?? []).map((r) => ({ id: r.id, name: r.name, imagePath: r.image_path, active: r.active }));
 }
 
-export type PricedProduct = Product & { prices: PriceRow[] };
-
-/** One page of products (newest edit first) with their farmer and buyer prices, filtered by name and category. */
-export async function fetchProductsPage(page: number, q: string, categoryId = ''): Promise<Paged<PricedProduct>> {
+/** One page of products (newest edit first) with their unit and base price, filtered by name or alias and by category. */
+export async function fetchProductsPage(page: number, q: string, categoryId = ''): Promise<Paged<Product>> {
   const [from, to] = pageRange(page);
-  let query = supabase.from('products').select('id, name, category_id, image_path, image_paths, description, active, categories(name)', { count: 'exact' });
-  if (q.trim()) query = query.ilike('name', likeTerm(q));
+  let query = supabase.from('products').select('id, name, category_id, image_path, image_paths, description, aliases, unit, active, categories(name), product_prices(price, prev_price)', { count: 'exact' });
+  if (q.trim()) {
+    const p = likeTerm(q);
+    query = query.or(`name.ilike.${p},aliases.ilike.${p}`);
+  }
   if (categoryId) query = query.eq('category_id', categoryId);
   const { data, error, count } = await query.order('updated_at', { ascending: false }).order('id').range(from, to);
   fail('Could not load products.')(error);
-  const ids = (data ?? []).map((r: any) => r.id as string);
-  const [c, b] = ids.length
-    ? await Promise.all([
-        supabase.from('crop_prices').select('product_id, grade, price, prev_price').in('product_id', ids),
-        supabase.from('buyer_prices').select('product_id, grade, price, prev_price').in('product_id', ids),
-      ])
-    : [null, null];
-  fail('Could not load prices.')(c?.error ?? b?.error);
-  const rows = (kind: PriceKind, d: NonNullable<typeof c>['data']): PriceRow[] => (d ?? []).map((r) => ({
-    kind,
-    productId: r.product_id,
-    grade: r.grade,
-    price: Number(r.price),
-    prevPrice: r.prev_price == null ? null : Number(r.prev_price),
-  }));
-  const prices = [...rows('farmer', c?.data ?? null), ...rows('buyer', b?.data ?? null)];
   return {
     rows: (data ?? []).map((r: any) => ({
       id: r.id,
@@ -199,8 +185,11 @@ export async function fetchProductsPage(page: number, q: string, categoryId = ''
       imagePath: r.image_path,
       imagePaths: r.image_paths ?? [],
       description: r.description ?? '',
+      aliases: r.aliases ?? '',
       active: r.active,
-      prices: prices.filter((p) => p.productId === r.id),
+      unit: r.unit,
+      price: one(r.product_prices)?.price == null ? null : Number(one(r.product_prices).price),
+      prevPrice: one(r.product_prices)?.prev_price == null ? null : Number(one(r.product_prices).prev_price),
     })),
     total: count ?? 0,
   };
@@ -250,10 +239,12 @@ export interface GalleryInput {
   added: PickedImage[];
 }
 
-export async function saveProduct(p: ProductInput & { description: string; gallery: GalleryInput }) {
+export async function saveProduct(p: ProductInput & { description: string; aliases: string; unit: string; gallery: GalleryInput }) {
   const description = p.description.trim();
-  const id = await saveWithImage('products', p.id, { name: p.name.trim(), category_id: p.categoryId, active: p.active, description: description || null },
-    p.image, p.oldImagePath, p.removeImage, 'Could not save that product (is the name already used?).');
+  // Tidy the list so search sees clean words: trimmed, no empty entries.
+  const aliases = p.aliases.split(',').map((a) => a.trim()).filter(Boolean).join(', ');
+  const id = await saveWithImage('products', p.id, { name: p.name.trim(), category_id: p.categoryId, active: p.active, description: description || null, aliases, unit: p.unit.trim() },
+    p.image, p.oldImagePath, p.removeImage, 'Could not save that product (is the name already used, or does it already have listings or orders in another unit?).');
   const { keep, dropped, added } = p.gallery;
   if (!dropped.length && !added.length) return;
   // One at a time: each upload path is stamped with Date.now().
@@ -263,15 +254,9 @@ export async function saveProduct(p: ProductInput & { description: string; galle
   await Promise.all(dropped.map(removeStoredImage));
 }
 
-/** Saves one kind of a product's prices (prev_price is set by a database trigger): a number sets the grade, null clears it. Grade order is checked here and again by the database. */
-export async function savePrices(productId: string, kind: PriceKind, prices: Record<Grade, number | null>): Promise<void> {
-  const bad = gradeOrderError(prices);
-  if (bad) throw new Error(bad);
-  const table = PRICE_TABLE[kind];
-  const rows = GRADES.flatMap((grade) => (prices[grade] != null ? [{ product_id: productId, grade, price: prices[grade] }] : []));
-  const cleared = GRADES.filter((g) => prices[g] == null);
-  if (rows.length) fail('Could not save the prices.')((await supabase.from(table).upsert(rows, { onConflict: 'product_id,grade' })).error);
-  if (cleared.length) fail('Could not clear a price.')((await supabase.from(table).delete().eq('product_id', productId).in('grade', cleared)).error);
+/** Sets a product's base price per unit. The previous price is kept by a database trigger to show the change. */
+export async function savePrice(productId: string, price: number): Promise<void> {
+  fail('Could not save the price.')((await supabase.from('product_prices').upsert({ product_id: productId, price }, { onConflict: 'product_id' })).error);
 }
 
 /** Show or hide a category or product in the public catalogue. */
@@ -286,6 +271,8 @@ export async function fetchConfig(): Promise<OpsConfig> {
   return {
     minTemp: s(data!.min_temp_c),
     maxTemp: s(data!.max_temp_c),
+    buyerMarkupPct: s(data!.buyer_markup_pct),
+    farmerDiscountPct: s(data!.farmer_discount_pct),
     supportPhone: s(data!.support_phone),
     supportEmail: s(data!.support_email),
     updatedAt: s(data!.updated_at),
@@ -300,12 +287,14 @@ export async function saveConfig(c: OpsConfig): Promise<void> {
     .update({
       min_temp_c: num(c.minTemp),
       max_temp_c: num(c.maxTemp),
+      buyer_markup_pct: num(c.buyerMarkupPct),
+      farmer_discount_pct: num(c.farmerDiscountPct),
       support_phone: c.supportPhone.trim() ? normalizePhone(c.supportPhone) : null,
       support_email: txt(c.supportEmail),
       updated_at: new Date().toISOString(),
     })
     .eq('id', true);
-  fail('Could not save settings (min temp must be below max).')(error);
+  fail('Could not save settings (min temp must be below max; markup 0-100, discount 0-90).')(error);
 }
 
 export type StaffRole = 'driver' | 'ops';

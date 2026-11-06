@@ -45,6 +45,8 @@ export function ProductForm({ categories, product, onSaved, onClose }: { categor
   const [image, setImage] = useState<PickedImage>();
   const [removed, setRemoved] = useState(false);
   const [description, setDescription] = useState(product?.description ?? '');
+  const [aliases, setAliases] = useState(product?.aliases ?? '');
+  const [unit, setUnit] = useState(product?.unit ?? '');
   const [gallery, setGallery] = useState({ saved: product?.imagePaths ?? [], picked: [] as PickedImage[] });
   const options = categories.filter((c) => c.active || c.id === product?.categoryId);
   const current = options.find((c) => c.id === categoryId);
@@ -53,10 +55,10 @@ export function ProductForm({ categories, product, onSaved, onClose }: { categor
       footer={<>
         <Button label="Cancel" variant="ghost" onPress={onClose} />
         {options.length ? (
-          <Button label={product ? 'Save product' : 'Add product'} loading={busy} disabled={name.trim().length < 2 || !current}
+          <Button label={product ? 'Save product' : 'Add product'} loading={busy} disabled={name.trim().length < 2 || !unit.trim() || !current}
             onPress={() => run(async () => {
               await saveProduct({
-                id: product?.id, name, categoryId, active: product?.active ?? true, image, oldImagePath: product?.imagePath, removeImage: removed, description,
+                id: product?.id, name, categoryId, active: product?.active ?? true, image, oldImagePath: product?.imagePath, removeImage: removed, description, aliases, unit,
                 gallery: { keep: gallery.saved, dropped: (product?.imagePaths ?? []).filter((p) => !gallery.saved.includes(p)), added: gallery.picked },
               });
               onClose();
@@ -67,12 +69,16 @@ export function ProductForm({ categories, product, onSaved, onClose }: { categor
       {options.length ? (
         <>
           <Input label="Name" value={name} onChangeText={setName} placeholder="Garden egg" />
+          <Input label="Sold by (unit)" value={unit} onChangeText={setUnit} maxLength={40} placeholder="kg, bunch, egg, 500 ml bottle…"
+            hint="The one unit farmers list in, buyers order in and drivers check at pickup. Pick something that can be weighed or counted. It cannot change once the product has listings or orders." />
+          <Input label="Other names" value={aliases} onChangeText={setAliases} maxLength={500} placeholder="pawpaw, brofre, papaye"
+            hint="Local or alternative names, separated by commas. Buyers and farmers can search by any of them." />
           <ChoiceChips label="Category" options={options.map((c) => c.name)} value={current?.name ?? ''}
             onChange={(n) => setCategoryId(options.find((c) => c.name === n)!.id)} />
           <ImageField label="Cover image" currentUrl={imageUrl(product?.imagePath)} picked={image} removed={removed} onPick={(i) => { setImage(i); setRemoved(false); }} onRemove={() => { setImage(undefined); setRemoved(true); }} />
           <GalleryField {...gallery} onChange={setGallery} />
           <Input label="Description" value={description} onChangeText={setDescription} multiline numberOfLines={7} maxLength={DESCRIPTION_MAX}
-            style={s.description} placeholder="Origin, taste, how it is graded and packed"
+            style={s.description} placeholder="Origin, taste, how it is packed"
             hint={`${description.length} / ${DESCRIPTION_MAX}`} />
         </>
       ) : <Text style={s.meta}>Add a category first.</Text>}
@@ -140,7 +146,7 @@ export function ProductList({ rows, onChange, onEdit }: { rows: Product[]; onCha
   return (
     <View style={s.table}>
       {rows.map((p) => (
-        <Row key={p.id} path={p.imagePath} name={p.name} meta={p.category} active={p.active}
+        <Row key={p.id} path={p.imagePath} name={p.name} meta={`${p.category} · per ${p.unit}`} active={p.active}
           onToggle={async (next) => { await setVisibility('products', p.id, next); await onChange(); }} onEdit={() => onEdit(p)} />
       ))}
     </View>

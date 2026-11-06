@@ -12,7 +12,7 @@ import { useAction } from './useAction';
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 type Stage = 'attention' | 'farmers' | 'moving' | 'done' | 'closed';
 
-const kgText = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
+const kgText = (n: number, unit = 'kg') => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} ${unit}`;
 const ACTIVE: AllocationStatus[] = ['offered', 'accepted', 'collected'];
 
 const ALLOC_TONE: Record<AllocationStatus, Tone> = { offered: 'warning', accepted: 'success', collected: 'info', declined: 'danger', expired: 'danger', cancelled: 'neutral' };
@@ -75,8 +75,8 @@ export function OrdersBoard({ orders, onChange }: { orders: BoardOrder[]; onChan
                     <View style={s.row}>
                       <View style={s.grow}>
                         <Text style={s.value}>{a.farmer} · {a.product}</Text>
-                        <Text style={s.meta}>Listed {kgText(a.kg)} grade {a.grade}{a.kmToBuyer != null ? ` · ${a.kmToBuyer} km from buyer` : ''}</Text>
-                        {a.takenKg != null ? <Text style={s.value}>Taken {kgText(a.takenKg)} grade {a.takenGrade ?? a.grade}{a.temperatureC != null ? ` · ${a.temperatureC} °C` : ''}</Text> : <Text style={s.meta}>Quantity not taken yet.</Text>}
+                        <Text style={s.meta}>Listed {kgText(a.kg, a.unit)}{a.kmToBuyer != null ? ` · ${a.kmToBuyer} km from buyer` : ''}</Text>
+                        {a.takenKg != null ? <Text style={s.value}>Taken {kgText(a.takenKg, a.unit)}{a.temperatureC != null ? ` · ${a.temperatureC} °C` : ''}</Text> : <Text style={s.meta}>Quantity not taken yet.</Text>}
                         <Text style={s.meta}>We pay {ghs(a.amount)}{a.status === 'offered' ? ` · answer by ${when(a.expiresAt)}` : ''}</Text>
                       </View>
                       <Badge label={a.status} tone={ALLOC_TONE[a.status]} />
@@ -101,7 +101,7 @@ export function OrdersBoard({ orders, onChange }: { orders: BoardOrder[]; onChan
                         <Text style={s.meta}>{p.driver ? `Driver ${p.driver}` : 'No driver yet'}{p.doneAt ? ` · ${when(p.doneAt)}` : ''}</Text>
                         {p.takenKg != null || p.temperatureC != null ? (
                           <Text style={s.meta}>
-                            {[p.takenKg != null ? kgText(p.takenKg) : '', p.takenGrade ? `grade ${p.takenGrade}` : '', p.temperatureC != null ? `${p.temperatureC} °C` : ''].filter(Boolean).join(' · ')}
+                            {[p.takenKg != null ? kgText(p.takenKg, p.unit) : '', p.temperatureC != null ? `${p.temperatureC} °C` : ''].filter(Boolean).join(' · ')}
                           </Text>
                         ) : null}
                       </View>

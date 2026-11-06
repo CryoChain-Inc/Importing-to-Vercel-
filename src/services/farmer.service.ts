@@ -37,7 +37,7 @@ export interface ProduceListing {
   /** Kg the farmer listed. */
   weightKg: number;
   createdAt: string;
-  grade: string;
+  unit: string;
   imagePaths: string[];
   estNet: number | null;
   estFee: number | null;
@@ -67,7 +67,6 @@ export interface CollectionPoint {
 }
 
 const PRODUCE_BUCKET = 'produce';
-export const GRADES = ['A', 'B', 'C'];
 export const MIN_PHOTOS = 3;
 export const MAX_PHOTOS = 6;
 export const produceImageUrl = (path: string) => supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
@@ -150,7 +149,7 @@ async function loadListings(): Promise<ProduceListing[]> {
   const [listed, stock] = await Promise.all([
     supabase
       .from('produce_listings')
-      .select('id, product, weight_kg, created_at, grade, image_paths, est_net, est_fee')
+      .select('id, product, weight_kg, created_at, unit, image_paths, est_net, est_fee')
       .order('created_at', { ascending: false }),
     supabase.from('listing_stock').select('listing_id, sold_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out'),
   ]);
@@ -163,7 +162,7 @@ async function loadListings(): Promise<ProduceListing[]> {
       product: row.product,
       weightKg: Number(row.weight_kg),
       createdAt: row.created_at,
-      grade: row.grade,
+      unit: row.unit,
       imagePaths: row.image_paths ?? [],
       estNet: row.est_net == null ? null : Number(row.est_net),
       estFee: row.est_fee == null ? null : Number(row.est_fee),
@@ -181,7 +180,7 @@ export interface Sale {
   id: string;
   listingId: string;
   product: string;
-  grade: string;
+  unit: string;
   kg: number;
   pricePerKg: number;
   amount: number;
@@ -197,7 +196,7 @@ export const fetchSales = () => cached('fetchSales', loadSales);
 async function loadSales(): Promise<Sale[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, listing_id, grade, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
+    .select('id, listing_id, unit, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
     .in('status', ['accepted', 'collected', 'offered'])
     .order('created_at', { ascending: false });
   if (error) throw new Error('Could not load your sales.');
@@ -205,7 +204,7 @@ async function loadSales(): Promise<Sale[]> {
     id: r.id,
     listingId: r.listing_id,
     product: r.products?.name ?? '',
-    grade: r.grade,
+    unit: r.unit,
     kg: Number(r.kg),
     pricePerKg: Number(r.farmer_price),
     amount: Number(r.amount),
@@ -216,11 +215,22 @@ async function loadSales(): Promise<Sale[]> {
   }));
 }
 
-export const fetchProductNames = () => cached('fetchProductNames', loadProductNames);
-async function loadProductNames(): Promise<string[]> {
-  const { data, error } = await supabase.from('products').select('name').eq('active', true).order('name');
+export interface ProductOption {
+  name: string;
+  /** Comma-separated alternative names, matched by search. */
+  aliases: string;
+  /** The one unit this product is listed and paid in. */
+  unit: string;
+  /** Farm-gate price per unit. */
+  price: number;
+}
+
+/** Active, priced products (the farmer's view of price_board()). */
+export const fetchProductOptions = () => cached('fetchProductOptions', loadProductOptions);
+async function loadProductOptions(): Promise<ProductOption[]> {
+  const { data, error } = await supabase.rpc('price_board');
   if (error) throw new Error('Could not load products.');
-  return (data ?? []).map((r) => r.name);
+  return (data ?? []).map((r: any): ProductOption => ({ name: r.product_name, aliases: r.aliases ?? '', unit: r.unit, price: Number(r.price) }));
 }
 
 /** Category name per product name, for grouping a farmer's listings. */
@@ -233,25 +243,9 @@ async function loadProductCategories(): Promise<Record<string, string>> {
   return out;
 }
 
-/** Grades that have a published farm-gate price, keyed by product name. */
-export const fetchPricedGrades = () => cached('fetchPricedGrades', loadPricedGrades);
-async function loadPricedGrades(): Promise<Record<string, string[]>> {
-  const { data, error } = await supabase.from('crop_prices').select('grade, products!inner(name)').eq('products.active', true);
-  if (error) throw new Error('Could not load prices.');
-  const found: Record<string, string[]> = {};
-  for (const row of data ?? []) {
-    const name = (row as { products?: { name?: string } }).products?.name;
-    const grade = (row as { grade?: string }).grade;
-    if (!name || !grade) continue;
-    (found[name] ??= []).push(grade);
-  }
-  for (const name of Object.keys(found)) found[name] = GRADES.filter((g) => found[name].includes(g));
-  return found;
-}
-
-/** Expected payout for a listing: farm-gate price for the chosen grade x kg, less the collection fee. Null when no price is published. */
-export async function estimateListing(product: string, kg: number, grade: string): Promise<Estimate | null> {
-  const { data, error } = await supabase.rpc('estimate_listing', { p_product: product, p_kg: kg, p_grade: grade });
+/** Expected payout for a listing: farm-gate price for the chosen unit x quantity, less the collection fee. Null when no price is published. */
+export async function estimateListing(product: string, kg: number, unit: string): Promise<Estimate | null> {
+  const { data, error } = await supabase.rpc('estimate_listing', { p_product: product, p_kg: kg, p_unit: unit });
   if (error) throw new Error('Could not work out the expected payout.');
   const row = (Array.isArray(data) ? data[0] : data) as {
     price_per_kg?: number | string | null;
@@ -264,13 +258,13 @@ export async function estimateListing(product: string, kg: number, grade: string
   return { pricePerKg: Number(row.price_per_kg), gross: Number(row.gross), feeRate: Number(row.fee_rate), fee: Number(row.fee), net: Number(row.net) };
 }
 
-export async function updateListing(id: string, product: string, weightKg: number, grade: string): Promise<void> {
-  const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_grade: grade, p_weight_kg: weightKg });
+export async function updateListing(id: string, product: string, weightKg: number, unit: string): Promise<void> {
+  const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_unit: unit, p_weight_kg: weightKg });
   if (!error) return;
   const msg = error.message ?? '';
   if (msg.includes('already in a lot')) throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
   if (msg.includes('been delivered')) throw new Error('This produce has been delivered, so it can no longer be edited.');
-  if (msg.includes('no published price')) throw new Error(`No published price for ${product} grade ${grade} yet.`);
+  if (msg.includes('no published price')) throw new Error(`No published price for ${product} (${unit}) yet.`);
   if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
   throw new Error('Could not save your changes.');
 }
@@ -322,7 +316,7 @@ export async function fetchNotices(): Promise<Notice[]> {
 export interface Offer {
   id: string;
   product: string;
-  grade: string;
+  unit: string;
   kg: number;
   /** What CryoChain pays this farmer for the allocation. */
   amount: number;
@@ -336,12 +330,12 @@ export interface Offer {
 export async function fetchOffers(): Promise<Offer[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, grade, kg, amount, status, pickup_at, created_at, products(name)')
+    .select('id, unit, kg, amount, status, pickup_at, created_at, products(name)')
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) throw new Error('Could not load your orders.');
   return (data ?? []).map((r: any) => ({
-    id: r.id, product: r.products?.name ?? '', grade: r.grade, kg: Number(r.kg), amount: Number(r.amount),
+    id: r.id, product: r.products?.name ?? '', unit: r.unit, kg: Number(r.kg), amount: Number(r.amount),
     status: r.status, pickupAt: r.pickup_at, createdAt: r.created_at,
   }));
 }

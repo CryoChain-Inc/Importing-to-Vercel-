@@ -18,7 +18,7 @@ You need the app running (`npx expo start --web` is the quickest) against a Supa
 
 **Paystack.** Use a Paystack **test** secret key and the test card/mobile money numbers from Paystack's docs. Never run these steps with a live key.
 
-**Minimum data before an order can work.** Ops needs at least one product with a **buyer price** and a **farmer price** for the grade (Prices and products), at least one collection point, and the farmer needs a listing with stock. A driver must have the route screen open so a location ping exists in the last 30 minutes.
+**Minimum data before an order can work.** Ops needs at least one product with a **unit** and a **base price** (Prices and products; the buyer and farmer prices are worked out from it), at least one collection point, and the farmer needs a listing with stock. A driver must have the route screen open so a location ping exists in the last 30 minutes.
 
 ### Suggested cast
 
@@ -64,7 +64,9 @@ Each step says what to do and what you should see. Anything else is a bug.
 | # | Step | Expected |
 |---|---|---|
 | B1 | Team: invite a driver with name, a valid Ghana phone and email | Driver appears under Drivers. Bad phone or email shows an inline error and Send stays disabled |
-| B2 | Prices and products: add a category, a product, a buyer price and a farmer price per grade | Product shows in the catalogue; buyers can see it in Shop |
+| B2 | Prices and products: add a category, then a product with its one unit (e.g. kg, bunch, egg), other names (e.g. "pawpaw") and a base price | Product shows in the catalogue; buyers see base + buyer markup %, farmers see base − farmer discount % |
+| B2a | Settings > Pricing: change the buyer markup and farmer discount % | Shop, new listing estimates and new allocations move to the new prices straight away |
+| B2b | Change the unit of a product that already has a listing or order | Refused. Products with no listings or orders can change unit |
 | B3 | Settings: set min and max temperature, min above max is rejected | "Must be above min" and Save is disabled |
 | B4 | Settings: save payout threshold, bank details, support phone | Button shows "Saved" |
 | B5 | Cold trucks: set GH₵ per km | Saved; used in buyer truck quotes |
@@ -75,7 +77,7 @@ Each step says what to do and what you should see. Anything else is a bug.
 |---|---|---|
 | C1 | Profile: fill name, address (map or fields) and save | "Wallet needed" badge in the header until a wallet exists |
 | C2 | Payments: add a mobile money wallet (network, number, name) | Wallet saved after verification; badge disappears |
-| C3 | Listings > New listing: pick product, grade, weight, add a photo, pick a collection point, add | Listing card shows Sold 0, Delivered 0, Left = weight |
+| C3 | Listings > New listing: pick product (search by name or local name), quantity in that product's unit, add a photo, pick a collection point, add | Listing card shows Sold 0, Delivered 0, Left = quantity |
 | C4 | Edit a listing | Changes saved |
 | C5 | Remove a listing that has no sales | Removed. Remove is hidden once anything is sold or withdrawn |
 | C6 | Look for any buyer price anywhere in the farmer app | None. Only the farmer price and payout amounts |

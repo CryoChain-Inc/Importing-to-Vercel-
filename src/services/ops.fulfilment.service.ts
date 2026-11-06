@@ -10,7 +10,7 @@ export type MediaKind = 'photo' | 'video';
 export interface BoardAllocation {
   id: string;
   product: string;
-  grade: string;
+  unit: string;
   farmer: string;
   kg: number;
   amount: number;
@@ -20,7 +20,6 @@ export interface BoardAllocation {
   farmerPhotos: string[];
   capturePhoto: string | null;
   takenKg: number | null;
-  takenGrade: string | null;
   temperatureC: number | null;
   driverMediaUrl: string | null;
   driverMediaKind: MediaKind | null;
@@ -37,8 +36,9 @@ export interface BoardStop {
   lat: number | null;
   lng: number | null;
   allocationId: string | null;
+  /** Unit of the allocation this stop collects (takenKg is a quantity in it). */
+  unit: string;
   takenKg: number | null;
-  takenGrade: string | null;
   temperatureC: number | null;
   mediaUrl: string | null;
   mediaKind: MediaKind | null;
@@ -71,17 +71,17 @@ const num = (v: unknown): number | null => (v == null || v === '' ? null : Numbe
 
 const BOARD = `id, code, amount, state, created_at, delivery_address,
   buyers(organization_name),
-  order_items(grade, kg, products(name)),
-  order_allocations(id, listing_id, grade, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name),
-    produce_listings(image_paths, captures(recorded_kg, grade, photo_path))),
+  order_items(unit, kg, products(name)),
+  order_allocations(id, listing_id, unit, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name),
+    produce_listings(image_paths, captures(recorded_kg, photo_path))),
   delivery_stops(id, kind, label, seq, state, done_at, lat, lng, allocation_id, driver_id,
-    delivery_handovers(recorded_kg, grade, temperature_c, note, media_path, media_kind),
+    delivery_handovers(recorded_kg, temperature_c, note, media_path, media_kind),
     drivers(id, profiles(display_name), driver_locations(lat, lng, updated_at)))`;
 
 const BOARD_NO_MEDIA = BOARD.replace(', media_path, media_kind', '');
 const BOARD_BASE = `id, code, amount, state, created_at, delivery_address, buyers(organization_name),
-  order_items(grade, kg, products(name)),
-  order_allocations(id, grade, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name)),
+  order_items(unit, kg, products(name)),
+  order_allocations(id, unit, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name)),
   delivery_stops(id, kind, label, seq, state, done_at, drivers(profiles(display_name)))`;
 
 async function signed(bucket: string, path: string | null | undefined): Promise<string | null> {
@@ -147,8 +147,8 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
         lat: num(s.lat),
         lng: num(s.lng),
         allocationId: s.allocation_id ?? null,
+        unit: (r.order_allocations ?? []).find((a: any) => a.id === s.allocation_id)?.unit ?? 'kg',
         takenKg: num(h?.recorded_kg),
-        takenGrade: h?.grade ?? null,
         temperatureC: num(h?.temperature_c),
         mediaUrl: await signed('deliveries', h?.media_path),
         mediaKind: kind as MediaKind | null,
@@ -167,7 +167,7 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
       return {
         id: a.id,
         product: a.products?.name ?? '',
-        grade: a.grade,
+        unit: a.unit,
         farmer: one(a.profiles)?.display_name || 'Farmer',
         kg: Number(a.kg),
         amount: Number(a.amount),
@@ -177,7 +177,6 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
         farmerPhotos: photos,
         capturePhoto: await signed('captures', capture?.photo_path),
         takenKg: stop?.takenKg ?? (capture ? num(capture.recorded_kg) : null),
-        takenGrade: stop?.takenGrade ?? capture?.grade ?? null,
         temperatureC: stop?.temperatureC ?? null,
         driverMediaUrl: stop?.mediaUrl ?? null,
         driverMediaKind: stop?.mediaKind ?? null,
@@ -192,8 +191,9 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
       state: r.state,
       createdAt: r.created_at,
       address: r.delivery_address ?? '',
+      // Summed across units; only ever compared with the collected total, which is summed the same way.
       itemKg: (r.order_items ?? []).reduce((n: number, i: any) => n + Number(i.kg || 0), 0),
-      items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} ${i.grade} · ${Number(i.kg).toLocaleString('en-GH')} kg`),
+      items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} · ${Number(i.kg).toLocaleString('en-GH')} ${i.unit}`),
       allocations,
       stops,
       driver: liveDriver,
@@ -214,12 +214,11 @@ export interface DriverRoute {
   stops: { id: string; kind: 'pickup' | 'dropoff'; label: string; seq: number | null; state: 'pending' | 'done'; order: string; reading: string | null }[];
 }
 
-const readingOf = (h: any): string | null => {
+const readingOf = (h: any, unit = 'kg'): string | null => {
   const row = Array.isArray(h) ? h[0] : h;
   if (!row) return null;
   const parts = [
-    row.recorded_kg != null ? `${Number(row.recorded_kg)} kg` : '',
-    row.grade ? `grade ${row.grade}` : '',
+    row.recorded_kg != null ? `${Number(row.recorded_kg)} ${unit}` : '',
     row.temperature_c != null ? `${Number(row.temperature_c)}°C` : '',
   ].filter(Boolean);
   return parts.length ? parts.join(' · ') : null;
@@ -227,7 +226,7 @@ const readingOf = (h: any): string | null => {
 
 export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
   const drivers = supabase.from('drivers').select('id, plate_number, vehicle_type, profiles(display_name, phone), driver_locations(lat, lng, updated_at)');
-  const withReading = 'id, driver_id, kind, label, seq, state, orders(code), delivery_handovers(recorded_kg, grade, temperature_c)';
+  const withReading = 'id, driver_id, kind, label, seq, state, orders(code), order_allocations(unit), delivery_handovers(recorded_kg, temperature_c)';
   type StopQuery = { data: any[] | null; error: { message: string } | null };
   let stops = await supabase.from('delivery_stops').select(withReading).not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
   if (stops.error && /delivery_handovers|relationship|schema cache/i.test(stops.error.message)) {
@@ -246,7 +245,7 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
       lat: loc ? Number(loc.lat) : null,
       lng: loc ? Number(loc.lng) : null,
       stops: (stops.data ?? []).filter((x: any) => x.driver_id === r.id)
-        .map((x: any) => ({ id: x.id, kind: x.kind, label: x.label, seq: x.seq, state: x.state, order: x.orders?.code ?? '', reading: readingOf(x.delivery_handovers) })),
+        .map((x: any) => ({ id: x.id, kind: x.kind, label: x.label, seq: x.seq, state: x.state, order: x.orders?.code ?? '', reading: readingOf(x.delivery_handovers, (Array.isArray(x.order_allocations) ? x.order_allocations[0] : x.order_allocations)?.unit) })),
     };
   });
 }

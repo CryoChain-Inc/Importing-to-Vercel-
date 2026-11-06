@@ -5,12 +5,11 @@ import { Banner } from '../../../components/feedback';
 import { checkoutCart, type BuyerAddress, type CartLine, type CatalogueItem, type Shortfall } from '../../../services/buyer.service';
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 import { useCart } from '../cart/CartProvider';
-import { KgStepper } from './KgStepper';
+import { QtyStepper } from './QtyStepper';
 
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
 /** Review the cart, pick where it goes, then check supply and pay. Stock is only held once every line fits. */
 export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onShop }: {
@@ -33,17 +32,17 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
   const address = pinned.find((a) => a.id === addressId) ?? pinned.find((a) => a.isDefault) ?? pinned[0];
 
   const rows = lines.map((l) => {
-    const item = items.find((i) => i.productId === l.productId && i.grade === l.grade);
-    const short = shortfalls.find((x) => x.productId === l.productId && x.grade === l.grade);
+    const item = items.find((i) => i.productId === l.productId && i.unit === l.unit);
+    const short = shortfalls.find((x) => x.productId === l.productId && x.unit === l.unit);
     const available = short?.availableKg ?? item?.availableKg ?? 0;
     return { line: l, item, available, over: l.kg > available };
   });
   const blocked = rows.some((r) => r.over);
   const total = rows.reduce((sum, r) => sum + (r.item ? r.line.kg * r.item.price : 0), 0);
 
-  const set = (productId: string, grade: CatalogueItem['grade'], next: number) => {
+  const set = (productId: string, unit: string, next: number) => {
     setShortfalls([]);
-    dispatch({ type: 'set', line: { productId, grade, kg: next } });
+    dispatch({ type: 'set', line: { productId, unit, kg: next } });
   };
 
   const submit = (cartLines: CartLine[]) => run(async () => {
@@ -60,11 +59,11 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
 
   // What the buyer would get if they accept the stock that is left: lines trimmed to it, sold-out lines dropped.
   const trimmed = lines
-    .map((l) => ({ ...l, kg: Math.min(l.kg, shortfalls.find((x) => x.productId === l.productId && x.grade === l.grade)?.availableKg ?? l.kg) }))
+    .map((l) => ({ ...l, kg: Math.min(l.kg, shortfalls.find((x) => x.productId === l.productId && x.unit === l.unit)?.availableKg ?? l.kg) }))
     .filter((l) => l.kg > 0);
-  const trimmedTotal = trimmed.reduce((sum, l) => sum + l.kg * (items.find((i) => i.productId === l.productId && i.grade === l.grade)?.price ?? 0), 0);
+  const trimmedTotal = trimmed.reduce((sum, l) => sum + l.kg * (items.find((i) => i.productId === l.productId && i.unit === l.unit)?.price ?? 0), 0);
   const acceptAvailable = () => {
-    lines.forEach((l) => dispatch({ type: 'set', line: { ...l, kg: trimmed.find((t) => t.productId === l.productId && t.grade === l.grade)?.kg ?? 0 } }));
+    lines.forEach((l) => dispatch({ type: 'set', line: { ...l, kg: trimmed.find((t) => t.productId === l.productId && t.unit === l.unit)?.kg ?? 0 } }));
     submit(trimmed);
   };
 
@@ -80,14 +79,13 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
   }
 
   const split = width >= 720;
-  const kgTotal = lines.reduce((sum, l) => sum + l.kg, 0);
 
   const itemsList = (
     <View style={s.col}>
       {rows.map(({ line, item, available, over }) => {
         const uri = imageUrl(item?.image ?? null);
         return (
-          <Card key={`${line.productId}-${line.grade}`} style={[s.item, over && s.itemOver]}>
+          <Card key={`${line.productId}-${line.unit}`} style={[s.item, over && s.itemOver]}>
             <View style={s.top}>
               <View style={s.thumb}>
                 {uri ? <Image source={{ uri }} style={s.thumbImg} resizeMode="cover" accessibilityLabel={item?.name ?? 'Item'} /> : <Icon name="leaf" size={22} color={colors.inkMuted} />}
@@ -95,21 +93,21 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
               <View style={s.grow}>
                 <Text style={s.name} numberOfLines={2}>{item?.name ?? 'Unavailable item'}</Text>
                 <View style={s.tags}>
-                  <Badge label={`Grade ${line.grade}`} tone="neutral" />
-                  {item ? <Text style={s.meta}>{ghs(item.price)} / kg</Text> : null}
+                  <Badge label={line.unit} tone="neutral" />
+                  {item ? <Text style={s.meta}>{ghs(item.price)} / {line.unit}</Text> : null}
                 </View>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item?.name ?? 'item'} from cart`} onPress={() => set(line.productId, line.grade, 0)} hitSlop={8} style={({ pressed }) => [s.trash, pressed && s.pressed]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item?.name ?? 'item'} from cart`} onPress={() => set(line.productId, line.unit, 0)} hitSlop={8} style={({ pressed }) => [s.trash, pressed && s.pressed]}>
                 <Icon name="trash" size={18} color={colors.inkMuted} />
               </Pressable>
             </View>
             {!item ? <Text style={s.warn}>No longer in stock. Remove it to continue.</Text> : null}
-            {over && item ? <Text style={s.warn}>{available > 0 ? `Only ${kg(available)} left.` : 'Out of stock. Remove it to continue.'}</Text> : null}
+            {over && item ? <Text style={s.warn}>{available > 0 ? `Only ${fmtQty(available, line.unit)} left.` : 'Out of stock. Remove it to continue.'}</Text> : null}
             <View style={s.bottom}>
-              {item ? <KgStepper value={line.kg} max={Math.max(available, line.kg)} onChange={(n) => set(line.productId, line.grade, n)} /> : <View />}
+              {item ? <QtyStepper unit={line.unit} value={line.kg} max={Math.max(available, line.kg)} onChange={(n) => set(line.productId, line.unit, n)} /> : <View />}
               <Text style={s.line}>{item ? ghs(line.kg * item.price) : ''}</Text>
             </View>
-            {over && item && available > 0 ? <Button size="sm" variant="tonal" label={`Reduce to ${kg(available)}`} onPress={() => set(line.productId, line.grade, available)} /> : null}
+            {over && item && available > 0 ? <Button size="sm" variant="tonal" label={`Reduce to ${fmtQty(available, line.unit)}`} onPress={() => set(line.productId, line.unit, available)} /> : null}
           </Card>
         );
       })}
@@ -141,7 +139,7 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
 
       <Card tone="tint" style={s.box}>
         <Text style={s.label}>Order summary</Text>
-        <View style={s.sumRow}><Text style={s.meta}>{lines.length} item{lines.length === 1 ? '' : 's'} · {kg(kgTotal)}</Text><Text style={s.sumValue}>{ghs(total)}</Text></View>
+        <View style={s.sumRow}><Text style={s.meta}>{lines.length} item{lines.length === 1 ? '' : 's'}</Text><Text style={s.sumValue}>{ghs(total)}</Text></View>
         <View style={s.divider} />
         <View style={s.bottom}>
           <Text style={s.label}>Total</Text>
@@ -162,10 +160,10 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
         <Card tone="tint" style={s.item}>
           <Text style={s.title}>Not enough stock for everything</Text>
           {shortfalls.map((x) => {
-            const it = items.find((i) => i.productId === x.productId && i.grade === x.grade);
+            const it = items.find((i) => i.productId === x.productId && i.unit === x.unit);
             return (
-              <Text key={`${x.productId}-${x.grade}`} style={s.meta}>
-                {it?.name ?? 'Item'} · Grade {x.grade}: you asked for {kg(x.requestedKg)}, {x.availableKg > 0 ? `only ${kg(x.availableKg)} is available` : 'none is available now'}.
+              <Text key={`${x.productId}-${x.unit}`} style={s.meta}>
+                {it?.name ?? 'Item'} · {x.unit}: you asked for {fmtQty(x.requestedKg, x.unit)}, {x.availableKg > 0 ? `only ${fmtQty(x.availableKg, x.unit)} is available` : 'none is available now'}.
               </Text>
             );
           })}

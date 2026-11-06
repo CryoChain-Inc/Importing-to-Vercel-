@@ -4,10 +4,9 @@ import { Badge, Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { cancelOrder, orderStage, orderStatus, type Order, type OrderStage } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
 const stamp = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -108,7 +107,6 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
   const unpaid = o.state === 'awaiting_payment';
   const retry = o.payment === 'failed' || o.payment === 'abandoned';
   const { pickupsTotal, pickupsDone, deliveredAt } = o.progress;
-  const totalKg = o.items.reduce((sum, i) => sum + i.kg, 0);
 
   const steps: { title: string; note: string }[] = [
     { title: 'Order placed', note: stamp(o.createdAt) },
@@ -179,12 +177,12 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
       )}
 
       <Card style={s.box}>
-        <Text style={s.title}>Items · {kg(totalKg)}</Text>
+        <Text style={s.title}>Items · {o.items.length}</Text>
         {o.items.map((i) => (
-          <View key={`${i.name}-${i.grade}`} style={s.row}>
+          <View key={`${i.name}-${i.unit}`} style={s.row}>
             <View style={s.grow}>
               <Text style={s.k}>{i.name}</Text>
-              <Text style={s.meta}>Grade {i.grade} · {kg(i.kg)} × {ghs(i.lineTotal / (i.kg || 1))}</Text>
+              <Text style={s.meta}>{fmtQty(i.kg, i.unit)} × {ghs(i.lineTotal / (i.kg || 1))}</Text>
             </View>
             <Text style={s.v}>{ghs(i.lineTotal)}</Text>
           </View>

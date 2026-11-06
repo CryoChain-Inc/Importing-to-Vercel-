@@ -41,7 +41,7 @@ const TITLES: Record<string, [string, string]> = {
   trucks: ['Cold trucks', 'Hour packages, bookings, and the driver you allot to each trip.'],
   prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
   team: ['Team', 'Drivers and operations staff.'],
-  settings: ['Settings', 'Temperature limits, payout rules and support contact.'],
+  settings: ['Settings', 'Temperature limits, buyer and farmer pricing, payout rules and support contact.'],
 };
 
 const TABS = Object.keys(TITLES);
@@ -154,7 +154,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
           {tab === 'payouts' ? <PayoutsPanel payables={data.payables} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
-          {tab === 'prices' ? <PricesPanel categories={data.categories} onChange={load} {...page} /> : null}
+          {tab === 'prices' ? <PricesPanel categories={data.categories} config={data.config} onChange={load} {...page} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}
           {tab === 'settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
         </>

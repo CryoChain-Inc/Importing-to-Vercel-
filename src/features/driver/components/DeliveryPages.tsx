@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
+import { Badge, Button, Card, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { completeStop } from '../../../services/driver.route.service';
 import { recordHandover, uploadHandoverMedia, type DeliveryOrder, type DropoffStop, type HandoverMediaKind, type PickupStop } from '../../../services/driver.deliveries.service';
@@ -12,7 +12,13 @@ import { Empty } from '../../ops/components/OpsBits';
 import { useAction } from '../../ops/components/useAction';
 import { BackButton, Fact, NextCard, openMaps, openPhone, QuickActions, RowCard, StepDot } from './bits';
 
-const kgText = (n: number) => `${n} kg`;
+const kgText = (n: number, unit = 'kg') => `${n} ${unit}`;
+/** Quantities only add up within one unit, so a mixed order shows one total per unit. */
+const sumText = (ps: PickupStop[], q: (p: PickupStop) => number) => {
+  const m = new Map<string, number>();
+  for (const p of ps) m.set(p.expectedUnit, (m.get(p.expectedUnit) ?? 0) + q(p));
+  return [...m].map(([u, n]) => kgText(Math.round(n * 10) / 10, u)).join(' + ');
+};
 
 /** The stop the driver should go to next: first farmer still to collect, else the buyer. */
 export function nextStop(order: DeliveryOrder): { kind: 'pickup'; pickup: PickupStop } | { kind: 'dropoff' } | null {
@@ -40,7 +46,7 @@ export function DeliveryList({ orders, past, onOpen }: { orders: DeliveryOrder[]
           key={o.id}
           title={o.buyerName}
           lead={past ? <StepDot n={0} done /> : undefined}
-          sub={`${o.code} · ${o.pickups.length} farmer${o.pickups.length === 1 ? '' : 's'}${past ? ` · ${kgText(Math.round(o.pickups.reduce((sum, p) => sum + (p.recordedKg ?? p.expectedKg), 0) * 10) / 10)}` : ''}`}
+          sub={`${o.code} · ${o.pickups.length} farmer${o.pickups.length === 1 ? '' : 's'}${past ? ` · ${sumText(o.pickups, (p) => p.recordedKg ?? p.expectedKg)}` : ''}`}
           done={past}
           right={past ? undefined : <Badge label={`${o.pickups.filter((p) => p.state === 'pending').length} to collect`} tone="info" />}
           onPress={() => onOpen(o.id)}
@@ -74,7 +80,7 @@ export function DeliveryOrderPage({
         <NextCard
           eyebrow="Next stop"
           title={next.pickup.farmerName}
-          lines={[`${next.pickup.product} · grade ${next.pickup.expectedGrade} · ${kgText(next.pickup.expectedKg)}`, next.pickup.place]}
+          lines={[`${next.pickup.product} · ${kgText(next.pickup.expectedKg, next.pickup.expectedUnit)}`, next.pickup.place]}
           label="Start pickup"
           onPress={() => onPickup(next.pickup.stopId)}
         />
@@ -89,7 +95,7 @@ export function DeliveryOrderPage({
               key={p.stopId}
               n={i + 1}
               title={p.farmerName}
-              sub={isDone && p.recordedKg != null ? `${kgText(p.recordedKg)} collected` : `${p.product} · ${kgText(p.expectedKg)}`}
+              sub={isDone && p.recordedKg != null ? `${kgText(p.recordedKg, p.expectedUnit)} collected` : `${p.product} · ${kgText(p.expectedKg, p.expectedUnit)}`}
               done={isDone}
               now={next?.kind === 'pickup' && next.pickup.stopId === p.stopId}
               last={!order.dropoff && i === order.pickups.length - 1}
@@ -172,17 +178,17 @@ export function PickupPage({
       />
       <Card tone="tint" style={s.facts}>
         <Fact label="Product" value={pickup.product} />
-        <Fact label="Listed grade" value={pickup.expectedGrade} />
-        <Fact label="Listed weight" value={kgText(pickup.expectedKg)} />
+        <Fact label="Listed quantity" value={kgText(pickup.expectedKg, pickup.expectedUnit)} />
       </Card>
       {done ? (
-        <SavedReading kg={pickup.recordedKg} grade={pickup.recordedGrade} temp={pickup.temperatureC} note={pickup.note} mediaUrl={pickup.mediaUrl} mediaKind={pickup.mediaKind} onBack={onBack} backLabel="Back to route" />
+        <SavedReading kg={pickup.recordedKg} unit={pickup.expectedUnit} temp={pickup.temperatureC} note={pickup.note} mediaUrl={pickup.mediaUrl} mediaKind={pickup.mediaKind} onBack={onBack} backLabel="Back to route" />
       ) : (
         <ReadingForm
           kind="pickup"
           stopId={pickup.stopId}
           range={range}
-          initial={{ kg: pickup.recordedKg, grade: pickup.recordedGrade, temp: pickup.temperatureC, note: pickup.note, mediaPath: pickup.mediaPath, mediaKind: pickup.mediaKind, mediaUrl: pickup.mediaUrl }}
+          unit={pickup.expectedUnit}
+          initial={{ kg: pickup.recordedKg, temp: pickup.temperatureC, note: pickup.note, mediaPath: pickup.mediaPath, mediaKind: pickup.mediaKind, mediaUrl: pickup.mediaUrl }}
           blocked={false}
           completeLabel="Confirm pickup"
           onComplete={() => completeStop(pickup.stopId)}
@@ -205,7 +211,6 @@ export function DropoffPage({
   const s = useThemedStyles(styles);
   const waiting = order.pickups.filter((p) => p.state === 'pending').length;
   const done = dropoff.state === 'done';
-  const kgTotal = order.pickups.reduce((sum, p) => sum + (p.recordedKg ?? p.expectedKg), 0);
   return (
     <View style={s.list}>
       <BackButton label="Route" onPress={onBack} />
@@ -218,22 +223,23 @@ export function DropoffPage({
       />
       <Card tone="tint" style={s.facts}>
         <Fact label="Farmers" value={String(order.pickups.length)} />
-        <Fact label="Total weight" value={kgText(Math.round(kgTotal * 10) / 10)} />
+        <Fact label="Total quantity" value={sumText(order.pickups, (p) => p.recordedKg ?? p.expectedKg)} />
       </Card>
       {order.pickups.map((p) => (
         <Text key={p.stopId} style={s.meta}>
-          {p.farmerName} · {p.product} · {p.recordedKg != null ? `${kgText(p.recordedKg)} collected, grade ${p.recordedGrade}` : `${kgText(p.expectedKg)} listed, grade ${p.expectedGrade}`}
+          {p.farmerName} · {p.product} · {p.recordedKg != null ? `${kgText(p.recordedKg, p.expectedUnit)} collected` : `${kgText(p.expectedKg, p.expectedUnit)} listed`}
           {p.state === 'pending' ? ' · still to collect' : ''}
         </Text>
       ))}
       {done ? (
-        <SavedReading kg={null} grade={null} temp={dropoff.temperatureC} note={dropoff.note} mediaUrl={dropoff.mediaUrl} mediaKind={dropoff.mediaKind} onBack={onBack} backLabel="Back to route" />
+        <SavedReading kg={null} unit="kg" temp={dropoff.temperatureC} note={dropoff.note} mediaUrl={dropoff.mediaUrl} mediaKind={dropoff.mediaKind} onBack={onBack} backLabel="Back to route" />
       ) : (
         <ReadingForm
           kind="dropoff"
           stopId={dropoff.stopId}
           range={range}
-          initial={{ kg: null, grade: null, temp: dropoff.temperatureC, note: dropoff.note, mediaPath: dropoff.mediaPath, mediaKind: dropoff.mediaKind, mediaUrl: dropoff.mediaUrl }}
+          unit="kg"
+          initial={{ kg: null, temp: dropoff.temperatureC, note: dropoff.note, mediaPath: dropoff.mediaPath, mediaKind: dropoff.mediaKind, mediaUrl: dropoff.mediaUrl }}
           blocked={waiting > 0}
           blockedText="Collect every farmer's produce before delivering this order."
           completeLabel="Confirm delivery"
@@ -245,8 +251,8 @@ export function DropoffPage({
   );
 }
 
-function SavedReading({ kg, grade, temp, note, mediaUrl, mediaKind, onBack, backLabel }: {
-  kg: number | null; grade: string | null; temp: number | null; note: string;
+function SavedReading({ kg, unit, temp, note, mediaUrl, mediaKind, onBack, backLabel }: {
+  kg: number | null; unit: string; temp: number | null; note: string;
   mediaUrl: string | null; mediaKind: HandoverMediaKind | null;
   onBack: () => void; backLabel: string;
 }) {
@@ -258,7 +264,7 @@ function SavedReading({ kg, grade, temp, note, mediaUrl, mediaKind, onBack, back
         <Text style={s.title}>Done</Text>
         <Icon name="check" size={22} color={colors.brandInk} />
       </View>
-      {kg != null ? <Text style={s.meta}>{kgText(kg)} · grade {grade}</Text> : null}
+      {kg != null ? <Text style={s.meta}>{kgText(kg, unit)}</Text> : null}
       <Text style={s.meta}>{temp == null ? 'No temperature recorded' : `${temp} °C on record`}</Text>
       {note ? <Text style={s.meta}>{note}</Text> : null}
       {mediaUrl ? <MediaPreview uri={mediaUrl} kind={mediaKind ?? 'photo'} /> : null}
@@ -274,12 +280,13 @@ function MediaPreview({ uri, kind }: { uri: string; kind: HandoverMediaKind }) {
 }
 
 function ReadingForm({
-  kind, stopId, range, initial, blocked, blockedText, completeLabel, onComplete, onChange,
+  kind, stopId, unit, range, initial, blocked, blockedText, completeLabel, onComplete, onChange,
 }: {
   kind: 'pickup' | 'dropoff';
   stopId: string;
+  unit: string;
   range: { min: number | null; max: number | null };
-  initial: { kg: number | null; grade: string | null; temp: number | null; note: string; mediaPath: string | null; mediaKind: HandoverMediaKind | null; mediaUrl: string | null };
+  initial: { kg: number | null; temp: number | null; note: string; mediaPath: string | null; mediaKind: HandoverMediaKind | null; mediaUrl: string | null };
   blocked: boolean;
   blockedText?: string;
   completeLabel: string;
@@ -289,19 +296,17 @@ function ReadingForm({
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onChange);
   const [kg, setKg] = useState(initial.kg == null ? '' : String(initial.kg));
-  const [grade, setGrade] = useState(initial.grade ?? '');
   const [temp, setTemp] = useState(initial.temp == null ? '' : String(initial.temp));
   const [note, setNote] = useState(initial.note);
   const [picked, setPicked] = useState<PickedImage | null>(null);
   useEffect(() => {
     setKg(initial.kg == null ? '' : String(initial.kg));
-    setGrade(initial.grade ?? '');
     setTemp(initial.temp == null ? '' : String(initial.temp));
     setNote(initial.note);
     setPicked(null);
-  }, [initial.kg, initial.grade, initial.temp, initial.note, initial.mediaPath]);
+  }, [initial.kg, initial.temp, initial.note, initial.mediaPath]);
 
-  const parsed = parseReading({ kind, kg, grade, temp, note, min: range.min, max: range.max });
+  const parsed = parseReading({ kind, kg, temp, note, min: range.min, max: range.max });
   const hasMedia = Boolean(picked || initial.mediaPath);
   const ready = Boolean(parsed.ok && hasMedia && !blocked);
   const lo = range.min ?? -100;
@@ -323,10 +328,7 @@ function ReadingForm({
       <Text style={s.title}>{kind === 'pickup' ? 'Check the produce' : 'Check the temperature'}</Text>
       <Text style={s.meta}>Allowed temperature is {lo} to {hi} °C. Add a photo or a short video. This stays as you save it once the stop is done.</Text>
       {kind === 'pickup' ? (
-        <>
-          <Input label="Weight collected (kg)" value={kg} onChangeText={setKg} keyboardType="decimal-pad" maxLength={8} />
-          <ChoiceChips label="Grade" options={['A', 'B', 'C']} value={grade} onChange={setGrade} />
-        </>
+        <Input label={`Quantity collected (${unit})`} value={kg} onChangeText={setKg} keyboardType="decimal-pad" maxLength={8} />
       ) : null}
       <Input label="Temperature (°C)" value={temp} onChangeText={setTemp} keyboardType="numbers-and-punctuation" maxLength={6} hint={`Safe range ${lo} to ${hi} °C`} />
       <Input label="Condition notes" value={note} onChangeText={setNote} maxLength={NOTE_MAX} hint={`${note.length}/${NOTE_MAX}`} />

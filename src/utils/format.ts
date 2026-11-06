@@ -1,5 +1,8 @@
 export const ghs = (n: number) => `GH₵${n.toLocaleString('en-GH', { minimumFractionDigits: 2 })}`;
 
+/** A quantity in its product's unit, e.g. "12 crate" or "2.5 kg". */
+export const fmtQty = (n: number, unit: string) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} ${unit}`;
+
 /** Ghana-style numbers: 024… and +233 24… compare equal. */
 export function normalizePhone(raw: string): string {
   const d = raw.replace(/\D/g, '');
