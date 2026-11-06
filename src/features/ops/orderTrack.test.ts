@@ -30,16 +30,16 @@ describe('orderTrack', () => {
   it('waits on farmers after an offer', () => {
     const t = orderTrack({
       ...base(),
-      allocations: [{ id: 'a', product: 'Tomato', grade: 'A', farmer: 'Ama', kg: 10, amount: 40, status: 'offered', expiresAt: '', kmToBuyer: 3, farmerPhotos: [], capturePhoto: null, takenKg: null, takenGrade: null, temperatureC: null, driverMediaUrl: null, driverMediaKind: null }],
+      allocations: [{ id: 'a', product: 'Tomato', unit: 'kg', farmer: 'Ama', kg: 10, amount: 40, status: 'offered', expiresAt: '', kmToBuyer: 3, farmerPhotos: [], capturePhoto: null, takenKg: null, temperatureC: null, driverMediaUrl: null, driverMediaKind: null }],
     });
     expect(t.key).toBe('farmers');
     expect(t.allocatedKg).toBe(10);
   });
 
   it('is collecting once a farm stop is done, then to the buyer, then delivered', () => {
-    const pickup = { id: 'p', kind: 'pickup' as const, label: 'Farm', seq: 1, state: 'done' as const, doneAt: 'x', driver: 'Kwame', lat: 1, lng: 1, allocationId: 'a', takenKg: 9.5, takenGrade: 'A', temperatureC: 4, mediaUrl: null, mediaKind: null as 'photo' | 'video' | null };
-    const drop = { id: 'd', kind: 'dropoff' as const, label: 'Buyer', seq: 2, state: 'pending' as const, doneAt: null, driver: 'Kwame', lat: 2, lng: 2, allocationId: null, takenKg: null, takenGrade: null, temperatureC: null, mediaUrl: null, mediaKind: null as 'photo' | 'video' | null };
-    const collecting = orderTrack({ ...base(), stops: [pickup, drop], allocations: [{ id: 'a', product: 'Tomato', grade: 'A', farmer: 'Ama', kg: 10, amount: 40, status: 'collected', expiresAt: '', kmToBuyer: 3, farmerPhotos: [], capturePhoto: null, takenKg: 9.5, takenGrade: 'A', temperatureC: 4, driverMediaUrl: null, driverMediaKind: null }] });
+    const pickup = { id: 'p', kind: 'pickup' as const, label: 'Farm', seq: 1, state: 'done' as const, doneAt: 'x', driver: 'Kwame', lat: 1, lng: 1, allocationId: 'a', unit: 'kg', takenKg: 9.5, temperatureC: 4, mediaUrl: null, mediaKind: null as 'photo' | 'video' | null };
+    const drop = { id: 'd', kind: 'dropoff' as const, label: 'Buyer', seq: 2, state: 'pending' as const, doneAt: null, driver: 'Kwame', lat: 2, lng: 2, allocationId: null, unit: 'kg', takenKg: null, temperatureC: null, mediaUrl: null, mediaKind: null as 'photo' | 'video' | null };
+    const collecting = orderTrack({ ...base(), stops: [pickup, drop], allocations: [{ id: 'a', product: 'Tomato', unit: 'kg', farmer: 'Ama', kg: 10, amount: 40, status: 'collected', expiresAt: '', kmToBuyer: 3, farmerPhotos: [], capturePhoto: null, takenKg: 9.5, temperatureC: 4, driverMediaUrl: null, driverMediaKind: null }] });
     expect(collecting.key).toBe('to_buyer');
     expect(collecting.collectedKg).toBe(9.5);
     expect(collecting.next?.kind).toBe('dropoff');

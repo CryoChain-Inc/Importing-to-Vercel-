@@ -6,9 +6,8 @@ import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../them
 import { ghs } from '../../../utils/format';
 import { EditListing } from './EditListing';
 
-const kgText = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
-
 export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { listing: ProduceListing; /** This listing's orders. */ sales?: Sale[]; onRemove?: (id: string) => void; onSaved: () => Promise<void> }) {
+  const kgText = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} ${l.unit}`;
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -28,7 +27,7 @@ export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { lis
         <View style={s.main}>
           <View style={s.titleRow}>
             <Text style={s.product} numberOfLines={1}>{l.product}</Text>
-            <Badge label={`Grade ${l.grade}`} tone="success" />
+            <Badge label={l.unit} tone="success" />
           </View>
           <Text style={s.meta}>{kgText(l.weightKg)} listed · {new Date(l.createdAt).toLocaleDateString('en-GH', { day: 'numeric', month: 'short' })}</Text>
         </View>
@@ -75,7 +74,7 @@ export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { lis
             <View key={x.id} style={s.sale}>
               <View style={s.footText}>
                 <Text style={s.status}>{kgText(x.kg)} · {ghs(x.amount)}</Text>
-                <Text style={s.meta}>{new Date(x.createdAt).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' })} · {ghs(x.pricePerKg)}/kg</Text>
+                <Text style={s.meta}>{new Date(x.createdAt).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' })} · {ghs(x.pricePerKg)}/{l.unit}</Text>
               </View>
               <Badge label={x.status === 'paid' ? 'Paid' : x.status === 'payable' ? 'Delivered' : 'To collect'} tone={x.status === 'paid' ? 'success' : 'warning'} />
             </View>

@@ -24,7 +24,7 @@ export async function fetchMyRoute(): Promise<RouteStop[]> {
 export async function completeStop(id: string): Promise<void> {
   const { error } = await supabase.rpc('complete_delivery_stop', { p_stop: id });
   if (error?.message.includes('collect all produce first')) throw new Error('Collect all the produce for this order before delivering it.');
-  if (error?.message.includes('record the pickup first')) throw new Error('Save the kilos, grade, temperature and a photo or video before marking this pickup collected.');
+  if (error?.message.includes('record the pickup first')) throw new Error('Save the quantity, temperature and a photo or video before marking this pickup collected.');
   if (error?.message.includes('log the temperature')) throw new Error('Save the temperature and a photo or video before marking this delivery done.');
   if (error?.message.includes('add a photo or video')) throw new Error('Add a photo or a short video of this stop.');
   if (error?.message.includes('no longer be changed')) throw new Error('This stop is already done, so it can no longer be changed.');

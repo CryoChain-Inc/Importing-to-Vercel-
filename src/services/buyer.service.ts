@@ -8,7 +8,7 @@ export type OrderState = 'awaiting_payment' | 'paid' | 'cancelled';
 
 export interface OrderItem {
   name: string;
-  grade: string;
+  unit: string;
   kg: number;
   lineTotal: number;
 }
@@ -62,10 +62,12 @@ const rpcError = (error: { message: string } | null, known: Record<string, strin
   throw new Error(hit ? known[hit] : fallback);
 };
 
-/** One shop row per product and grade that has a buyer price and stock. */
+/** One shop row per product and unit that has a buyer price and stock. */
 export interface CatalogueItem {
   productId: string;
   name: string;
+  /** Comma-separated alternative names, matched by shop search. */
+  aliases: string;
   image: string | null;
   /** Extra gallery photos after the cover. */
   images: string[];
@@ -73,7 +75,7 @@ export interface CatalogueItem {
   categoryId: string;
   category: string;
   categoryImage: string | null;
-  grade: 'A' | 'B' | 'C';
+  unit: string;
   price: number;
   availableKg: number;
 }
@@ -84,13 +86,14 @@ export async function fetchCatalogue(): Promise<CatalogueItem[]> {
   return (data ?? []).map((r: any) => ({
     productId: r.product_id,
     name: r.product_name,
+    aliases: r.product_aliases ?? '',
     image: r.product_image,
     images: r.product_images ?? [],
     description: r.product_description ?? '',
     categoryId: r.category_id,
     category: r.category_name,
     categoryImage: r.category_image,
-    grade: r.grade,
+    unit: r.unit,
     price: Number(r.price),
     availableKg: Number(r.available_kg),
   }));
@@ -98,35 +101,35 @@ export async function fetchCatalogue(): Promise<CatalogueItem[]> {
 
 export interface CartLine {
   productId: string;
-  grade: CatalogueItem['grade'];
+  unit: string;
   kg: number;
 }
 
 /** The signed-in buyer's saved cart. */
 export async function fetchCart(): Promise<CartLine[]> {
-  const { data, error } = await supabase.from('cart_lines').select('product_id, grade, kg');
+  const { data, error } = await supabase.from('cart_lines').select('product_id, unit, kg');
   fail('Could not load your cart.')(error);
-  return (data ?? []).map((r) => ({ productId: r.product_id, grade: r.grade, kg: Number(r.kg) }));
+  return (data ?? []).map((r) => ({ productId: r.product_id, unit: r.unit, kg: Number(r.kg) }));
 }
 
 /** Replaces the saved cart with these lines (an empty list empties it). */
 export async function saveCart(lines: CartLine[]): Promise<void> {
-  const items = lines.map((l) => ({ product_id: l.productId, grade: l.grade, kg: l.kg }));
+  const items = lines.map((l) => ({ product_id: l.productId, unit: l.unit, kg: l.kg }));
   fail('Could not save your cart.')((await supabase.rpc('save_cart', { p_items: items })).error);
 }
 
 export interface Shortfall {
   productId: string;
-  grade: string;
+  unit: string;
   requestedKg: number;
   availableKg: number;
 }
 
 export type CheckoutResult = { ok: true; orderId: string } | { ok: false; shortfalls: Shortfall[] };
 
-/** Checks every line against live supply and holds the kg for 30 minutes. Nothing is held unless the whole cart fits. */
+/** Checks every line against live supply and holds the stock for 30 minutes. Nothing is held unless the whole cart fits. */
 export async function checkoutCart(lines: CartLine[], addressId: string): Promise<CheckoutResult> {
-  const items = lines.map((l) => ({ product_id: l.productId, grade: l.grade, kg: l.kg }));
+  const items = lines.map((l) => ({ product_id: l.productId, unit: l.unit, kg: l.kg }));
   const { data, error } = await supabase.rpc('checkout_cart', { p_items: items, p_address_id: addressId });
   rpcError(error, {
     'choose a delivery address': 'Choose a delivery address.',
@@ -134,7 +137,7 @@ export async function checkoutCart(lines: CartLine[], addressId: string): Promis
     'not for sale': 'An item in your cart is no longer for sale. Remove it and try again.',
   }, 'Could not check out. Please try again.');
   if (!data.ok) {
-    return { ok: false, shortfalls: data.shortfalls.map((r: any) => ({ productId: r.product_id, grade: r.grade, requestedKg: Number(r.requested_kg), availableKg: Number(r.available_kg) })) };
+    return { ok: false, shortfalls: data.shortfalls.map((r: any) => ({ productId: r.product_id, unit: r.unit, requestedKg: Number(r.requested_kg), availableKg: Number(r.available_kg) })) };
   }
   return { ok: true, orderId: data.order_id };
 }
@@ -142,7 +145,7 @@ export async function checkoutCart(lines: CartLine[], addressId: string): Promis
 export async function fetchOrders(): Promise<Order[]> {
   const [{ data, error }, tracking] = await Promise.all([supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, paid_at, delivery_address, order_items(grade, kg, line_total, products(name)), payments(status, created_at)')
+    .select('id, code, amount, state, created_at, paid_at, delivery_address, order_items(unit, kg, line_total, products(name)), payments(status, created_at)')
     .order('created_at', { ascending: false }), supabase.rpc('buyer_order_progress')]);
   fail('Could not load your orders.')(error);
   // Tracking is a nicety: if it cannot load, orders still show with their paid/unpaid state.
@@ -159,7 +162,7 @@ export async function fetchOrders(): Promise<Order[]> {
       pickupsDone: stops.get(r.id)?.pickups_done ?? 0,
       deliveredAt: stops.get(r.id)?.delivered_at ?? null,
     },
-    items: (r.order_items ?? []).map((i: any) => ({ name: i.products?.name ?? '', grade: i.grade, kg: Number(i.kg), lineTotal: Number(i.line_total) })),
+    items: (r.order_items ?? []).map((i: any) => ({ name: i.products?.name ?? '', unit: i.unit, kg: Number(i.kg), lineTotal: Number(i.line_total) })),
     deliveryAddress: r.delivery_address ?? '',
     payment: [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]?.status ?? null,
   }));

@@ -4,28 +4,26 @@ import { Badge, Button, Card, Icon } from '../../../components/common';
 import type { CatalogueItem } from '../../../services/buyer.service';
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
-import { KG_STEP } from '../cart/cart';
+import { fmtQty, ghs } from '../../../utils/format';
+import { stepFor } from '../cart/cart';
 import { useCart } from '../cart/CartProvider';
-import { KgStepper } from './KgStepper';
+import { QtyStepper } from './QtyStepper';
 
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
-
-/** One product: swipeable photos, details, a grade picker and one quantity panel, ready to add to the cart. */
-export function ProductDetail({ grades, onBack, onOpenCart }: { grades: CatalogueItem[]; onBack: () => void; onOpenCart: () => void }) {
+/** One product: swipeable photos, details, a unit picker and one quantity panel, ready to add to the cart. */
+export function ProductDetail({ units, onBack, onOpenCart }: { units: CatalogueItem[]; onBack: () => void; onOpenCart: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const { lines, dispatch } = useCart();
   const [page, setPage] = useState(0);
   const [width, setWidth] = useState(0);
-  const p = grades[0];
-  const cheapest = (grades.filter((g) => g.availableKg > 0).sort((a, b) => a.price - b.price)[0] ?? grades[0]).grade;
-  const [grade, setGrade] = useState<string>(cheapest);
+  const p = units[0];
+  const cheapest = (units.filter((g) => g.availableKg > 0).sort((a, b) => a.price - b.price)[0] ?? units[0]).unit;
+  const [unit, setUnit] = useState<string>(cheapest);
   const photos = [p.image, ...p.images].map(imageUrl).filter((u): u is string => Boolean(u));
   const split = width >= 640;
   const size = split ? Math.min(440, Math.floor((width - 24) / 2)) : Math.min(width, 520);
-  const sel = grades.find((g) => g.grade === grade) ?? grades[0];
-  const inCart = (g: CatalogueItem) => lines.find((l) => l.productId === g.productId && l.grade === g.grade)?.kg ?? 0;
+  const sel = units.find((g) => g.unit === unit) ?? units[0];
+  const inCart = (g: CatalogueItem) => lines.find((l) => l.productId === g.productId && l.unit === g.unit)?.kg ?? 0;
   const cartCount = lines.length;
 
   return (
@@ -62,29 +60,35 @@ export function ProductDetail({ grades, onBack, onOpenCart }: { grades: Catalogu
             <Text style={s.name}>{p.name}</Text>
             {p.description ? <Text style={s.desc}>{p.description}</Text> : null}
 
-            <Text style={s.section}>Choose a grade</Text>
-            <View style={s.tiles}>
-              {grades.map((g) => {
-                const out = g.availableKg <= 0;
-                const on = g.grade === sel.grade;
-                const n = inCart(g);
-                return (
-                  <Pressable key={g.grade} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: out }} accessibilityLabel={`Grade ${g.grade}, ${ghs(g.price)} per kilogram, ${out ? 'sold out' : `${kg(g.availableKg)} left`}`}
-                    disabled={out} onPress={() => setGrade(g.grade)} style={[s.tile, on && s.tileOn, out && s.tileOff]}>
-                    <View style={s.tileTop}>
-                      <Text style={[s.tileGrade, on && s.tileGradeOn]}>Grade {g.grade}</Text>
-                      {on ? <Icon name="check" size={16} color={colors.brandInk} /> : null}
-                    </View>
-                    <Text style={s.tilePrice}>{ghs(g.price)}<Text style={s.unit}> / kg</Text></Text>
-                    <Text style={[s.tileMeta, out && s.dangerText]}>{out ? 'Sold out' : n > 0 ? `${kg(n)} in cart` : `${kg(g.availableKg)} left`}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {units.length > 1 ? (
+              <>
+                <Text style={s.section}>Choose a unit</Text>
+                <View style={s.tiles}>
+                  {units.map((g) => {
+                    const out = g.availableKg <= 0;
+                    const on = g.unit === sel.unit;
+                    const n = inCart(g);
+                    return (
+                      <Pressable key={g.unit} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: out }} accessibilityLabel={`${g.unit}, ${ghs(g.price)} per ${g.unit}, ${out ? 'sold out' : `${fmtQty(g.availableKg, g.unit)} left`}`}
+                        disabled={out} onPress={() => setUnit(g.unit)} style={[s.tile, on && s.tileOn, out && s.tileOff]}>
+                        <View style={s.tileTop}>
+                          <Text style={[s.tileName, on && s.tileNameOn]}>{g.unit}</Text>
+                          {on ? <Icon name="check" size={16} color={colors.brandInk} /> : null}
+                        </View>
+                        <Text style={s.tilePrice}>{ghs(g.price)}<Text style={s.unit}> / {g.unit}</Text></Text>
+                        <Text style={[s.tileMeta, out && s.dangerText]}>{out ? 'Sold out' : n > 0 ? `${fmtQty(n, g.unit)} in cart` : `${fmtQty(g.availableKg, g.unit)} left`}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <Text style={s.meta}>{ghs(sel.price)} per {sel.unit}</Text>
+            )}
 
             {sel.availableKg > 0 ? (
-              <AddToCart key={sel.grade} item={sel} inCart={inCart(sel)} onOpenCart={onOpenCart}
-                onSet={(next) => dispatch({ type: 'set', line: { productId: sel.productId, grade: sel.grade, kg: next } })} />
+              <AddToCart key={sel.unit} item={sel} inCart={inCart(sel)} onOpenCart={onOpenCart}
+                onSet={(next) => dispatch({ type: 'set', line: { productId: sel.productId, unit: sel.unit, kg: next } })} />
             ) : null}
           </View>
         </View>
@@ -94,34 +98,35 @@ export function ProductDetail({ grades, onBack, onOpenCart }: { grades: Catalogu
 }
 
 const PRESETS = [10, 25, 50, 100, 200];
+const COUNT_PRESETS = [1, 2, 5, 10, 20];
 
-/** Pick an exact weight (type it, step it, or tap a preset), see the price, then add, update or remove. */
+/** Pick an exact quantity (type it, step it, or tap a preset), see the price, then add, update or remove. */
 function AddToCart({ item, inCart, onSet, onOpenCart }: { item: CatalogueItem; inCart: number; onSet: (kg: number) => void; onOpenCart: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const start = Math.min(KG_STEP, item.availableKg);
+  const start = Math.min(stepFor(item.unit), item.availableKg);
   const [qty, setQty] = useState(inCart || start);
-  const chips = [...PRESETS.filter((n) => n < item.availableKg), item.availableKg];
+  const chips = [...(item.unit === 'kg' ? PRESETS : COUNT_PRESETS).filter((n) => n < item.availableKg), item.availableKg];
   const total = qty * item.price;
   const changed = qty !== inCart;
 
   return (
     <Card style={s.add}>
       <View style={s.addHead}>
-        <Text style={s.addTitle}>How many kg?</Text>
-        <Text style={s.meta}>{kg(item.availableKg)} available</Text>
+        <Text style={s.addTitle}>How many {item.unit}?</Text>
+        <Text style={s.meta}>{fmtQty(item.availableKg, item.unit)} available</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
         {chips.map((n, i) => (
           <Pressable key={n} accessibilityRole="button" accessibilityState={{ selected: qty === n }} onPress={() => setQty(n)} style={[s.chip, qty === n && s.chipOn]}>
-            <Text style={[s.chipText, qty === n && s.chipTextOn]}>{i === chips.length - 1 && chips.length > 1 ? `All ${kg(n)}` : `${n} kg`}</Text>
+            <Text style={[s.chipText, qty === n && s.chipTextOn]}>{i === chips.length - 1 && chips.length > 1 ? `All ${fmtQty(n, item.unit)}` : `${n} ${item.unit}`}</Text>
           </Pressable>
         ))}
       </ScrollView>
       <View style={s.qtyRow}>
-        <KgStepper removable={false} value={qty} max={item.availableKg} onChange={setQty} />
+        <QtyStepper unit={item.unit} removable={false} value={qty} max={item.availableKg} onChange={setQty} />
         <View style={s.totalBox}>
-          <Text style={s.meta}>{kg(qty)} × {ghs(item.price)}</Text>
+          <Text style={s.meta}>{fmtQty(qty, item.unit)} × {ghs(item.price)}</Text>
           <Text style={s.total}>{ghs(total)}</Text>
         </View>
       </View>
@@ -130,7 +135,7 @@ function AddToCart({ item, inCart, onSet, onOpenCart }: { item: CatalogueItem; i
         <View style={s.inCart}>
           <View style={s.inCartText}>
             <Icon name="check" size={16} color={colors.brandInk} />
-            <Text style={s.inCartLabel}>{kg(inCart)} in your cart</Text>
+            <Text style={s.inCartLabel}>{fmtQty(inCart, item.unit)} in your cart</Text>
           </View>
           <View style={s.inCartActions}>
             <Button size="sm" variant="ghost" label="View cart" onPress={onOpenCart} />
@@ -165,8 +170,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   tileOn: { borderColor: c.brand600, backgroundColor: c.brandTint },
   tileOff: { opacity: 0.5 },
   tileTop: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
-  tileGrade: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
-  tileGradeOn: { fontFamily: fonts.sansBold, color: c.brandInk },
+  tileName: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
+  tileNameOn: { fontFamily: fonts.sansBold, color: c.brandInk },
   tilePrice: { fontFamily: fonts.heading, fontSize: 19, color: c.ink, fontVariant: ['tabular-nums' as const] },
   tileMeta: { fontFamily: fonts.sansRegular, fontSize: 12, color: c.inkMuted },
   dangerText: { color: c.dangerInk },

@@ -3,10 +3,9 @@ import { Image, Text, View } from 'react-native';
 import { Badge, Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { imageUrl } from '../../../services/catalogueImage';
-import { fetchProductsPage, savePrices, type Category, type PriceKind, type PriceRow, type Product } from '../../../services/ops.service';
+import { fetchProductsPage, savePrice, type Category, type OpsConfig, type Product } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-import { GRADES, gradeOrderError, type Grade } from '../../../utils/gradeOrder';
 import type { PageProps } from '../useOpsLocation';
 import { CategoriesSection, ProductForm, ProductList } from './CatalogueSections';
 import { ListRowsSkeleton, PriceCardsSkeleton } from './CatalogueSkeletons';
@@ -15,131 +14,89 @@ import { Sheet } from './Sheet';
 import { useAction } from './useAction';
 
 type View_ = 'prices' | 'products' | 'categories';
-type Texts = Record<PriceKind, Record<Grade, string>>;
-const KINDS: PriceKind[] = ['farmer', 'buyer'];
-
-const change = (r?: PriceRow) => {
-  if (!r?.prevPrice) return null;
-  const pct = ((r.price - r.prevPrice) / r.prevPrice) * 100;
+const change = (p: Product) => {
+  if (!p.price || !p.prevPrice) return null;
+  const pct = ((p.price - p.prevPrice) / p.prevPrice) * 100;
   return { text: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, down: pct < 0 };
 };
 
-/** '' clears the grade (null); anything that is not a positive number is NaN. */
-const parse = (t: string) => (t.trim() === '' ? null : Number(t.replace(',', '.')));
-const valid = (n: number | null) => n === null || (Number.isFinite(n) && n > 0 && n <= 100000);
+const parse = (t: string) => Number(t.replace(',', '.'));
+const validPrice = (n: number) => Number.isFinite(n) && n > 0 && n <= 100000;
 
-/** Farmer and buyer price for every grade in one dialog, with the margin shown as you type. */
-function PriceSheet({ product, rows, onSaved, onClose }: { product: Product; rows: PriceRow[]; onSaved: () => Promise<void>; onClose: () => void }) {
+// Mirrors private.buyer_price / private.farmer_price in the database, which is what buyers and farmers are actually charged and paid.
+const buyerPrice = (base: number, c: OpsConfig) => Math.round(base * (1 + Number(c.buyerMarkupPct || 0) / 100) * 100) / 100;
+const farmerPrice = (base: number, c: OpsConfig) => Math.round(base * (1 - Number(c.farmerDiscountPct || 0) / 100) * 100) / 100;
+
+/** A product's base price per unit in one dialog. Buyer and farmer prices are worked out from it and shown as you type. */
+function PriceSheet({ product, config, onSaved, onClose }: { product: Product; config: OpsConfig; onSaved: () => Promise<void>; onClose: () => void }) {
   const s = useThemedStyles(styles);
   const { busy, error, run } = useAction(onSaved);
-  const initial: Texts = { farmer: { A: '', B: '', C: '' }, buyer: { A: '', B: '', C: '' } };
-  for (const r of rows) initial[r.kind][r.grade] = String(r.price);
-  const [text, setText] = useState(initial);
-  const nums = (k: PriceKind) => ({ A: parse(text[k].A), B: parse(text[k].B), C: parse(text[k].C) }) as Record<Grade, number | null>;
-  const badNumber = KINDS.some((k) => GRADES.some((g) => !valid(nums(k)[g])));
-  const order = KINDS.map((k) => {
-    const e = badNumber ? null : gradeOrderError(nums(k));
-    return e ? `${k === 'farmer' ? 'Farmer' : 'Buyer'} prices: ${e}` : null;
-  }).filter(Boolean) as string[];
-  const inverted = badNumber ? [] : GRADES.filter((g) => {
-    const f = nums('farmer')[g], b = nums('buyer')[g];
-    return f !== null && b !== null && f > b;
-  });
-  const dirty = KINDS.some((k) => GRADES.some((g) => text[k][g] !== initial[k][g]));
-  const set = (k: PriceKind, g: Grade, v: string) => setText((t) => ({ ...t, [k]: { ...t[k], [g]: v } }));
+  const [text, setText] = useState(product.price == null ? '' : String(product.price));
+  const base = parse(text);
+  const ok = validPrice(base);
+  const dirty = text.trim() !== '' && base !== product.price;
 
   return (
-    <Sheet title={product.name} subtitle="Prices per kg. Grade A farmer price shows on the public landing page; the previous price is kept to show the change." onClose={onClose}
+    <Sheet title={product.name} subtitle={`Base price per ${product.unit}. Buyers and farmers see prices worked out from it; the previous price is kept to show the change.`} onClose={onClose}
       footer={<>
         <Button label="Cancel" variant="ghost" onPress={onClose} />
-        <Button label="Save prices" loading={busy} disabled={!dirty || badNumber || order.length > 0 || inverted.length > 0}
-          onPress={() => run(async () => {
-            for (const k of KINDS) if (GRADES.some((g) => text[k][g] !== initial[k][g])) await savePrices(product.id, k, nums(k));
-            onClose();
-          })} />
+        <Button label="Save price" loading={busy} disabled={!dirty || !ok}
+          onPress={() => run(async () => { await savePrice(product.id, base); onClose(); })} />
       </>}>
       {error ? <Banner text={error} /> : null}
-      {GRADES.map((g) => {
-        const f = parse(text.farmer[g]);
-        const b = parse(text.buyer[g]);
-        const both = f !== null && b !== null && valid(f) && valid(b);
-        const margin = both ? b - f : null;
-        return (
-          <View key={g} style={s.gradeBlock}>
-            <View style={s.gradeHead}>
-              <Text style={s.gradeTitle}>Grade {g}</Text>
-              {margin !== null ? (
-                <Text style={[s.margin, margin <= 0 && s.marginBad]}>
-                  {margin <= 0 ? 'Buyer pays no more than the farmer gets' : `Margin ${ghs(margin)} · ${Math.round((margin / f!) * 100)}%`}
-                </Text>
-              ) : null}
-            </View>
-            <View style={s.pair}>
-              <View style={s.cell}><Input label="Farmer price" prefix="GH₵" value={text.farmer[g]} onChangeText={(v) => set('farmer', g, v)} keyboardType="decimal-pad" placeholder="Not set"
-                error={!valid(f) ? 'Enter an amount above 0.' : undefined} /></View>
-              <View style={s.cell}><Input label="Buyer price" prefix="GH₵" value={text.buyer[g]} onChangeText={(v) => set('buyer', g, v)} keyboardType="decimal-pad" placeholder="Not set"
-                error={!valid(b) ? 'Enter an amount above 0.' : undefined} /></View>
-            </View>
-          </View>
-        );
-      })}
-      {order.map((o) => <Text key={o} style={s.rule}>{o}</Text>)}
-      {inverted.length ? <Text style={s.rule}>Farmer price is higher than the buyer price for grade {inverted.join(', ')}. Fix it to save.</Text> : null}
-      <Text style={s.hint}>Leave a box empty to remove that price. Grade A must cost more than B, and B more than C.</Text>
+      <Input label={`Base price per ${product.unit}`} prefix="GH₵" value={text} onChangeText={setText} keyboardType="decimal-pad" placeholder="0.00"
+        error={text !== '' && !ok ? 'Enter an amount above 0.' : undefined} />
+      {ok ? (
+        <View style={s.unitBlock}>
+          <Text style={s.derived}>Buyers pay {ghs(buyerPrice(base, config))} per {product.unit} (base + {config.buyerMarkupPct || 0}%)</Text>
+          <Text style={s.derived}>Farmers are paid {ghs(farmerPrice(base, config))} per {product.unit} (base − {config.farmerDiscountPct || 0}%)</Text>
+        </View>
+      ) : null}
+      <Text style={s.hint}>Change the percentages in Settings. A product with no price is not for sale.</Text>
     </Sheet>
   );
 }
 
-/** One product with farmer and buyer prices side by side for every grade. */
-function PriceCard({ product, rows, onEdit }: { product: Product; rows: PriceRow[]; onEdit: () => void }) {
+/** One product with its unit and its base, buyer and farmer price. */
+function PriceCard({ product, config, onEdit }: { product: Product; config: OpsConfig; onEdit: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const photo = imageUrl(product.imagePath);
-  const find = (kind: PriceKind, grade: Grade) => rows.find((r) => r.kind === kind && r.grade === grade);
-  const missing = rows.length < 6;
+  const d = change(product);
+  const missing = product.price == null;
   return (
     <Card style={s.item}>
       <View style={s.head}>
         {photo ? <Image source={{ uri: photo }} style={s.thumb} accessibilityLabel={product.name} /> : <View style={[s.thumb, s.noThumb]}><Icon name="leaf" size={22} color={colors.inkMuted} /></View>}
         <View style={s.grow}>
           <Text style={s.name} numberOfLines={1}>{product.name}</Text>
-          <Text style={s.meta} numberOfLines={1}>{product.category}</Text>
+          <Text style={s.meta} numberOfLines={1}>{product.category} · per {product.unit}{product.aliases ? ` · ${product.aliases}` : ''}</Text>
         </View>
         {product.active ? null : <Badge label="Hidden" tone="neutral" />}
-        <Button label={missing ? 'Set prices' : 'Edit prices'} size="sm" variant={missing ? 'primary' : 'outline'} onPress={onEdit} />
+        <Button label={missing ? 'Set price' : 'Edit price'} size="sm" variant={missing ? 'primary' : 'outline'} onPress={onEdit} />
       </View>
-      <View style={s.table}>
-        <View style={s.tr}>
-          <Text style={[s.th, s.cGrade]}>Grade</Text>
-          <Text style={[s.th, s.cPrice]}>Farmer</Text>
-          <Text style={[s.th, s.cPrice]}>Buyer</Text>
-          <Text style={[s.th, s.cMargin]}>Margin</Text>
-        </View>
-        {GRADES.map((g) => {
-          const f = find('farmer', g);
-          const b = find('buyer', g);
-          return (
-            <View key={g} style={[s.tr, s.trBorder]}>
-              <Text style={[s.grade, s.cGrade]}>{g}</Text>
-              {[f, b].map((r, i) => {
-                const d = change(r);
-                return (
-                  <View key={i} style={s.cPrice}>
-                    <Text style={[s.price, !r && s.unset]}>{r ? ghs(r.price) : '—'}</Text>
-                    {d ? <Text style={[s.delta, d.down && s.down]}>{d.text}</Text> : null}
-                  </View>
-                );
-              })}
-              <Text style={[s.price, s.cMargin, !(f && b) && s.unset, f && b && b.price <= f.price && s.down]}>{f && b ? `${b.price - f.price >= 0 ? '+' : ''}${ghs(b.price - f.price)}` : '—'}</Text>
+      {missing ? <Text style={s.meta}>Not for sale until it has a price.</Text> : (
+        <View style={s.table}>
+          <View style={s.tr}>
+            <Text style={[s.th, s.cPrice]}>Base</Text>
+            <Text style={[s.th, s.cPrice]}>Buyer</Text>
+            <Text style={[s.th, s.cPrice]}>Farmer</Text>
+          </View>
+          <View style={[s.tr, s.trBorder]}>
+            <View style={s.cPrice}>
+              <Text style={s.price}>{ghs(product.price!)}</Text>
+              {d ? <Text style={[s.delta, d.down && s.down]}>{d.text}</Text> : null}
             </View>
-          );
-        })}
-      </View>
+            <Text style={[s.price, s.cPrice]}>{ghs(buyerPrice(product.price!, config))}</Text>
+            <Text style={[s.price, s.cPrice]}>{ghs(farmerPrice(product.price!, config))}</Text>
+          </View>
+        </View>
+      )}
     </Card>
   );
 }
 
-export function PricesPanel({ categories, onChange, params, setParams, rev }: PageProps & { categories: Category[]; onChange: () => Promise<void> }) {
+export function PricesPanel({ categories, config, onChange, params, setParams, rev }: PageProps & { categories: Category[]; config: OpsConfig; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const view: View_ = params.view === 'products' || params.view === 'categories' ? params.view : 'prices';
   const category = categories.find((c) => c.id === params.cat);
@@ -162,7 +119,7 @@ export function PricesPanel({ categories, onChange, params, setParams, rev }: Pa
         <>
           {error ? <Banner text={error} /> : null}
           <View style={s.bar}>
-            <View style={s.search}><Input label="Search products" value={text} onChangeText={setText} placeholder="Garden egg" /></View>
+            <View style={s.search}><Input label="Search products" value={text} onChangeText={setText} placeholder="Name or local name, e.g. Garden egg" /></View>
             {view === 'products' ? <Button label="Add product" icon="tag" onPress={() => setForm('new')} /> : null}
           </View>
           {categories.length ? (
@@ -170,15 +127,15 @@ export function PricesPanel({ categories, onChange, params, setParams, rev }: Pa
               onChange={(n) => setParams({ ...params, cat: categories.find((c) => c.name === n)?.id ?? '', page: '' })} />
           ) : null}
           {firstLoad || switching ? (view === 'prices' ? <PriceCardsSkeleton /> : <ListRowsSkeleton />) : empty ? (
-            <Empty icon="tag" title="No products yet" hint="Add a category and a product first, then set a farmer and a buyer price for each grade." />
+            <Empty icon="tag" title="No products yet" hint="Add a category and a product first, then set its base price." />
           ) : total === 0 ? <Text style={s.meta}>No product matches.</Text> : view === 'prices' ? (
-            <View style={s.cards}>{rows.map((p) => <PriceCard key={p.id} product={p} rows={p.prices} onEdit={() => setPriceFor(p.id)} />)}</View>
+            <View style={s.cards}>{rows.map((p) => <PriceCard key={p.id} product={p} config={config} onEdit={() => setPriceFor(p.id)} />)}</View>
           ) : <ProductList rows={rows} onChange={onChange} onEdit={setForm} />}
           {firstLoad ? null : <Pager page={page} total={total} onPage={goPage} noun="products" />}
         </>
       ) : <CategoriesSection categories={categories} onChange={onChange} />}
       {form ? <ProductForm categories={categories} product={form === 'new' ? undefined : form} onSaved={onChange} onClose={() => setForm(null)} /> : null}
-      {target ? <PriceSheet product={target} rows={target.prices} onSaved={onChange} onClose={() => setPriceFor(null)} /> : null}
+      {target ? <PriceSheet product={target} config={config} onSaved={onChange} onClose={() => setPriceFor(null)} /> : null}
     </View>
   );
 }
@@ -199,19 +156,17 @@ const styles = (c: Record<ColorToken, string>) => ({
   tr: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, minHeight: 48 },
   trBorder: { borderTopWidth: 1, borderTopColor: c.borderSubtle },
   th: { fontFamily: fonts.sansSemiBold, fontSize: 12, letterSpacing: 0.3, color: c.inkMuted },
-  cGrade: { width: 44 },
+  cUnit: { width: 72 },
   cPrice: { flex: 1, gap: 1 },
-  cMargin: { flex: 1, textAlign: 'right' as const },
-  grade: { fontFamily: fonts.heading, fontSize: 20, color: c.brandInk },
+  unit: { fontFamily: fonts.sansBold, fontSize: 15, color: c.brandInk },
   price: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink, fontVariant: ['tabular-nums' as const] },
-  unset: { fontFamily: fonts.sansRegular, color: c.inkMuted },
   delta: { fontFamily: fonts.sansSemiBold, fontSize: 11, color: c.brandInk },
   down: { color: c.dangerInk },
-  gradeBlock: { gap: 10, padding: 14, borderRadius: 14, backgroundColor: c.surfaceSunken },
-  gradeHead: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const, flexWrap: 'wrap' as const, gap: 8 },
-  gradeTitle: { fontFamily: fonts.heading, fontSize: 18, color: c.ink },
-  margin: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.brandInk },
-  marginBad: { color: c.harvestInk },
+  off: { opacity: 0.5 },
+  unitBlock: { gap: 10, padding: 14, borderRadius: 14, backgroundColor: c.surfaceSunken },
+  derived: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.brandInk },
+  rowActions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  common: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
   pair: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
   cell: { flexGrow: 1, flexBasis: 180, minWidth: 0 },
   rule: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.dangerInk },

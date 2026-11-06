@@ -9,7 +9,7 @@ import { useAction } from './useAction';
 
 const KIND: Record<Decision['kind'], { title: string; hint: string }> = {
   no_supply: { title: 'Not enough supply', hint: 'Contact farmers for more stock, or refund the shortfall to the buyer.' },
-  no_farmer_price: { title: 'No farmer price', hint: 'Set the farmer price for this product and grade under Prices, then retry.' },
+  no_farmer_price: { title: 'No farmer price', hint: 'Add this unit with a base price under Prices, then retry.' },
   no_driver: { title: 'No driver available', hint: 'Ask a driver to open the app, or assign a cold truck. The route builds itself once one reports in.' },
   sms_failed: { title: 'SMS not delivered', hint: 'Call the farmer. They can still accept in the app.' },
   allocation_error: { title: 'Allocation failed', hint: 'Retry the allocation. If it fails again, check the order and farmer listings.' },

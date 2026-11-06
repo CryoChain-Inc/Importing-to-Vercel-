@@ -64,7 +64,7 @@ export function PayoutsPanel({ payables, runs, farmers, onChange }: {
                   <Text style={s.name} numberOfLines={1}>{x.farmer}</Text>
                   <Text style={s.amount}>{ghs(x.net)}</Text>
                 </View>
-                <Text style={s.meta}>{x.product} · {x.kg} kg · order {x.orderCode}{x.deliveredAt ? ` · delivered ${new Date(x.deliveredAt).toLocaleDateString('en-GH')}` : ''}</Text>
+                <Text style={s.meta}>{x.product} · {x.kg} {x.unit} · order {x.orderCode}{x.deliveredAt ? ` · delivered ${new Date(x.deliveredAt).toLocaleDateString('en-GH')}` : ''}</Text>
                 {x.inRun ? <Badge label="in a run" tone="info" /> : null}
                 {!x.inRun && !hasWallet.has(x.farmerId) ? <Text style={s.meta}>No MoMo wallet saved, so this cannot be paid yet.</Text> : null}
                 {canPick ? <Button size="sm" variant={picked.has(x.id) ? 'tonal' : 'outline'} label={picked.has(x.id) ? 'Selected' : 'Select'} onPress={() => toggle(x.id)} /> : null}
@@ -117,7 +117,7 @@ function PayableLine({ x, note }: { x: svc.PayableRow; note: string }) {
         <Text style={s.name} numberOfLines={1}>{x.farmer}</Text>
         <Text style={s.amount}>{ghs(x.net)}</Text>
       </View>
-      <Text style={s.meta}>{x.product} · {x.kg} kg · order {x.orderCode}</Text>
+      <Text style={s.meta}>{x.product} · {x.kg} {x.unit} · order {x.orderCode}</Text>
       <Text style={s.meta}>{note}</Text>
     </Card>
   );

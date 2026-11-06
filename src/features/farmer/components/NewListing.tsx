@@ -3,24 +3,24 @@ import { Pressable, Text, View } from 'react-native';
 import { Button, Icon, Input } from '../../../components/common';
 import { Banner, Skeleton } from '../../../components/feedback';
 import type { PickedImage } from '../../../services/catalogueImage';
-import { estimateListing, GRADES, MIN_PHOTOS, type Estimate } from '../../../services/farmer.service';
+import { estimateListing, MIN_PHOTOS, type Estimate } from '../../../services/farmer.service';
 import { enqueueListing } from '../../../services/listingOutbox';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
+import { matchesSearch } from '../../../utils/search';
 import { Sheet } from '../../ops/components/Sheet';
 import { useProductOptions } from '../useProductOptions';
 import { PhotoPicker } from './PhotoPicker';
 
-const STEPS = ['Product', 'Grade and weight', 'Photos', 'Review'];
+const STEPS = ['Product', 'Quantity', 'Photos', 'Review'];
 
-/** One button that opens a four-step sheet (product, grade and weight, photos, review). Pickup is always the farm address saved in the profile. Closing keeps the draft. */
+/** One button that opens a four-step sheet (product, quantity, photos, review). Pickup is always the farm address saved in the profile. Closing keeps the draft. */
 export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);
-  const { products, priced, pricesFailed, error: loadError } = useProductOptions(open);
+  const { products: options, error: loadError } = useProductOptions(open);
   const [product, setProduct] = useState('');
-  const [gradePick, setGrade] = useState('A');
   const [weight, setWeight] = useState('');
   const [photos, setPhotos] = useState<PickedImage[]>([]);
   const [computed, setComputed] = useState<{ key: string; value: Estimate | null }>({ key: '', value: null });
@@ -30,35 +30,37 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
   const [q, setQ] = useState('');
 
   const weightKg = Number(weight);
+  const products = options.map((o) => o.name);
   const chosen = products.includes(product) ? product : (products[0] ?? '');
-  const gradeOptions = priced ? (priced[chosen] ?? []) : GRADES;
-  const grade = gradeOptions.length > 0 && !gradeOptions.includes(gradePick) ? gradeOptions[0] : gradePick;
-  const key = `${chosen}|${weightKg}|${grade}`;
+  // One unit per product: it follows the chosen product.
+  const option = options.find((o) => o.name === chosen);
+  const unit = option?.unit ?? '';
+  const key = `${chosen}|${weightKg}|${unit}`;
   const validKg = Number.isFinite(weightKg) && weightKg > 0;
-  const blockedOnPrice = priced ? !gradeOptions.includes(grade) : false;
+  const blockedOnPrice = options.length > 0 && !option;
   // Keep showing the last estimate while a new one loads so the card never unmounts and shifts the layout.
   const estimate = validKg && !blockedOnPrice ? computed.value : null;
   const pending = computed.key !== key;
   const photosShort = Math.max(0, MIN_PHOTOS - photos.length);
-  const ready = chosen.length > 1 && validKg && photosShort === 0 && !blockedOnPrice && (priced !== null || pricesFailed);
-  const hint = blockedOnPrice ? `No published price for ${chosen} yet. Pick another product.` : photosShort > 0 ? `Add ${photosShort} more photo${photosShort === 1 ? '' : 's'} to continue.` : !validKg ? 'Enter the weight you have ready.' : null;
+  const ready = chosen.length > 1 && validKg && photosShort === 0 && !blockedOnPrice;
+  const hint = blockedOnPrice ? `No published price for ${chosen} yet. Pick another product.` : photosShort > 0 ? `Add ${photosShort} more photo${photosShort === 1 ? '' : 's'} to continue.` : !validKg ? 'Enter the quantity you have ready.' : null;
 
   useEffect(() => {
     if (!chosen || !validKg || blockedOnPrice) return;
     let stale = false;
-    estimateListing(chosen, weightKg, grade).then(
+    estimateListing(chosen, weightKg, unit).then(
       (value) => { if (!stale) setComputed({ key, value }); },
       () => undefined,
     );
     return () => { stale = true; };
-  }, [chosen, weightKg, validKg, grade, key, blockedOnPrice]);
+  }, [chosen, weightKg, validKg, unit, key, blockedOnPrice]);
 
   const close = () => { setOpen(false); setError(null); };
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
-      await enqueueListing(chosen, weightKg, grade, photos);
+      await enqueueListing(chosen, weightKg, unit, photos);
       setWeight('');
       setPhotos([]);
       setStep(0);
@@ -71,9 +73,9 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
     }
   };
 
-  const pricesReady = priced !== null || pricesFailed;
-  const canNext = [chosen.length > 1, validKg && !blockedOnPrice && pricesReady, photosShort === 0][step] ?? false;
-  const shownProducts = products.filter((p) => p.toLowerCase().includes(q.trim().toLowerCase()));
+  const canNext = [chosen.length > 1, validKg && !blockedOnPrice && options.length > 0, photosShort === 0][step] ?? false;
+  const shownProducts = options.filter((o) => matchesSearch(q, o.name, o.aliases));
+  const quick = unit === 'kg' ? [50, 100, 500] : [5, 10, 50];
   const bump = (n: number) => setWeight(String((validKg ? weightKg : 0) + n));
 
   if (!open) {
@@ -99,14 +101,15 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
       {step === 0 ? (
         <>
           <Text style={s.q}>What are you selling?</Text>
-          {products.length > 8 ? <Input label="Search produce" value={q} onChangeText={setQ} placeholder="e.g. Tomato" autoCorrect={false} /> : null}
+          {products.length > 0 ? <Input label="Search produce" value={q} onChangeText={setQ} placeholder="Name or local name, e.g. Tomato" autoCorrect={false} /> : null}
           {products.length === 0 ? (
             <View style={s.grid}>{[0, 1, 2, 3, 4, 5].map((i) => <View key={i} style={s.cell}><Skeleton width="100%" height={56} radius={14} /></View>)}</View>
           ) : shownProducts.length === 0 ? (
             <Text style={s.meta}>No produce matches “{q}”.</Text>
           ) : (
             <View style={s.grid}>
-              {shownProducts.map((p) => {
+              {shownProducts.map((o) => {
+                const p = o.name;
                 const on = p === chosen;
                 return (
                   <View key={p} style={s.cell}>
@@ -125,28 +128,16 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
       {step === 1 ? (
         <>
           <Text style={s.q}>How much {chosen} do you have ready?</Text>
-          {gradeOptions.length > 0 ? (
-            <View style={s.grades} accessibilityRole="radiogroup">
-              {gradeOptions.map((g) => {
-                const on = g === grade;
-                return (
-                  <Pressable key={g} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setGrade(g)} style={[s.gradeTile, on && s.tileOn]}>
-                    <Text style={[s.gradeLetter, on && s.tileTextOn]}>{g}</Text>
-                    <Text style={s.meta}>Grade</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-          <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
+          {option ? <Text style={s.meta}>Sold by the {option.unit}. You are paid about {ghs(option.price)} per {option.unit}.</Text> : null}
+          <Input label={`Quantity (${unit || 'units'})`} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
           <View style={s.quick}>
-            {[50, 100, 500].map((n) => (
-              <Pressable key={n} accessibilityRole="button" accessibilityLabel={`Add ${n} kilograms`} onPress={() => bump(n)} style={s.add}>
-                <Text style={s.addText}>+{n} kg</Text>
+            {quick.map((n) => (
+              <Pressable key={n} accessibilityRole="button" accessibilityLabel={`Add ${n} ${unit}`} onPress={() => bump(n)} style={s.add}>
+                <Text style={s.addText}>+{n} {unit}</Text>
               </Pressable>
             ))}
           </View>
-          <EstimateCard s={s} estimate={estimate} loading={validKg && !blockedOnPrice && pending} lines={2} detail={estimate ? `${ghs(estimate.pricePerKg)}/kg` : blockedOnPrice ? `No published price for ${chosen} yet. Go back and pick another product.` : 'Enter your weight and we will show what you get.'} />
+          <EstimateCard s={s} estimate={estimate} loading={validKg && !blockedOnPrice && pending} lines={2} detail={estimate ? `${ghs(estimate.pricePerKg)}/${unit}` : blockedOnPrice ? `No published price for ${chosen} yet. Go back and pick another product.` : 'Enter your quantity and we will show what you get.'} />
         </>
       ) : null}
 
@@ -162,11 +153,11 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
         <>
           <Text style={s.q}>Check and add</Text>
           <View style={s.summary}>
-            <Row label="Produce" value={`${chosen} · Grade ${grade}`} s={s} />
-            <Row label="Weight" value={`${weightKg.toLocaleString('en-GH')} kg`} s={s} />
+            <Row label="Produce" value={`${chosen} · ${unit}`} s={s} />
+            <Row label="Quantity" value={`${weightKg.toLocaleString('en-GH')} ${unit}`} s={s} />
             <Row label="Photos" value={String(photos.length)} s={s} last />
           </View>
-          <EstimateCard s={s} estimate={estimate} loading={validKg && !blockedOnPrice && pending} lines={4} detail={estimate ? `${ghs(estimate.pricePerKg)}/kg · ${(estimate.feeRate * 100).toFixed(1)}% collection fee ${ghs(estimate.fee)}. Final amount follows the weight and grade recorded at collection.` : 'Final amount follows the weight and grade recorded at collection.'} />
+          <EstimateCard s={s} estimate={estimate} loading={validKg && !blockedOnPrice && pending} lines={4} detail={estimate ? `${ghs(estimate.pricePerKg)}/${unit} · ${(estimate.feeRate * 100).toFixed(1)}% collection fee ${ghs(estimate.fee)}. Final amount follows the quantity recorded at collection.` : 'Final amount follows the quantity recorded at collection.'} />
           <View style={s.pickup}>
             <Icon name="pin" size={18} color={colors.brandInk} />
             <View style={s.pickupText}>
@@ -217,9 +208,9 @@ const styles = (c: Record<ColorToken, string>) => ({
   tileOn: { borderColor: c.brand500, backgroundColor: c.brandTint },
   tileText: { flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },
   tileTextOn: { color: c.brandInk },
-  grades: { flexDirection: 'row' as const, gap: 10 },
-  gradeTile: { flex: 1, minHeight: 76, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 16, borderWidth: 1.5, borderColor: c.borderSubtle, backgroundColor: c.surfaceCard },
-  gradeLetter: { fontFamily: fonts.heading, fontSize: 28, color: c.ink },
+  units: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 10 },
+  unitTile: { flexGrow: 1, flexBasis: '30%' as const, minHeight: 76, paddingHorizontal: 8, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 16, borderWidth: 1.5, borderColor: c.borderSubtle, backgroundColor: c.surfaceCard },
+  unitName: { fontFamily: fonts.heading, fontSize: 20, color: c.ink },
   quick: { flexDirection: 'row' as const, gap: 8 },
   add: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
   addText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink, fontVariant: ['tabular-nums' as const] },

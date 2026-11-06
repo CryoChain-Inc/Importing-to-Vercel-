@@ -24,7 +24,7 @@ export function ListRowsSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
-/** Placeholder shaped like a price card: product header, then the grade table. */
+/** Placeholder shaped like a price card: product header, then the unit table. */
 export function PriceCardsSkeleton({ cards = 3 }: { cards?: number }) {
   const s = useThemedStyles(styles);
   return (

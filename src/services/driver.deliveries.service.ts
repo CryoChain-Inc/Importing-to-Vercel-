@@ -10,13 +10,12 @@ export interface PickupStop {
   place: string;
   product: string;
   expectedKg: number;
-  expectedGrade: string;
+  expectedUnit: string;
   lat: number;
   lng: number;
   state: 'pending' | 'done';
   seq: number | null;
   recordedKg: number | null;
-  recordedGrade: string | null;
   temperatureC: number | null;
   note: string;
   mediaPath: string | null;
@@ -72,13 +71,12 @@ const mapPickup = async (r: any): Promise<PickupStop> => ({
   place: r.place ?? '',
   product: r.product ?? '',
   expectedKg: Number(r.expectedKg),
-  expectedGrade: r.expectedGrade ?? '',
+  expectedUnit: r.expectedUnit ?? 'kg',
   lat: Number(r.lat),
   lng: Number(r.lng),
   state: r.state,
   seq: r.seq == null ? null : Number(r.seq),
   recordedKg: num(r.recordedKg),
-  recordedGrade: r.recordedGrade ?? null,
   temperatureC: num(r.temperatureC),
   note: r.note ?? '',
   mediaPath: r.mediaPath ?? null,
@@ -155,7 +153,6 @@ export async function uploadHandoverMedia(stopId: string, file: PickedImage): Pr
 
 export async function recordHandover(stopId: string, reading: {
   kg: number | null;
-  grade: string | null;
   temp: number;
   note: string | null;
   mediaPath: string;
@@ -164,15 +161,13 @@ export async function recordHandover(stopId: string, reading: {
   const { error } = await supabase.rpc('record_delivery_handover', {
     p_stop: stopId,
     p_kg: reading.kg,
-    p_grade: reading.grade,
     p_celsius: reading.temp,
     p_note: reading.note,
     p_media_path: reading.mediaPath,
     p_media_kind: reading.mediaKind,
   });
   if (error?.message.includes('temperature out of range')) throw new Error('That temperature is outside the allowed range.');
-  if (error?.message.includes('enter the kilos')) throw new Error('Enter the kilos you collected.');
-  if (error?.message.includes('choose a grade')) throw new Error('Choose the grade you collected.');
+  if (error?.message.includes('enter the kilos')) throw new Error('Enter the quantity you collected.');
   if (error?.message.includes('add a photo or video')) throw new Error('Add a photo or a short video of this stop.');
   if (error?.message.includes('note is too long')) throw new Error('Notes can be at most 280 characters.');
   if (error?.message.includes('no longer be changed')) throw new Error('This stop is already done, so the reading can no longer be changed.');

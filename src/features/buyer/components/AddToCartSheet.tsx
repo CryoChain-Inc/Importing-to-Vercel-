@@ -3,55 +3,53 @@ import { Pressable, Text, View } from 'react-native';
 import { Button, Icon } from '../../../components/common';
 import type { CatalogueItem } from '../../../services/buyer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtQty, ghs } from '../../../utils/format';
 import { Sheet } from '../../ops/components/Sheet';
-import { KG_STEP } from '../cart/cart';
+import { stepFor } from '../cart/cart';
 import { useCart } from '../cart/CartProvider';
-import { KgStepper } from './KgStepper';
+import { QtyStepper } from './QtyStepper';
 
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
-
-/** Pick a grade and a quantity for a product that has several grades. Dialog on web, bottom sheet on phones. */
-export function AddToCartSheet({ grades, onClose }: { grades: CatalogueItem[]; onClose: () => void }) {
+/** Pick a unit and a quantity for a product that is sold in several units. Dialog on web, bottom sheet on phones. */
+export function AddToCartSheet({ units, onClose }: { units: CatalogueItem[]; onClose: () => void }) {
   const s = useThemedStyles(styles);
   const { lines, dispatch } = useCart();
-  const p = grades[0];
-  const inCart = (g: CatalogueItem) => lines.find((l) => l.productId === g.productId && l.grade === g.grade)?.kg ?? 0;
-  const stocked = grades.filter((g) => g.availableKg > 0);
-  const [grade, setGrade] = useState((stocked.slice().sort((a, b) => a.price - b.price)[0] ?? grades[0]).grade);
-  const sel = grades.find((g) => g.grade === grade)!;
-  const [qty, setQty] = useState(inCart(sel) || Math.min(KG_STEP, sel.availableKg));
+  const p = units[0];
+  const inCart = (g: CatalogueItem) => lines.find((l) => l.productId === g.productId && l.unit === g.unit)?.kg ?? 0;
+  const stocked = units.filter((g) => g.availableKg > 0);
+  const [unit, setUnit] = useState((stocked.slice().sort((a, b) => a.price - b.price)[0] ?? units[0]).unit);
+  const sel = units.find((g) => g.unit === unit)!;
+  const [qty, setQty] = useState(inCart(sel) || Math.min(stepFor(sel.unit), sel.availableKg));
 
-  const pick = (g: CatalogueItem) => { setGrade(g.grade); setQty(inCart(g) || Math.min(KG_STEP, g.availableKg)); };
+  const pick = (g: CatalogueItem) => { setUnit(g.unit); setQty(inCart(g) || Math.min(stepFor(g.unit), g.availableKg)); };
   const update = inCart(sel) > 0;
 
   return (
-    <Sheet title={p.name} subtitle="Choose a grade and how many kilograms." onClose={onClose}
+    <Sheet title={p.name} subtitle={units.length > 1 ? 'Choose a unit and how many.' : `How many ${units[0].unit}?`} onClose={onClose}
       footer={<Button label={`${update ? 'Update cart' : 'Add to cart'} · ${ghs(qty * sel.price)}`} icon="cart" disabled={qty <= 0}
-        onPress={() => { dispatch({ type: 'set', line: { productId: sel.productId, grade: sel.grade, kg: qty } }); onClose(); }} />}>
+        onPress={() => { dispatch({ type: 'set', line: { productId: sel.productId, unit: sel.unit, kg: qty } }); onClose(); }} />}>
       <View style={s.list} accessibilityRole="radiogroup">
-        {grades.map((g) => {
-          const on = g.grade === sel.grade;
+        {units.map((g) => {
+          const on = g.unit === sel.unit;
           const out = g.availableKg <= 0;
           const n = inCart(g);
           return (
-            <Pressable key={g.grade} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: out }}
-              accessibilityLabel={`Grade ${g.grade}, ${ghs(g.price)} per kilogram, ${out ? 'sold out' : `${kg(g.availableKg)} left`}`}
+            <Pressable key={g.unit} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: out }}
+              accessibilityLabel={`${g.unit}, ${ghs(g.price)} per ${g.unit}, ${out ? 'sold out' : `${fmtQty(g.availableKg, g.unit)} left`}`}
               disabled={out} onPress={() => pick(g)} style={({ pressed }) => [s.row, on && s.rowOn, out && s.rowOff, pressed && s.pressed]}>
               <View style={[s.radio, on && s.radioOn]}>{on ? <Icon name="check" size={14} color="#ffffff" /> : null}</View>
               <View style={s.grow}>
-                <Text style={[s.grade, on && s.gradeOn]}>Grade {g.grade}</Text>
-                <Text style={[s.meta, out && s.danger]}>{out ? 'Sold out' : `${kg(g.availableKg)} left${n > 0 ? ` · ${kg(n)} in cart` : ''}`}</Text>
+                <Text style={[s.unitName, on && s.unitNameOn]}>{g.unit}</Text>
+                <Text style={[s.meta, out && s.danger]}>{out ? 'Sold out' : `${fmtQty(g.availableKg, g.unit)} left${n > 0 ? ` · ${fmtQty(n, g.unit)} in cart` : ''}`}</Text>
               </View>
-              <Text style={s.price}>{ghs(g.price)}<Text style={s.unit}> / kg</Text></Text>
+              <Text style={s.price}>{ghs(g.price)}<Text style={s.unit}> / {g.unit}</Text></Text>
             </Pressable>
           );
         })}
       </View>
       <View style={s.qty}>
         <Text style={s.label}>Quantity</Text>
-        <KgStepper key={sel.grade} value={qty} max={sel.availableKg} removable={false} onChange={setQty} />
-        <Text style={s.meta}>Up to {kg(sel.availableKg)} available</Text>
+        <QtyStepper key={sel.unit} unit={sel.unit} value={qty} max={sel.availableKg} removable={false} onChange={setQty} />
+        <Text style={s.meta}>Up to {fmtQty(sel.availableKg, sel.unit)} available</Text>
       </View>
     </Sheet>
   );
@@ -66,8 +64,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   radio: { width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: c.cardEdge },
   radioOn: { backgroundColor: c.brand600, borderColor: c.brand600 },
   grow: { flex: 1, gap: 2 },
-  grade: { fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
-  gradeOn: { fontFamily: fonts.sansBold, color: c.brandInk },
+  unitName: { fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
+  unitNameOn: { fontFamily: fonts.sansBold, color: c.brandInk },
   meta: { fontFamily: fonts.sansRegular, fontSize: 12, color: c.inkMuted },
   danger: { color: c.dangerInk },
   price: { fontFamily: fonts.heading, fontSize: 18, color: c.ink, fontVariant: ['tabular-nums' as const] },

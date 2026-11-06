@@ -1,17 +1,17 @@
 import { cartReducer } from './cart';
 
-const line = { productId: 'p1', grade: 'A' as const, kg: 10 };
+const line = { productId: 'p1', unit: 'kg', kg: 10 };
 
 describe('cartReducer', () => {
-  it('replaces the kg of the same product and grade', () => {
+  it('replaces the quantity of the same product and unit', () => {
     const next = cartReducer([line], { type: 'set', line: { ...line, kg: 25 } });
     expect(next).toEqual([{ ...line, kg: 25 }]);
   });
-  it('keeps grades as separate lines', () => {
-    const next = cartReducer([line], { type: 'set', line: { ...line, grade: 'B' } });
+  it('keeps units as separate lines', () => {
+    const next = cartReducer([line], { type: 'set', line: { ...line, unit: 'crate' } });
     expect(next).toHaveLength(2);
   });
-  it('removes a line when kg drops to zero', () => {
+  it('removes a line when the quantity drops to zero', () => {
     expect(cartReducer([line], { type: 'set', line: { ...line, kg: 0 } })).toEqual([]);
   });
   it('caps absurd quantities', () => {

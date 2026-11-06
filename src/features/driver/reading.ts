@@ -5,7 +5,6 @@ const ABS_MAX = 100;
 export interface ReadingInput {
   kind: 'pickup' | 'dropoff';
   kg: string;
-  grade: string;
   temp: string;
   note: string;
   min: number | null;
@@ -14,7 +13,6 @@ export interface ReadingInput {
 
 export interface Reading {
   kg: number | null;
-  grade: string | null;
   temp: number;
   note: string | null;
 }
@@ -30,9 +28,8 @@ export function parseReading(input: ReadingInput): { ok: true; value: Reading } 
   if (temp < lo || temp > hi || temp < ABS_MIN || temp > ABS_MAX) {
     return { ok: false, error: `Temperature must be between ${lo} and ${hi} °C.` };
   }
-  if (input.kind === 'dropoff') return { ok: true, value: { kg: null, grade: null, temp, note: note || null } };
+  if (input.kind === 'dropoff') return { ok: true, value: { kg: null, temp, note: note || null } };
   const kg = Number(input.kg);
-  if (!input.kg.trim() || !Number.isFinite(kg) || kg <= 0 || kg > 100000) return { ok: false, error: 'Enter the kilos you collected.' };
-  if (!['A', 'B', 'C'].includes(input.grade)) return { ok: false, error: 'Choose the grade you collected.' };
-  return { ok: true, value: { kg: Math.round(kg * 100) / 100, grade: input.grade, temp, note: note || null } };
+  if (!input.kg.trim() || !Number.isFinite(kg) || kg <= 0 || kg > 100000) return { ok: false, error: 'Enter the quantity you collected.' };
+  return { ok: true, value: { kg: Math.round(kg * 100) / 100, temp, note: note || null } };
 }
