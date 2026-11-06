@@ -64,7 +64,8 @@
     "build:web": "expo export -p web",
     "test:e2e": "playwright test",
     "lh": "lhci autorun",
-    "lh:roles": "node e2e/lighthouse-roles.mjs"
+    "lh:roles": "node e2e/lighthouse-roles.mjs",
+    "lh:perf": "node e2e/lighthouse-perf.mjs"
   },
   "jest": {
     "preset": "jest-expo",

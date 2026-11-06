@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Linking } from 'react-native';
-import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
+import { Linking, Platform } from 'react-native';
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,7 +12,6 @@ import { OpsLoginScreen } from './features/auth/screens/OpsLoginScreen';
 import { RoleScreen } from './features/auth/screens/RoleScreen';
 import { VerifyScreen, afterSignIn } from './features/auth/screens/VerifyScreen';
 import { WorkspaceScreen } from './features/auth/screens/WorkspaceScreen';
-import { ProduceDetail } from './features/farmer/screens/ProduceDetail';
 import { HomeScreen } from './features/home/HomeScreen';
 import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
@@ -22,6 +21,9 @@ import { onPaymentReturn } from './services/checkout';
 import { paymentReturnReference } from './utils/paymentReturn';
 import { verifyLinkStatus } from './utils/verifyLink';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
+
+// Lazy so the farmer screens stay out of the main bundle for every other role.
+const ProduceDetail = lazy(() => import('./features/farmer/screens/ProduceDetail').then((m) => ({ default: m.ProduceDetail })));
 
 // Auth is Supabase (services/auth.service.ts); payout and review are still demo data.
 function Routes() {
@@ -42,7 +44,11 @@ function Routes() {
     case 'workspace':
       return <WorkspaceScreen account={route.account} />;
     case 'produce':
-      return <ProduceDetail account={route.account} product={route.product} />;
+      return (
+        <Suspense fallback={<LoadingScreen message="Loading..." />}>
+          <ProduceDetail account={route.account} product={route.product} />
+        </Suspense>
+      );
     case 'home':
       return <HomeScreen account={route.account} role={route.role} tab={route.tab} />;
   }
@@ -106,7 +112,8 @@ function Shell() {
 
 export default function V1App() {
   const [fontsReady] = useFonts(fontFiles);
-  if (!fontsReady) return <LoadingScreen message="Loading CryoChain..." />;
+  // Web paints straight away and swaps fonts in; native keeps the splash until they load.
+  if (!fontsReady && Platform.OS !== 'web') return <LoadingScreen message="Loading CryoChain..." />;
   return (
     <SafeAreaProvider>
       <ThemeProvider>

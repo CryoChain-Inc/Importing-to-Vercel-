@@ -3,13 +3,17 @@ import type * as fulfil from '../../services/ops.fulfilment.service';
 import type * as payouts from '../../services/ops.payouts.service';
 import type * as ops from '../../services/ops.service';
 
-/** Everything the ops sections read, loaded together so tabs never fetch on switch. */
-export interface OpsData {
-  farmers: ops.FarmerRow[];
-  buyers: ops.BuyerRow[];
+/** What the dashboard reads; loaded first so it can paint before the rest. */
+export interface OpsCore {
   supply: ops.SupplyRow[];
   orders: buyers.OrderRow[];
   board: fulfil.BoardOrder[];
+}
+
+/** Everything else the ops sections read. */
+export interface OpsRest {
+  farmers: ops.FarmerRow[];
+  buyers: ops.BuyerRow[];
   drivers: fulfil.DriverRoute[];
   decisions: fulfil.Decision[];
   categories: ops.Category[];
@@ -18,6 +22,9 @@ export interface OpsData {
   payables: payouts.PayableRow[];
   runs: payouts.PayoutRun[];
 }
+
+/** Everything the ops sections read, loaded together so tabs never fetch on switch. */
+export type OpsData = OpsCore & OpsRest;
 
 /** Kilos listed by farmers and kilos still unsold, per product, largest first. */
 export function supplyByProduct(supply: ops.SupplyRow[]) {

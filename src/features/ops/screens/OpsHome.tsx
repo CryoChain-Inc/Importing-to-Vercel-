@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
@@ -25,7 +25,7 @@ import { SupplyPanel } from '../components/SupplyPanel';
 import { TeamPanel } from '../components/TeamPanel';
 import { TrucksPanel } from '../components/TrucksPanel';
 import { PanelSkeleton } from '../components/OpsBits';
-import type { OpsData } from '../data';
+import type { OpsCore, OpsData, OpsRest } from '../data';
 import { useOpsLocation } from '../useOpsLocation';
 
 const TITLES: Record<string, [string, string]> = {
@@ -52,19 +52,42 @@ export function OpsHome({ account }: { account: Account }) {
   const s = useThemedStyles(styles);
   const { tab, params, go } = useOpsLocation(TABS);
   const [rev, setRev] = useState(0);
-  const [data, setData] = useState<OpsData | null>(null);
+  const [core, setCore] = useState<OpsCore | null>(null);
+  const [rest, setRest] = useState<OpsRest | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loaded = useRef(false);
+  const data = useMemo<OpsData | null>(() => (core && rest ? { ...core, ...rest } : null), [core, rest]);
+
+  const fetchCore = async (): Promise<OpsCore> => {
+    const [supply, orders, board] = await Promise.all([ops.fetchSupply(), buyers.fetchOrders(), fulfil.fetchBoard()]);
+    return { supply, orders, board };
+  };
+  const fetchRest = async (): Promise<OpsRest> => {
+    const [farmers, buyerRows, categories, team, config, drivers, decisions, payables, runs] = await Promise.all([
+      ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchCategories(), ops.fetchTeam(), ops.fetchConfig(),
+      fulfil.fetchDriverRoutes(), fulfil.fetchDecisions(), payouts.fetchPayables(), payouts.fetchPayoutRuns(),
+    ]);
+    return { farmers, buyers: buyerRows, categories, team, config, drivers, decisions, payables, runs };
+  };
 
   const load = useCallback(async () => {
     try {
-      const [farmers, buyerRows, supply, orders, cat, team, config, board, drivers, decisions, payables, runs] = await Promise.all([
-        ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchSupply(), buyers.fetchOrders(),
-        ops.fetchCategories(), ops.fetchTeam(), ops.fetchConfig(), fulfil.fetchBoard(), fulfil.fetchDriverRoutes(), fulfil.fetchDecisions(),
-        payouts.fetchPayables(), payouts.fetchPayoutRuns(),
-      ]);
-      setData({ farmers, buyers: buyerRows, supply, orders, categories: cat, team, config, board, drivers, decisions, payables, runs });
+      let c: OpsCore;
+      let r: OpsRest;
+      if (loaded.current) {
+        // Reloads stay atomic so a panel never mixes fresh and stale slices.
+        [c, r] = await Promise.all([fetchCore(), fetchRest()]);
+      } else {
+        // First load: the dashboard only needs these three, so it paints before the other nine queries even start.
+        c = await fetchCore();
+        setCore(c);
+        r = await fetchRest();
+      }
+      setCore(c);
+      setRest(r);
+      loaded.current = true;
       fulfil.sendQueuedSms();
-      setRev((r) => r + 1);
+      setRev((n) => n + 1);
       setError(null);
       await refreshAccount();
     } catch (e) {
@@ -77,9 +100,9 @@ export function OpsHome({ account }: { account: Account }) {
   }, [load]);
 
   const n = {
-    payments: data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0,
-    decisions: data?.decisions.filter((d) => d.status === 'open').length ?? 0,
-    payouts: data?.payables.filter((p) => p.status === 'payable' && !p.inRun).length ?? 0,
+    payments: core?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0,
+    decisions: rest?.decisions.filter((d) => d.status === 'open').length ?? 0,
+    payouts: rest?.payables.filter((p) => p.status === 'payable' && !p.inRun).length ?? 0,
   };
   const groups: NavGroup[] = [
     { title: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'grid' }] },
@@ -115,12 +138,13 @@ export function OpsHome({ account }: { account: Account }) {
       {error ? (
         <>
           <Banner text={error} />
-          {data ? null : <Button label="Try again" variant="outline" onPress={load} />}
+          {core ? null : <Button label="Try again" variant="outline" onPress={load} />}
         </>
       ) : null}
-      {data ? (
+      {tab === 'dashboard' && core ? (
+        <DashboardPanel data={core} onGo={(t) => go(t)} />
+      ) : data ? (
         <>
-          {tab === 'dashboard' ? <DashboardPanel data={data} onGo={(t) => go(t)} /> : null}
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}

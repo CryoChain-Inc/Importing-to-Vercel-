@@ -4,12 +4,12 @@ import { Badge, Icon, type IconName } from '../../../components/common';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { boardFilter, orderTrack } from '../orderTrack';
-import { supplyByProduct, type OpsData } from '../data';
+import { supplyByProduct, type OpsCore } from '../data';
 import { Empty, Hero, kg, SectionTitle, Stat, StatGrid, when } from './OpsBits';
 import { ProductSupply } from './SupplyPanel';
 
 /** Overview: supply listed, money in, and what needs doing next. */
-export function DashboardPanel({ data, onGo }: { data: OpsData; onGo: (tab: string) => void }) {
+export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: string) => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const listed = data.supply.reduce((n, r) => n + r.weightKg, 0);
