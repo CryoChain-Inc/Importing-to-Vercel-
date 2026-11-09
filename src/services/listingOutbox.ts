@@ -17,7 +17,7 @@ export interface QueuedListing {
   farmerId: string;
   product: string;
   weightKg: number;
-  grade: string;
+  unit: string;
   /** Copies kept in app storage, so the picker's cache being cleared cannot lose them. */
   photos: { uri: string; mimeType: string }[];
   createdAt: string;
@@ -34,7 +34,7 @@ let loaded: Promise<void> | null = null;
 let flushing = false;
 const listeners = new Set<() => void>();
 
-const load = () => (loaded ??= AsyncStorage.getItem(KEY).then((raw) => { if (raw) items = JSON.parse(raw); }, () => undefined));
+const load = () => (loaded ??= AsyncStorage.getItem(KEY).then((raw) => { if (raw) items = (JSON.parse(raw) as QueuedListing[]).filter((i) => i.unit); /* drops listings queued before units replaced grades */ }, () => undefined));
 async function commit(next: QueuedListing[]) {
   items = next;
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
@@ -59,7 +59,7 @@ const native = Platform.OS !== 'web';
 const dropFolder = (id: string) => { if (native && folder(id).exists) folder(id).delete(); };
 
 /** Validates, then on the phone copies the photos into app storage and queues the listing (works with no signal); on web uploads straight away. */
-export async function enqueueListing(product: string, weightKg: number, grade: string, images: PickedImage[]): Promise<void> {
+export async function enqueueListing(product: string, weightKg: number, unit: string, images: PickedImage[]): Promise<void> {
   if (images.length < MIN_PHOTOS) throw new Error(`Add at least ${MIN_PHOTOS} photos.`);
   if (images.some((img, i) => images.slice(0, i).some((earlier) => samePhoto(earlier, img)))) {
     throw new Error('Each photo has to be a different picture.');
@@ -70,7 +70,7 @@ export async function enqueueListing(product: string, weightKg: number, grade: s
   const id = uuid();
   if (!native) {
     // Web has no safe place to keep photos across a reload, so it never queues: upload now or tell the farmer.
-    const item = { id, farmerId, product: product.trim(), weightKg, grade, photos: images.map((img) => ({ uri: img.uri, mimeType: img.mimeType ?? 'image/jpeg' })), createdAt: new Date().toISOString() };
+    const item = { id, farmerId, product: product.trim(), weightKg, unit, photos: images.map((img) => ({ uri: img.uri, mimeType: img.mimeType ?? 'image/jpeg' })), createdAt: new Date().toISOString() };
     let refused: string | null;
     try {
       refused = await send(item);
@@ -89,7 +89,7 @@ export async function enqueueListing(product: string, weightKg: number, grade: s
       await new File(img.uri).copy(copy, { overwrite: true });
       return { uri: copy.uri, mimeType };
     }));
-    await commit([...items, { id, farmerId, product: product.trim(), weightKg, grade, photos, createdAt: new Date().toISOString() }]);
+    await commit([...items, { id, farmerId, product: product.trim(), weightKg, unit, photos, createdAt: new Date().toISOString() }]);
   } catch {
     if (dir.exists) dir.delete();
     throw new Error('Could not save the listing on this phone. Check there is free space and try again.');
@@ -123,7 +123,7 @@ async function send(item: QueuedListing): Promise<string | null> {
   }
   const { error, status } = await supabase
     .from('produce_listings')
-    .insert({ id: item.id, farmer_id: item.farmerId, product: item.product, weight_kg: item.weightKg, grade: item.grade, image_paths: paths });
+    .insert({ id: item.id, farmer_id: item.farmerId, product: item.product, weight_kg: item.weightKg, unit: item.unit, image_paths: paths });
   if (!error || error.code === '23505') return null;
   if (status === 0 || status >= 500 || status === 408 || status === 429 || isNetworkError(error)) throw error;
   return REFUSED;

@@ -15,7 +15,6 @@ export interface Account {
 export interface CropPrice {
   id: string;
   crop: string;
-  grade: 'A' | 'B' | 'C';
   unit: string;
   price: number;
   changePct: number;

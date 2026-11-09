@@ -57,7 +57,12 @@
     "test:watch": "jest --watchAll",
     "test:functions": "deno test --allow-env --allow-net supabase/functions",
     "test:all": "jest && deno test --allow-env --allow-net supabase/functions",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:web": "expo export -p web",
+    "test:e2e": "playwright test",
+    "lh": "lhci autorun",
+    "lh:roles": "node e2e/lighthouse-roles.mjs",
+    "lh:perf": "node e2e/lighthouse-perf.mjs"
   },
   "jest": {
     "preset": "jest-expo",

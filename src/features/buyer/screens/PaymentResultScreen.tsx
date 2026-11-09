@@ -8,7 +8,7 @@ import { authService } from '../../../services/auth.service';
 import { fetchOrders, verifyPayment, type Order } from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtQty, ghs } from '../../../utils/format';
 import { afterSignIn } from '../../auth/screens/VerifyScreen';
 
 type Phase = 'checking' | 'paid' | 'failed' | 'mismatch' | 'pending' | 'signedOut' | 'error';
@@ -17,7 +17,6 @@ type Phase = 'checking' | 'paid' | 'failed' | 'mismatch' | 'pending' | 'signedOu
 const ATTEMPTS = 6;
 const GAP_MS = 2500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const COPY: Record<Phase, { title: string; subtitle: string }> = {
@@ -103,8 +102,8 @@ export function PaymentResultScreen({ reference }: { reference: string }) {
           <Card style={s.receipt}>
             {order ? <Text style={s.amount}>{ghs(order.amount)}</Text> : <Text style={s.amount}>Cold truck booking</Text>}
             {order?.items.map((i) => (
-              <View key={`${i.name}-${i.grade}`} style={s.row}>
-                <Text style={s.k}>{i.name} · Grade {i.grade} · {kg(i.kg)}</Text>
+              <View key={`${i.name}-${i.unit}`} style={s.row}>
+                <Text style={s.k}>{i.name} · {fmtQty(i.kg, i.unit)}</Text>
                 <Text style={s.v}>{ghs(i.lineTotal)}</Text>
               </View>
             ))}

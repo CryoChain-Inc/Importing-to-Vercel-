@@ -22,6 +22,8 @@ const PRESETS = [
 ];
 const inRange = (v: string) => Number.isFinite(Number(v)) && Number(v) >= TEMP_MIN && Number(v) <= TEMP_MAX;
 const tempError = (v: string) => (blank(v) || inRange(v) ? undefined : `Between ${TEMP_MIN} and ${TEMP_MAX}`);
+/** A percentage must be filled in and between 0 and `max`. Mirrors the database check on ops_config. */
+const pctOk = (v: string, max: number) => !blank(v) && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max;
 const pct = (v: number) => `${((Math.max(-GAUGE, Math.min(GAUGE, v)) + GAUGE) / (GAUGE * 2)) * 100}%` as `${number}%`;
 
 /** Stored digits (e.g. 233241234567) back into a country plus national number; longest dial code wins. */
@@ -50,7 +52,9 @@ export function ConfigPanel({ config, onChange }: { config: OpsConfig; onChange:
   const ordered = blank(c.minTemp) || blank(c.maxTemp) || Number(c.minTemp) < Number(c.maxTemp);
   const phoneOk = blank(national) || isNationalNumber(country, national);
   const emailOk = blank(c.supportEmail) || isEmail(c.supportEmail);
-  const valid = numeric && ordered && phoneOk && emailOk;
+  const markupOk = pctOk(c.buyerMarkupPct, 100);
+  const discountOk = pctOk(c.farmerDiscountPct, 90);
+  const valid = numeric && ordered && phoneOk && emailOk && markupOk && discountOk;
   const dirty = (Object.keys(c) as (keyof OpsConfig)[]).some((k) => c[k] !== base[k]);
   const range = !blank(c.minTemp) && !blank(c.maxTemp) && numeric && ordered ? `${Number(c.minTemp)}° to ${Number(c.maxTemp)}°C` : 'Not set';
 
@@ -85,6 +89,14 @@ export function ConfigPanel({ config, onChange }: { config: OpsConfig; onChange:
             </View>
           </Card>
           <Card style={s.form}>
+            <Head icon="tag" title="Pricing" help="Ops set one base price per unit. Buyers pay the base price plus the markup; farmers are paid the base price minus the discount." />
+            <View style={s.pair}>
+              <View style={s.grow}><Input label="Buyer markup (%)" value={c.buyerMarkupPct} onChangeText={set('buyerMarkupPct')} keyboardType="decimal-pad" maxLength={6} hint="Added to the base price. 0 to 100." error={markupOk ? undefined : 'Enter 0 to 100'} /></View>
+              <View style={s.grow}><Input label="Farmer discount (%)" value={c.farmerDiscountPct} onChangeText={set('farmerDiscountPct')} keyboardType="decimal-pad" maxLength={6} hint="Taken off the base price. 0 to 90." error={discountOk ? undefined : 'Enter 0 to 90'} /></View>
+            </View>
+            {markupOk && discountOk ? <Text style={s.help}>Example: a GH₵100 base price costs buyers GH₵{(100 * (1 + Number(c.buyerMarkupPct) / 100)).toFixed(2)} and pays farmers GH₵{(100 * (1 - Number(c.farmerDiscountPct) / 100)).toFixed(2)}. Changes apply to the whole shop and to new payouts straight away.</Text> : null}
+          </Card>
+          <Card style={s.form}>
             <Head icon="phone" title="Support contact" help="Shown to farmers and buyers who need help." />
             <View style={s.pair}>
               <View style={s.grow}><PhoneField label="Support phone" country={country} value={national} error={phoneOk ? undefined : 'Enter a valid phone number'}
@@ -96,6 +108,8 @@ export function ConfigPanel({ config, onChange }: { config: OpsConfig; onChange:
         <Card style={[s.form, s.side, wide && s.sideWide]}>
           <Text style={s.sideTitle}>Summary</Text>
           <Row label="Safe range" value={range} big />
+          <Row label="Buyer markup" value={markupOk ? `+${Number(c.buyerMarkupPct)}%` : 'Not set'} />
+          <Row label="Farmer discount" value={discountOk ? `−${Number(c.farmerDiscountPct)}%` : 'Not set'} />
           <Row label="Support phone" value={blank(national) ? 'Not set' : `+${country.dial} ${national.trim()}`} />
           <Row label="Support email" value={blank(c.supportEmail) ? 'Not set' : c.supportEmail.trim()} />
           {config.updatedAt ? <Text style={s.help}>Last saved {new Date(config.updatedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Accra' })}</Text> : null}

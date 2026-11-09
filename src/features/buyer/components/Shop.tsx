@@ -5,17 +5,17 @@ import { SkeletonCard } from '../../../components/feedback';
 import type { CatalogueItem } from '../../../services/buyer.service';
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtQty, ghs } from '../../../utils/format';
+import { matchesSearch } from '../../../utils/search';
 import { useCart } from '../cart/CartProvider';
 import { AddToCartSheet } from './AddToCartSheet';
-import { KgStepper } from './KgStepper';
+import { QtyStepper } from './QtyStepper';
 import { ProductDetail } from './ProductDetail';
 
 const ALL = 'all';
 const GAP = 12;
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
-/** Marketplace home: search, category pills and a grid of products (newest first) that can be added to the cart by the kilogram. */
+/** Marketplace home: search, category pills and a grid of products (newest first) that can be added to the cart by the unit. */
 export function Shop({ name, items, address, onOpenCart, onPickAddress }: {
   name: string;
   items: CatalogueItem[];
@@ -42,15 +42,15 @@ export function Shop({ name, items, address, onOpenCart, onPickAddress }: {
   const products = useMemo(() => {
     const byProduct = new Map<string, CatalogueItem[]>();
     items
-      .filter((i) => (category === ALL || i.categoryId === category) && i.name.toLowerCase().includes(q.trim().toLowerCase()))
+      .filter((i) => (category === ALL || i.categoryId === category) && matchesSearch(q, i.name, i.aliases))
       .forEach((i) => byProduct.set(i.productId, [...(byProduct.get(i.productId) ?? []), i]));
     // The catalogue arrives newest product first; in-stock first is a stable sort so that order holds in each group.
     return [...byProduct.values()].sort((a, b) => Number(b.some((i) => i.availableKg > 0)) - Number(a.some((i) => i.availableKg > 0)));
   }, [items, category, q]);
   const opened = items.filter((i) => i.productId === open);
-  const cartTotal = lines.reduce((sum, l) => sum + l.kg * (items.find((i) => i.productId === l.productId && i.grade === l.grade)?.price ?? 0), 0);
+  const cartTotal = lines.reduce((sum, l) => sum + l.kg * (items.find((i) => i.productId === l.productId && i.unit === l.unit)?.price ?? 0), 0);
 
-  if (opened.length > 0) return <ProductDetail grades={opened} onBack={() => setOpen(null)} onOpenCart={onOpenCart} />;
+  if (opened.length > 0) return <ProductDetail units={opened} onBack={() => setOpen(null)} onOpenCart={onOpenCart} />;
 
   const cols = width >= 720 ? 4 : width >= 520 ? 3 : 2;
   const cardW = width > 0 ? Math.floor((width - GAP * (cols - 1)) / cols) : 0;
@@ -69,7 +69,7 @@ export function Shop({ name, items, address, onOpenCart, onPickAddress }: {
 
       <View style={s.search}>
         <Icon name="search" size={18} color={colors.inkMuted} />
-        <TextInput value={q} onChangeText={setQ} placeholder="Search produce" placeholderTextColor={colors.inkMuted} accessibilityLabel="Search produce" style={[s.searchInput, { outlineStyle: 'none' } as object]} />
+        <TextInput value={q} onChangeText={setQ} placeholder="Search produce or local name" placeholderTextColor={colors.inkMuted} accessibilityLabel="Search produce" style={[s.searchInput, { outlineStyle: 'none' } as object]} />
         {q ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQ('')} hitSlop={10}>
             <Icon name="close" size={18} color={colors.inkMuted} />
@@ -111,10 +111,11 @@ export function Shop({ name, items, address, onOpenCart, onPickAddress }: {
           const p = g[0];
           const uri = imageUrl(p.image);
           const stocked = g.filter((i) => i.availableKg > 0);
-          const from = Math.min(...(stocked.length ? stocked : g).map((i) => i.price));
+          // A product can sell in several units whose prices don't compare, so the card leads with the first in-stock unit.
+          const lead = stocked[0] ?? g[0];
           const only = stocked.length === 1 ? stocked[0] : null;
-          const inCart = only ? lines.find((l) => l.productId === only.productId && l.grade === only.grade)?.kg ?? 0 : 0;
-          const setKg = (item: CatalogueItem, next: number) => dispatch({ type: 'set', line: { productId: item.productId, grade: item.grade, kg: next } });
+          const inCart = only ? lines.find((l) => l.productId === only.productId && l.unit === only.unit)?.kg ?? 0 : 0;
+          const setKg = (item: CatalogueItem, next: number) => dispatch({ type: 'set', line: { productId: item.productId, unit: item.unit, kg: next } });
           return (
             <View key={p.productId} style={[s.card, { width: cardW }, stocked.length === 0 && s.dim]}>
               <Pressable accessibilityRole="button" accessibilityLabel={`${p.name}, view details`} onPress={() => setOpen(p.productId)} style={({ pressed }) => pressed && s.pressed}>
@@ -125,22 +126,22 @@ export function Shop({ name, items, address, onOpenCart, onPickAddress }: {
                 <View style={s.info}>
                   <Text style={s.category} numberOfLines={1}>{p.category}</Text>
                   <Text style={s.name} numberOfLines={2}>{p.name}</Text>
-                  <Text style={s.price}>{stocked.length > 1 ? 'From ' : ''}{ghs(from)}<Text style={s.unit}> / kg</Text></Text>
+                  <Text style={s.price}>{ghs(lead.price)}<Text style={s.unit}> / {lead.unit}</Text></Text>
                   <Text style={s.meta} numberOfLines={1}>
-                    {stocked.length === 0 ? 'Back soon' : `${kg(stocked.reduce((t, i) => t + i.availableKg, 0))} left${g.length > 1 ? ` · ${g.length} grades` : ` · Grade ${g[0].grade}`}`}
+                    {stocked.length === 0 ? 'Back soon' : stocked.length > 1 ? `${stocked.length} units available` : `${fmtQty(lead.availableKg, lead.unit)} left`}
                   </Text>
                 </View>
               </Pressable>
               <View style={s.action}>
                 {stocked.length === 0 ? <Badge label="Out of stock" tone="danger" />
-                  : only && inCart > 0 ? <KgStepper compact value={inCart} max={only.availableKg} onChange={(n) => setKg(only, n)} />
+                  : only && inCart > 0 ? <QtyStepper compact unit={only.unit} value={inCart} max={only.availableKg} onChange={(n) => setKg(only, n)} />
                   : <Button size="sm" variant="tonal" icon="cart" label="Add" onPress={() => setChoosing(p.productId)} style={s.addBtn} />}
               </View>
             </View>
           );
         }) : null}
       </View>
-      {choosing ? <AddToCartSheet grades={items.filter((i) => i.productId === choosing)} onClose={() => setChoosing(null)} /> : null}
+      {choosing ? <AddToCartSheet units={items.filter((i) => i.productId === choosing)} onClose={() => setChoosing(null)} /> : null}
     </View>
   );
 }

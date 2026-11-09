@@ -2,30 +2,31 @@ import React, { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Icon } from '../../../components/common';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { KG_STEP } from '../cart/cart';
+import { stepFor } from '../cart/cart';
 
 /**
- * Kg picker in one pill: step with − / +, or type an exact quantity. At the smallest step the − turns into a bin
+ * Quantity picker in one pill: step with − / +, or type an exact quantity. At the smallest step the − turns into a bin
  * that removes the line (onChange(0)), so a buyer always sees what the next tap does.
  */
-export function KgStepper({ value, max, onChange, compact = false, removable = true }: { value: number; max: number; onChange: (kg: number) => void; compact?: boolean; removable?: boolean }) {
+export function QtyStepper({ value, max, unit, onChange, compact = false, removable = true }: { value: number; max: number; unit: string; onChange: (kg: number) => void; compact?: boolean; removable?: boolean }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
+  const STEP = stepFor(unit);
   // Typed text is a draft only while the field is focused; otherwise the cart value is shown.
   const [draft, setDraft] = useState<string | null>(null);
 
   // Where the quantity lands when it drops below one step: 0 removes the line; a draft (product page) stays at one step.
-  const floor = removable ? 0 : Math.min(KG_STEP, max);
+  const floor = removable ? 0 : Math.min(STEP, max);
   const commit = (raw: string) => {
     setDraft(null);
     const n = Math.round(parseFloat(raw.replace(',', '.')) * 100) / 100;
     onChange(Number.isFinite(n) && n > 0 ? Math.min(n, max) : floor);
   };
   const step = (dir: 1 | -1) => {
-    const next = value + dir * KG_STEP;
-    onChange(next < KG_STEP ? floor : Math.min(next, max));
+    const next = value + dir * STEP;
+    onChange(next < STEP ? floor : Math.min(next, max));
   };
-  const removing = removable && value - KG_STEP < KG_STEP;
+  const removing = removable && value - STEP < STEP;
   const atMin = !removable && value <= floor;
   const size = compact ? 36 : 44;
 
@@ -36,7 +37,7 @@ export function KgStepper({ value, max, onChange, compact = false, removable = t
         {removing ? <Icon name="trash" size={compact ? 16 : 18} color={colors.dangerInk} /> : <Text style={s.sign}>−</Text>}
       </Pressable>
       <TextInput
-        accessibilityLabel="Kilograms"
+        accessibilityLabel={`Quantity in ${unit}`}
         value={draft ?? String(value)}
         onFocus={() => setDraft(String(value))}
         onChangeText={setDraft}
@@ -46,7 +47,7 @@ export function KgStepper({ value, max, onChange, compact = false, removable = t
         selectTextOnFocus
         style={[s.input, compact && s.inputCompact, { outlineStyle: 'none' } as object]}
       />
-      <Text style={s.unit}>kg</Text>
+      <Text style={s.unit}>{unit}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="More" disabled={value >= max} onPress={() => step(1)} hitSlop={6}
         style={({ pressed }) => [s.btn, { width: size, height: size }, value >= max && s.off, pressed && s.pressed]}>
         <Text style={s.sign}>+</Text>

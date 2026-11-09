@@ -5,20 +5,21 @@ import { fetchSupplyPage, type SupplyRow } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { supplyByProduct } from '../data';
 import type { PageProps } from '../useOpsLocation';
-import { Empty, Hero, kg, Pager, SectionTitle, usePaged, useServerPage } from './OpsBits';
+import { fmtQty } from '../../../utils/format';
+import { Empty, Hero, Pager, SectionTitle, usePaged, useServerPage } from './OpsBits';
 
-/** One row per product: kilos farmers have listed. Pages so a long catalogue stays short. */
+/** One row per product and unit: quantity farmers have listed. Pages so a long catalogue stays short. */
 export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?: number }) {
   const s = useThemedStyles(styles);
   const { rows, more } = usePaged(supplyByProduct(supply), 'products', page);
   return (
     <View style={s.gap}>
       <Card style={s.group}>
-        {rows.map(({ product, kg: listed, left }, i) => (
-          <View key={product} style={[s.prod, i > 0 && s.divider]}>
+        {rows.map(({ product, unit, kg: listed, left }, i) => (
+          <View key={`${product}|${unit}`} style={[s.prod, i > 0 && s.divider]}>
             <View style={s.top}>
-              <Text style={s.name} numberOfLines={1}>{product}</Text>
-              <Text style={s.left}>{kg(left)} left of {kg(listed)}</Text>
+              <Text style={s.name} numberOfLines={1}>{product} · {unit}</Text>
+              <Text style={s.left}>{fmtQty(left, unit)} left of {fmtQty(listed, unit)}</Text>
             </View>
           </View>
         ))}
@@ -32,13 +33,12 @@ export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?
 export function SupplyPanel({ supply, params, setParams, rev }: { supply: SupplyRow[] } & PageProps) {
   const s = useThemedStyles(styles);
   const { rows, total, page, goPage, loading } = useServerPage(params, setParams, rev, fetchSupplyPage);
-  if (!supply.length) return <Empty icon="leaf" title="No supply yet" hint="Farmers' listings appear here with their estimated kilos." />;
+  if (!supply.length) return <Empty icon="leaf" title="No supply yet" hint="Farmers' listings appear here with their quantities." />;
   return (
     <View style={s.gap}>
-      <Hero label="Listed by farmers" value={kg(supply.reduce((n, r) => n + r.weightKg, 0))} cells={[
-        { label: 'Left to sell', value: kg(supply.reduce((n, r) => n + r.remainingKg, 0)) },
-        { label: 'Listings', value: String(supply.length) },
-        { label: 'Products', value: String(supplyByProduct(supply).length) },
+      <Hero label="Listed by farmers" value={String(supply.length)} cells={[
+        { label: 'Still to sell', value: String(supply.filter((r) => r.remainingKg > 0).length) },
+        { label: 'Products', value: String(new Set(supply.map((r) => r.product)).size) },
       ]} />
 
       <SectionTitle title="By product" />
@@ -48,7 +48,7 @@ export function SupplyPanel({ supply, params, setParams, rev }: { supply: Supply
       <View style={[s.gap, loading && s.busy]}>
       {rows.map((r) => (
         <Card key={r.id} style={s.item}>
-          <Text style={s.name} numberOfLines={1}>{r.product} · Grade {r.grade} · {kg(r.remainingKg)} left of {kg(r.weightKg)}</Text>
+          <Text style={s.name} numberOfLines={1}>{r.product} · {fmtQty(r.remainingKg, r.unit)} left of {fmtQty(r.weightKg, r.unit)}</Text>
           <Text style={s.meta}>{[r.farmer, r.locality, r.point].filter(Boolean).join(' · ')}</Text>
           <Text style={s.meta}>Listed {new Date(r.createdAt).toLocaleDateString('en-GH')}</Text>
         </Card>

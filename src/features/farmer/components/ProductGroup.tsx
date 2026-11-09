@@ -5,7 +5,7 @@ import { produceImageUrl, type ProduceListing } from '../../../services/farmer.s
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 
-const kgText = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
+const fmt = (n: number) => n.toLocaleString('en-GH', { maximumFractionDigits: 2 });
 
 export interface Group {
   product: string;
@@ -13,19 +13,23 @@ export interface Group {
   listings: ProduceListing[];
 }
 
-/** One product with all its grades rolled up. Tapping opens the product's detail page. */
+/** One product with all its units rolled up. Tapping opens the product's detail page. */
 export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const sum = (f: (l: ProduceListing) => number) => g.listings.reduce((a, l) => a + f(l), 0);
-  const listed = sum((l) => l.weightKg);
-  const sold = sum((l) => l.soldKg);
-  const left = sum((l) => l.remainingKg);
-  // Money already earned on sold kg, plus the estimate for what is still unsold on listings with no sales yet.
+  // Quantities only add up within one unit, so a product sold in several units shows one figure per unit.
+  const qty = (f: (l: ProduceListing) => number) => {
+    const m = new Map<string, number>();
+    for (const l of g.listings) m.set(l.unit, (m.get(l.unit) ?? 0) + f(l));
+    return [...m].map(([u, n]) => `${fmt(n)} ${u}`).join(' + ');
+  };
+  const sold = g.listings.reduce((a, l) => a + (l.weightKg > 0 ? l.soldKg / l.weightKg : 0), 0) / g.listings.length;
+  // Money already earned on sold quantity, plus the estimate for what is still unsold on listings with no sales yet.
   const money = sum((l) => (l.earned > 0 ? l.earned : l.estNet ?? 0));
   const photo = g.listings.find((l) => l.imagePaths[0])?.imagePaths[0];
-  const grades = [...new Set(g.listings.map((l) => l.grade))].sort();
-  const label = `${g.product}, ${kgText(left)} left of ${kgText(listed)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
+  const units = [...new Set(g.listings.map((l) => l.unit))].sort();
+  const label = `${g.product}, ${qty((l) => l.remainingKg)} left of ${qty((l) => l.weightKg)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onOpen}>
       <Card style={s.card}>
@@ -36,14 +40,14 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
           <View style={s.main}>
             <Text style={s.product} numberOfLines={1}>{g.product}</Text>
             <Text style={s.meta} numberOfLines={1}>{g.category ? `${g.category} · ` : ''}{g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'}</Text>
-            <View style={s.grades}>{grades.map((x) => <Badge key={x} label={`Grade ${x}`} tone="success" />)}</View>
+            <View style={s.grades}>{units.map((x) => <Badge key={x} label={x} tone="success" />)}</View>
           </View>
           <Icon name="chevronRight" size={22} color={colors.inkMuted} />
         </View>
-        <View style={s.bar}><View style={[s.fill, { width: `${listed > 0 ? Math.min(100, (sold / listed) * 100) : 0}%` }]} /></View>
+        <View style={s.bar}><View style={[s.fill, { width: `${Math.min(100, sold * 100)}%` }]} /></View>
         <View style={s.legend}>
-          <Stat label="Left" value={kgText(left)} s={s} strong />
-          <Stat label="Sold" value={kgText(sold)} s={s} />
+          <Stat label="Left" value={qty((l) => l.remainingKg)} s={s} strong />
+          <Stat label="Sold" value={qty((l) => l.soldKg)} s={s} />
           <Stat label={sold > 0 ? 'Earned' : 'Expected'} value={money > 0 ? `${sold > 0 ? '' : '~'}${ghs(money)}` : '—'} s={s} />
         </View>
       </Card>

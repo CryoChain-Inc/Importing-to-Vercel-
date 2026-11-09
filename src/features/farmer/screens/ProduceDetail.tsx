@@ -10,7 +10,7 @@ import type { Account } from '../../../types/auth';
 import { ListingCard } from '../components/ListingCard';
 import { TABS, type Tab } from './FarmerHome';
 
-/** Every listing (grade) of one product, opened from its card on the farmer's Listings tab. */
+/** Every listing (unit) of one product, opened from its card on the farmer's Listings tab. */
 export function ProduceDetail({ account, product }: { account: Account; product: string }) {
   const { back, reset } = useNav();
   const { colors } = useTheme();
@@ -22,7 +22,7 @@ export function ProduceDetail({ account, product }: { account: Account; product:
   const load = useCallback(async () => {
     try {
       const [l, sold] = await Promise.all([fetchListings(), fetchSales()]);
-      setListings(l.filter((x) => x.product === product).sort((a, b) => a.grade.localeCompare(b.grade)));
+      setListings(l.filter((x) => x.product === product).sort((a, b) => a.unit.localeCompare(b.unit)));
       setSales(sold);
       setError(null);
     } catch (e) {

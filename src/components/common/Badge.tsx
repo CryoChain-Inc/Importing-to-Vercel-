@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 
+
 export interface BadgeProps {
   label: string;
   tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral';

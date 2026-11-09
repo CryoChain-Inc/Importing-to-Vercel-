@@ -215,7 +215,7 @@ function Home({
         />
       ) : null}
       {!trip && !order ? (
-        <Empty icon="truck" title="Nothing assigned yet" hint="Keep location on. New deliveries and truck bookings appear here as soon as they are yours." />
+        <Empty icon="truck" title="Nothing assigned yet" hint="Keep location on. Deliveries and cold-truck bookings allotted to you appear here." />
       ) : null}
       <Button label="Sign out" icon="logOut" variant="ghost" size="sm" onPress={onSignOut} style={{ alignSelf: 'center' }} />
     </View>
@@ -235,7 +235,7 @@ function TruckHome({
   return (
     <View style={s.list}>
       {trip ? <TruckDetail trip={trip} onMessages={() => onMessages(trip.id)} /> : (
-        <Empty icon="truck" title="No trip right now" hint="Your next cold-truck booking shows here once a buyer is assigned." />
+        <Empty icon="truck" title="No trip right now" hint="Your next cold-truck booking shows here once operations allots it to you." />
       )}
       {also.length > 0 ? <><SectionLabel text="Up next · not started" /><TruckList trips={also} past={false} onOpen={onOpen} /></> : null}
       {past.length > 0 ? <><SectionLabel text="Past trips" /><TruckList trips={past} past onOpen={onOpen} /></> : null}

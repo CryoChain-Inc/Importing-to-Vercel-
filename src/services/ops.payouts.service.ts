@@ -7,7 +7,7 @@ export interface PayableRow {
   farmer: string;
   orderCode: string;
   product: string;
-  grade: string;
+  unit: string;
   kg: number;
   net: number;
   status: 'pending' | 'payable' | 'paid';
@@ -56,7 +56,7 @@ export async function fetchPayables(): Promise<PayableRow[]> {
   const [{ data, error }, live] = await Promise.all([
     supabase
       .from('order_allocations')
-      .select('id, farmer_id, grade, kg, amount, payout_status, delivered_at, paid_at, orders(code), products(name), profiles:farmer_id(display_name)')
+      .select('id, farmer_id, unit, kg, amount, payout_status, delivered_at, paid_at, orders(code), products(name), profiles:farmer_id(display_name)')
       .in('status', ['offered', 'accepted', 'collected'])
       .order('created_at', { ascending: false }),
     supabase.from('payout_transfers').select('allocation_id').neq('status', 'cancelled').not('allocation_id', 'is', null),
@@ -69,7 +69,7 @@ export async function fetchPayables(): Promise<PayableRow[]> {
     farmer: r.profiles?.display_name || 'Farmer',
     orderCode: r.orders?.code ?? '',
     product: r.products?.name ?? '',
-    grade: r.grade,
+    unit: r.unit,
     kg: Number(r.kg),
     net: Number(r.amount),
     status: r.payout_status,

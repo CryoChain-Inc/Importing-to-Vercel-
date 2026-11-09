@@ -35,11 +35,11 @@ export function ProduceListings({ listings, sales, pickup, addressReady, walletR
   const [cats, setCats] = useState<Record<string, string>>({});
   useEffect(() => { fetchProductCategories().then(setCats).catch(() => {}); }, []);
   const active = FILTERS.find((f) => f.key === filter)!;
-  // Group by product; a product is "on sale" while any of its listings has kg left.
+  // Group by product; a product is "on sale" while any of its listings has stock left.
   const groups = useMemo<Group[]>(() => {
     const m = new Map<string, ProduceListing[]>();
     for (const l of listings) m.set(l.product, [...(m.get(l.product) ?? []), l]);
-    return [...m].map(([product, ls]) => ({ product, category: cats[product], listings: ls.sort((a, b) => a.grade.localeCompare(b.grade)) }));
+    return [...m].map(([product, ls]) => ({ product, category: cats[product], listings: ls.sort((a, b) => a.unit.localeCompare(b.unit)) }));
   }, [listings, cats]);
   const catNames = [...new Set(groups.map((g) => g.category).filter((x): x is string => !!x))].sort();
   const needle = q.trim().toLowerCase();
@@ -69,7 +69,7 @@ export function ProduceListings({ listings, sales, pickup, addressReady, walletR
             <Text style={s.title}>{q.product}</Text>
             <Badge label={q.error ? 'Needs attention' : 'Waiting for internet'} tone="warning" />
           </View>
-          <Text style={s.copy}>{q.weightKg.toLocaleString('en-GH')} kg · Grade {q.grade} · saved on this phone</Text>
+          <Text style={s.copy}>{q.weightKg.toLocaleString('en-GH')} {q.unit} · saved on this phone</Text>
           <Text style={s.copy}>{q.error ?? 'It uploads by itself as soon as you have signal. You can close the app.'}</Text>
           <View style={s.actions}>
             {q.error ? <Button label="Try again" size="sm" variant="outline" onPress={() => retryQueued(q.id).then(onChange)} /> : null}

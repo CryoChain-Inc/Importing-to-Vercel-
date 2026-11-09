@@ -4,10 +4,9 @@ import { Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { cancelOrder, fetchOrders, openPayment, startPayment, verifyPayment, type Order } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
-import { ghs } from '../../../utils/format';
+import { fmtQty, ghs } from '../../../utils/format';
 
 const POLL_MS = 3000;
-const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} kg`;
 
 type Phase = 'starting' | 'waiting' | 'paid' | 'error';
 
@@ -89,8 +88,8 @@ export function Payment({ orderId, onPaid, onLeave }: { orderId: string; onPaid:
       {order && order.items.length > 0 ? (
         <Card style={s.lines}>
           {order.items.map((i) => (
-            <View key={`${i.name}-${i.grade}`} style={s.row}>
-              <Text style={s.k}>{i.name} · Grade {i.grade} · {kg(i.kg)}</Text>
+            <View key={`${i.name}-${i.unit}`} style={s.row}>
+              <Text style={s.k}>{i.name} · {fmtQty(i.kg, i.unit)}</Text>
               <Text style={s.v}>{ghs(i.lineTotal)}</Text>
             </View>
           ))}

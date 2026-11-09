@@ -31,7 +31,6 @@ function Row({ p, first }: { p: CropPrice; first: boolean }) {
       <View style={s.name}>
         <View style={s.cropRow}>
           <Text style={s.crop}>{p.crop}</Text>
-          <Badge label={`Grade ${p.grade}`} tone={p.grade === 'A' ? 'success' : p.grade === 'B' ? 'warning' : 'neutral'} />
         </View>
         <Text style={s.window}>{p.category}</Text>
       </View>
@@ -47,12 +46,12 @@ function Row({ p, first }: { p: CropPrice; first: boolean }) {
 }
 
 /** Public daily farmer prices, safe to show before sign-in. Buyer prices live elsewhere. */
-export function PriceBoard({ gradeAOnly = false, compact = false }: { gradeAOnly?: boolean; compact?: boolean }) {
+export function PriceBoard({ compact = false }: { compact?: boolean }) {
   const s = useThemedStyles(styles);
   const [data, setData] = useState<PriceBoardData | null>(null);
   useEffect(() => {
-    fetchPrices(gradeAOnly).then(setData, () => setData({ prices: [], updatedAt: null }));
-  }, [gradeAOnly]);
+    fetchPrices().then(setData, () => setData({ prices: [], updatedAt: null }));
+  }, []);
   if (!data) return compact ? <View style={s.strip}><Skeleton width={140} height={20} /><View style={s.chips}><Skeleton width={148} height={84} radius={16} /><Skeleton width={148} height={84} radius={16} /></View></View> : <Skeleton height={220} radius={20} />;
   if (compact) {
     return (
@@ -64,7 +63,7 @@ export function PriceBoard({ gradeAOnly = false, compact = false }: { gradeAOnly
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
           {data.prices.map((p) => (
             <View key={p.id} style={s.chip}>
-              <Text style={s.chipCrop} numberOfLines={1}>{p.crop} · {p.grade}</Text>
+              <Text style={s.chipCrop} numberOfLines={1}>{p.crop}</Text>
               <Text style={s.amount}>{ghs(p.price)}<Text style={s.unit}> /{p.unit}</Text></Text>
               <Delta pct={p.changePct} />
             </View>
