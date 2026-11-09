@@ -4,7 +4,6 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { Button, Icon } from '../../../components/common';
 import { imageFingerprint, samePhoto, type PickedImage } from '../../../services/catalogueImage';
 import { MAX_PHOTOS, MIN_PHOTOS } from '../../../services/farmer.service';
-import { CropModal } from '../../ops/components/CropModal';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
 async function toPicked(a: ImagePicker.ImagePickerAsset): Promise<PickedImage> {
@@ -21,32 +20,29 @@ export function PhotoPicker({ value, onChange }: { value: PickedImage[]; onChang
   const s = useThemedStyles(styles);
   const [duplicate, setDuplicate] = useState(false);
   const room = MAX_PHOTOS - value.length;
-  // Picked photos wait here and are cropped one at a time before they join the listing.
-  const [queue, setQueue] = useState<PickedImage[]>([]);
   const add = async (r: ImagePicker.ImagePickerResult) => {
     if (r.canceled) return;
-    const next: PickedImage[] = [];
+    const next = [...value];
     let skipped = false;
     for (const asset of r.assets) {
-      if (value.length + next.length >= MAX_PHOTOS) break;
+      if (next.length >= MAX_PHOTOS) break;
       const img = await toPicked(asset);
-      if ([...value, ...next].some((have) => samePhoto(have, img))) {
+      if (next.some((have) => samePhoto(have, img))) {
         skipped = true;
         continue;
       }
       next.push(img);
     }
     setDuplicate(skipped);
-    setQueue(next);
+    onChange(next);
   };
-  const current = queue[0];
 
   const camera = async () => {
     const { granted } = await ImagePicker.requestCameraPermissionsAsync();
-    if (granted) await add(await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 }));
+    if (granted) await add(await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 }));
   };
   const library = async () =>
-    add(await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: room, quality: 1 }));
+    add(await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: room, quality: 0.6 }));
 
   return (
     <View style={s.wrap}>
@@ -65,14 +61,6 @@ export function PhotoPicker({ value, onChange }: { value: PickedImage[]; onChang
         <Button label="Take photo" variant="outline" size="sm" onPress={camera} disabled={room <= 0} />
         <Button label="Upload" variant="outline" size="sm" onPress={library} disabled={room <= 0} />
       </View>
-      {current ? (
-        <CropModal
-          uri={current.uri}
-          onCancel={() => setQueue((q) => q.slice(1))}
-          // Keep the original's id and fingerprint so the same picture is still caught as a duplicate.
-          onDone={(c) => { onChange([...value, { ...c, assetId: current.assetId, fingerprint: current.fingerprint }]); setQueue((q) => q.slice(1)); }}
-        />
-      ) : null}
       {duplicate ? <Text style={s.warn}>That photo is already added. Choose a different one.</Text> : null}
     </View>
   );
