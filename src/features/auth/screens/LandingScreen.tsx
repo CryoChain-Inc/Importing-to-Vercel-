@@ -30,7 +30,21 @@ export function LandingScreen() {
     [lift],
   );
   useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      // Mobile browsers keep the field focused when the keyboard is dismissed, so no blur fires: lower the sheet when the viewport grows back.
+      const vv = window.visualViewport;
+      if (!vv) return;
+      let full = vv.height;
+      const onResize = () => {
+        full = Math.max(full, vv.height);
+        if (vv.height >= full - 80) {
+          clearTimeout(blurTimer.current);
+          go(false);
+        }
+      };
+      vv.addEventListener('resize', onResize);
+      return () => vv.removeEventListener('resize', onResize);
+    }
     const ios = Platform.OS === 'ios';
     const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
       setKb(e.endCoordinates.height);

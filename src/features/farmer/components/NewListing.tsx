@@ -172,6 +172,22 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
   );
 }
 
+/** Fixed-size card with three states in the same footprint: placeholder (no weight), skeleton (first load), value (dimmed while refreshing). */
+function EstimateCard({ s, estimate, loading, detail, lines }: { s: ReturnType<typeof styles>; estimate: Estimate | null; loading: boolean; detail: string; lines: number }) {
+  const first = loading && !estimate;
+  return (
+    <View style={s.estimate} accessibilityLiveRegion="polite">
+      <Text style={s.meta}>You get about</Text>
+      <View style={s.netBox}>
+        {first ? <Skeleton width={150} height={30} radius={8} /> : <Text style={[s.net, !estimate && s.placeholder, loading && s.pending]}>{ghs(estimate ? estimate.net : 0)}</Text>}
+      </View>
+      <View style={{ height: lines * 18 }}>
+        {first ? <><Skeleton width="70%" height={12} style={{ marginTop: 3 }} /><Skeleton width="45%" height={12} style={{ marginTop: 6 }} /></> : <Text style={[s.meta, loading && s.pending]} numberOfLines={lines}>{detail}</Text>}
+      </View>
+    </View>
+  );
+}
+
 function Row({ label, value, s, last }: { label: string; value: string; s: ReturnType<typeof styles>; last?: boolean }) {
   return (
     <View style={[s.row, !last && s.rowLine]}>
@@ -198,8 +214,11 @@ const styles = (c: Record<ColorToken, string>) => ({
   quick: { flexDirection: 'row' as const, gap: 8 },
   add: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken },
   addText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink, fontVariant: ['tabular-nums' as const] },
-  estimate: { gap: 2, padding: 16, borderRadius: 16, backgroundColor: c.surfaceSunken },
-  net: { fontFamily: fonts.heading, fontSize: 30, letterSpacing: -0.5, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  estimate: { gap: 4, padding: 16, borderRadius: 16, backgroundColor: c.surfaceSunken },
+  netBox: { height: 36, justifyContent: 'center' as const },
+  placeholder: { opacity: 0.25 },
+  pending: { opacity: 0.6 },
+  net: { fontFamily: fonts.heading, fontSize: 30, lineHeight: 36, letterSpacing: -0.5, color: c.ink, fontVariant: ['tabular-nums' as const] },
   summary: { borderRadius: 16, borderWidth: 1, borderColor: c.borderSubtle, paddingHorizontal: 16 },
   row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 12, paddingVertical: 14 },
   rowLine: { borderBottomWidth: 1, borderBottomColor: c.borderSubtle },
