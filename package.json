@@ -77,5 +77,8 @@
       "<rootDir>/supabase/"
     ]
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "proxy-agent": "^8.0.2"
+  }
 }
