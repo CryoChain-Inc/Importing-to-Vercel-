@@ -6,6 +6,7 @@ import { imageUrl, type PickedImage } from '../../../services/catalogueImage';
 import { PAGE_SIZE } from '../../../services/paging';
 import { saveCategory, saveProduct, setVisibility, type Category, type Product } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { UNITS } from '../../../utils/units';
 import { GalleryField } from './GalleryField';
 import { ImageField } from './ImageField';
 import { ActiveToggle, Empty } from './OpsBits';
@@ -46,7 +47,7 @@ export function ProductForm({ categories, product, onSaved, onClose }: { categor
   const [removed, setRemoved] = useState(false);
   const [description, setDescription] = useState(product?.description ?? '');
   const [aliases, setAliases] = useState(product?.aliases ?? '');
-  const [unit, setUnit] = useState(product?.unit ?? '');
+  const [unit, setUnit] = useState(product?.unit ?? UNITS[0]);
   const [gallery, setGallery] = useState({ saved: product?.imagePaths ?? [], picked: [] as PickedImage[] });
   const options = categories.filter((c) => c.active || c.id === product?.categoryId);
   const current = options.find((c) => c.id === categoryId);
@@ -69,8 +70,8 @@ export function ProductForm({ categories, product, onSaved, onClose }: { categor
       {options.length ? (
         <>
           <Input label="Name" value={name} onChangeText={setName} placeholder="Garden egg" />
-          <Input label="Sold by (unit)" value={unit} onChangeText={setUnit} maxLength={40} placeholder="kg, bunch, egg, 500 ml bottle…"
-            hint="The one unit farmers list in, buyers order in and drivers check at pickup. Pick something that can be weighed or counted. It cannot change once the product has listings or orders." />
+          <ChoiceChips label="Sold by (unit)" options={[...UNITS]} value={unit} onChange={setUnit} />
+          <Text style={s.hint}>The one base unit farmers list in, buyers order in and drivers check at pickup. Put pack sizes (crate of 30, 50 kg bag) in the description, not here. It cannot change once the product has listings or orders.</Text>
           <Input label="Other names" value={aliases} onChangeText={setAliases} maxLength={500} placeholder="pawpaw, brofre, papaye"
             hint="Local or alternative names, separated by commas. Buyers and farmers can search by any of them." />
           <ChoiceChips label="Category" options={options.map((c) => c.name)} value={current?.name ?? ''}
