@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/common';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
@@ -8,11 +9,12 @@ export function Sheet({ title, subtitle, onClose, footer, children }: { title: s
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const wide = useWindowDimensions().width >= 720;
+  const { bottom } = useSafeAreaInsets(); // Android edge-to-edge: keep footer above the nav bar
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <View style={[s.root, wide && s.rootWide]}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[s.panel, wide ? s.panelWide : s.panelSheet]} accessibilityViewIsModal>
+        <View style={[s.panel, wide ? s.panelWide : [s.panelSheet, { paddingBottom: bottom }]]} accessibilityViewIsModal>
           <View style={s.head}>
             <View style={s.grow}>
               <Text style={s.title} numberOfLines={1}>{title}</Text>

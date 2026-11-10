@@ -53,3 +53,8 @@ coverage/
 # generated native folders
 /ios
 /android
+
+# Playwright / Lighthouse
+test-results/
+playwright-report/
+.lighthouseci/
