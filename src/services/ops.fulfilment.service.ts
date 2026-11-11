@@ -214,6 +214,8 @@ export interface DriverRoute {
   lng: number | null;
   stops: { id: string; kind: 'pickup' | 'dropoff'; label: string; seq: number | null; state: 'pending' | 'done'; order: string; reading: string | null;
     lat: number; lng: number; eta: string | null; legPolyline: string | null }[];
+  /** Ops set this route's order by hand; the system keeps it until the trip ends. */
+  routeLocked: boolean;
   /** Positions reported in the last 12 hours, oldest first: the road actually driven. */
   trail: { lat: number; lng: number }[];
 }
@@ -229,7 +231,7 @@ const readingOf = (h: any, unit = 'kg'): string | null => {
 };
 
 export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
-  const drivers = supabase.from('drivers').select('id, plate_number, vehicle_type, profiles(display_name, phone), driver_locations(lat, lng, updated_at)');
+  const drivers = supabase.from('drivers').select('id, plate_number, vehicle_type, route_locked, profiles(display_name, phone), driver_locations(lat, lng, updated_at)');
   const withReading = 'id, driver_id, kind, label, seq, state, lat, lng, eta, leg_polyline, orders(code), order_allocations!order_allocations_pickup_stop_id_fkey(unit), delivery_handovers(recorded_kg, temperature_c)';
   type StopQuery = { data: any[] | null; error: { message: string } | null };
   let stops = await supabase.from('delivery_stops').select(withReading).not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
@@ -248,6 +250,7 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
       phone: r.profiles?.phone ?? '',
       vehicle: [r.vehicle_type, r.plate_number].filter(Boolean).join(' · '),
       seenAt: loc?.updated_at ?? null,
+      routeLocked: Boolean(r.route_locked),
       lat: loc ? Number(loc.lat) : null,
       lng: loc ? Number(loc.lng) : null,
       stops: (stops.data ?? []).filter((x: any) => x.driver_id === r.id)
@@ -259,7 +262,7 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
 
 export interface Decision {
   id: string;
-  kind: 'no_supply' | 'no_farmer_price' | 'no_driver' | 'sms_failed' | 'allocation_error';
+  kind: 'no_supply' | 'no_farmer_price' | 'no_driver' | 'sms_failed' | 'allocation_error' | 'over_capacity' | 'short_supply';
   orderId: string | null;
   order: string;
   summary: string;

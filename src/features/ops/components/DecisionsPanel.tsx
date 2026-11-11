@@ -12,6 +12,8 @@ const KIND: Record<Decision['kind'], { title: string; hint: string }> = {
   no_farmer_price: { title: 'No farmer price', hint: 'Add this unit with a base price under Prices, then retry.' },
   no_driver: { title: 'No driver available', hint: 'Ask a driver to open the app, or assign a cold truck. The route builds itself once one reports in.' },
   sms_failed: { title: 'SMS not delivered', hint: 'Call the farmer. They can still accept in the app.' },
+  over_capacity: { title: 'Order too large for one truck', hint: 'Add a larger truck on the Fleet page, or move it onto a truck by hand from Orders (you will see a capacity warning).' },
+  short_supply: { title: 'Short supply', hint: 'The buyer has been told. Approve the refund under Buyer refunds; this closes by itself once it is paid.' },
   allocation_error: { title: 'Allocation failed', hint: 'Retry the allocation. If it fails again, check the order and farmer listings.' },
 };
 
@@ -49,7 +51,7 @@ export function DecisionsPanel({ decisions, onChange }: { decisions: Decision[];
               <Text style={s.meta}>{KIND[d.kind].hint}</Text>
               <Input label="What did you decide?" value={note[d.id] ?? ''} onChangeText={(v) => setNote((n) => ({ ...n, [d.id]: v }))} placeholder="e.g. Refunded 230 kg to the buyer" />
               <View style={s.actions}>
-                {d.orderId && d.kind !== 'sms_failed' ? <Button size="sm" variant="outline" label="Retry allocation" loading={busy} onPress={() => run(() => retryAllocation(d.orderId!))} /> : null}
+                {d.orderId && !['sms_failed', 'short_supply'].includes(d.kind) ? <Button size="sm" variant="outline" label="Retry allocation" loading={busy} onPress={() => run(() => retryAllocation(d.orderId!))} /> : null}
                 <Button size="sm" label="Mark resolved" loading={busy} disabled={(note[d.id] ?? '').trim().length < 3} onPress={() => run(() => resolveDecision(d.id, note[d.id]))} />
               </View>
             </>

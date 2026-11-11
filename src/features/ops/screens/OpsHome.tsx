@@ -22,6 +22,7 @@ import { PricesPanel } from '../components/PricesPanel';
 import { RefundsPanel } from '../components/RefundsPanel';
 import { DecisionsPanel } from '../components/DecisionsPanel';
 import { FleetPanel } from '../components/FleetPanel';
+import { LogisticsSettings } from '../components/LogisticsSettings';
 import { OrdersBoard } from '../components/OrdersBoard';
 import { RoutesPanel } from '../components/RoutesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
@@ -46,7 +47,7 @@ const TITLES: Record<string, [string, string]> = {
   fleet: ['Fleet', 'Your trucks, how much each carries and which driver has it.'],
   prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
   team: ['Team', 'Drivers and operations staff.'],
-  settings: ['Settings', 'Temperature limits, buyer and farmer pricing, payout rules and support contact.'],
+  settings: ['Settings', 'Temperature limits, pricing, support contact, and how trucks are dispatched and timed.'],
 };
 
 const TABS = Object.keys(TITLES);
@@ -157,7 +158,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
-          {tab === 'orders' ? <OrdersBoard orders={data.board} onChange={load} /> : null}
+          {tab === 'orders' ? <OrdersBoard orders={data.board} drivers={data.drivers} onChange={load} /> : null}
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
           {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
@@ -167,7 +168,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'trucks' ? <TrucksPanel /> : null}
           {tab === 'prices' ? <PricesPanel categories={data.categories} config={data.config} onChange={load} {...page} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}
-          {tab === 'settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
+          {tab === 'settings' ? <><ConfigPanel config={data.config} onChange={load} /><LogisticsSettings rev={rev} /></> : null}
         </>
       ) : error ? null : (
         <PanelSkeleton />

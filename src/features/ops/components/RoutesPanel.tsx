@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips } from '../../../components/common';
+import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/common';
+import { reorderStops, unlockRoute } from '../../../services/ops.control.service';
 import { LiveMap, type LivePlace } from '../../../components/location/LiveMap';
 import { decodePolyline } from '../../../utils/polyline';
 import { Banner } from '../../../components/feedback';
@@ -24,6 +25,15 @@ export function RoutesPanel({ drivers, onChange }: { drivers: DriverRoute[]; onC
   const pending = drivers.reduce((n, d) => n + d.stops.filter((x) => x.state === 'pending').length, 0);
   const onRoad = drivers.filter((d) => d.stops.some((x) => x.state === 'pending'));
   const [focus, setFocus] = useState(ALL);
+  // The driver whose stops are being reordered, with the order being built.
+  const [editing, setEditing] = useState<{ driver: string; ids: string[] } | null>(null);
+  const [reason, setReason] = useState('');
+  const move = (i: number, by: number) => setEditing((e) => {
+    if (!e) return e;
+    const ids = [...e.ids];
+    [ids[i], ids[i + by]] = [ids[i + by], ids[i]];
+    return { ...e, ids };
+  });
   const shown = onRoad.filter((d) => focus === ALL || d.name === focus);
   const map = {
     // One truck at a time for its truck marker; the shared map shows every truck's stops and roads.
@@ -60,7 +70,33 @@ export function RoutesPanel({ drivers, onChange }: { drivers: DriverRoute[]; onC
               <Badge label={noSignal(d) ? 'No signal' : online(d) ? 'Reporting' : d.seenAt ? 'Offline' : 'Never seen'} tone={noSignal(d) ? 'warning' : online(d) ? 'success' : 'neutral'} />
             </View>
             <Text style={s.meta}>{d.lat != null ? `Last seen ${when(d.seenAt)} · ${d.lat.toFixed(4)}, ${d.lng!.toFixed(4)}` : 'Has not shared a location.'}</Text>
-            <SectionTitle title="Route" note={`${todo.length} pending`} />
+            <SectionTitle title="Route" note={`${todo.length} pending${d.routeLocked ? ' · order set by ops' : ''}`} />
+            {editing?.driver === d.id ? (
+              <View style={s.edit}>
+                {editing.ids.map((id, i) => {
+                  const x = todo.find((t) => t.id === id)!;
+                  return (
+                    <View key={id} style={s.row}>
+                      <Text style={s.stop} numberOfLines={2}>{i + 1}. {x.label} · {x.order}</Text>
+                      <Button size="sm" variant="ghost" label="Up" disabled={i === 0} onPress={() => move(i, -1)} />
+                      <Button size="sm" variant="ghost" label="Down" disabled={i === editing.ids.length - 1} onPress={() => move(i, 1)} />
+                    </View>
+                  );
+                })}
+                <Input label="Reason" value={reason} onChangeText={setReason} maxLength={280} placeholder="e.g. Buyer closes at noon" />
+                <View style={s.row}>
+                  <Button size="sm" label="Save this order" loading={busy} disabled={!reason.trim()}
+                    onPress={() => run(async () => { await reorderStops(d.id, editing.ids, reason); setEditing(null); setReason(''); })} />
+                  <Button size="sm" variant="ghost" label="Cancel" onPress={() => setEditing(null)} />
+                </View>
+                <Text style={s.meta}>The system keeps this order until the trip ends. New orders are added at the end.</Text>
+              </View>
+            ) : todo.length > 1 || d.routeLocked ? (
+              <View style={s.actionsRow}>
+                {todo.length > 1 ? <Button size="sm" variant="outline" label="Change stop order" onPress={() => setEditing({ driver: d.id, ids: [...todo].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)).map((t) => t.id) })} /> : null}
+                {d.routeLocked ? <Button size="sm" variant="ghost" label="Let the system order it" loading={busy} onPress={() => run(() => unlockRoute(d.id, 'Handed back to automatic planning'))} /> : null}
+              </View>
+            ) : null}
             {d.stops.length === 0 ? <Text style={s.meta}>No stops. New orders are assigned automatically.</Text> : d.stops.map((x) => (
               <View key={x.id} style={s.row}>
                 <View style={s.grow}>
@@ -87,4 +123,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   stop: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink },
   done: { color: c.inkMuted, textDecorationLine: 'line-through' as const },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
+  edit: { gap: 8 },
+  actionsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
 });
