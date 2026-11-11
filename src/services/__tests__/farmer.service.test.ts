@@ -1,4 +1,4 @@
-import { fetchListings, reportShortage, updateListing, updateListingPhotos } from '../farmer.service';
+import { fetchListings, fetchPickups, reportShortage, updateListing, updateListingPhotos } from '../farmer.service';
 import { supabase } from '../supabase';
 
 jest.mock('../supabase', () => ({
@@ -54,4 +54,11 @@ test('reporting a shortage sends what the farmer can supply and explains a refus
   expect(rpc).toHaveBeenCalledWith('report_listing_shortage', { p_listing: 'l1', p_available: 60 });
   rpc.mockResolvedValueOnce({ error: { message: 'enter less than the 100 reserved' } });
   await expect(reportShortage('l1', 100)).rejects.toThrow('lower than what is reserved');
+});
+
+test('pickups map the server lines and keep the numbers numeric', async () => {
+  rpc.mockResolvedValueOnce({ data: [{ id: 's1', product: 'Pepper', unit: 'kg', expected: '100', collected: '80', short: '20', earning: '640', paid: 0, state: 'collected', eta: null, collectedAt: 'x', reservedAt: 'y' }], error: null });
+  const [p] = await fetchPickups();
+  expect(rpc).toHaveBeenCalledWith('farmer_pickups');
+  expect(p).toMatchObject({ expected: 100, collected: 80, short: 20, earning: 640, state: 'collected' });
 });

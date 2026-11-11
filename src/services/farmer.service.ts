@@ -369,29 +369,46 @@ export async function fetchNotices(): Promise<Notice[]> {
   return (data ?? []).map((r) => ({ id: r.id, title: r.title, body: r.body, createdAt: r.created_at }));
 }
 
-export interface Offer {
+export type PickupState = 'waiting' | 'on_the_way' | 'collected' | 'delivered' | 'paid' | 'not_supplied';
+
+/** One pickup line: one product from this farm for one order. The buyer is never shown. */
+export interface Pickup {
   id: string;
   product: string;
   unit: string;
-  kg: number;
-  /** What CryoChain pays this farmer for the allocation. */
-  amount: number;
-  status: 'offered' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'collected';
-  /** When CryoChain collects it from the farm. */
-  pickupAt: string | null;
-  createdAt: string;
+  /** Quantity CryoChain reserved for this pickup. */
+  expected: number;
+  /** What the driver collected. */
+  collected: number;
+  /** What could not be supplied. */
+  short: number;
+  /** What this pickup earns (for the reserved quantity until collected, then for what was collected). */
+  earning: number;
+  paid: number;
+  state: PickupState;
+  /** Estimated truck arrival while the pickup is ahead. */
+  eta: string | null;
+  collectedAt: string | null;
+  reservedAt: string;
 }
 
-/** Pickups CryoChain has scheduled with this farmer. The buyer is never shown. */
-export async function fetchOffers(): Promise<Offer[]> {
-  const { data, error } = await supabase
-    .from('order_allocations')
-    .select('id, unit, kg, amount, status, pickup_at, created_at, products(name)')
-    .order('created_at', { ascending: false })
-    .limit(20);
-  if (error) throw new Error('Could not load your orders.');
-  return (data ?? []).map((r: any) => ({
-    id: r.id, product: r.products?.name ?? '', unit: r.unit, kg: Number(r.kg), amount: Number(r.amount),
-    status: r.status, pickupAt: r.pickup_at, createdAt: r.created_at,
+/** This farmer's pickups: upcoming first, then the history. */
+export const fetchPickups = () => cached('fetchPickups', loadPickups);
+async function loadPickups(): Promise<Pickup[]> {
+  const { data, error } = await supabase.rpc('farmer_pickups');
+  if (error) throw new Error('Could not load your pickups.');
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    product: r.product ?? '',
+    unit: r.unit ?? 'kg',
+    expected: Number(r.expected ?? 0),
+    collected: Number(r.collected ?? 0),
+    short: Number(r.short ?? 0),
+    earning: Number(r.earning ?? 0),
+    paid: Number(r.paid ?? 0),
+    state: r.state,
+    eta: r.eta ?? null,
+    collectedAt: r.collectedAt ?? null,
+    reservedAt: r.reservedAt,
   }));
 }
