@@ -19,6 +19,7 @@ import { PaymentsPanel } from '../components/PaymentsPanel';
 import { PayoutsPanel } from '../components/PayoutsPanel';
 import { PricesPanel } from '../components/PricesPanel';
 import { DecisionsPanel } from '../components/DecisionsPanel';
+import { FleetPanel } from '../components/FleetPanel';
 import { OrdersBoard } from '../components/OrdersBoard';
 import { RoutesPanel } from '../components/RoutesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
@@ -39,6 +40,7 @@ const TITLES: Record<string, [string, string]> = {
   payments: ['Payments', 'Money received from buyers.'],
   payouts: ['Farmer payouts', 'Delivered orders to pay, payout runs and what has been sent.'],
   trucks: ['Cold trucks', 'Hour packages, bookings, and the driver you allot to each trip.'],
+  fleet: ['Fleet', 'Your trucks, how much each carries and which driver has it.'],
   prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
   team: ['Team', 'Drivers and operations staff.'],
   settings: ['Settings', 'Temperature limits, buyer and farmer pricing, payout rules and support contact.'],
@@ -121,6 +123,7 @@ export function OpsHome({ account }: { account: Account }) {
     ] },
     { title: 'Logistics', items: [
       { key: 'routes', label: 'Routes', icon: 'truck' },
+      { key: 'fleet', label: 'Fleet', icon: 'truck' },
       { key: 'trucks', label: 'Cold trucks', icon: 'truck' },
     ] },
     { title: 'Catalogue', items: [{ key: 'prices', label: 'Prices and products', icon: 'tag' }] },
@@ -153,6 +156,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
           {tab === 'payouts' ? <PayoutsPanel payables={data.payables} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
+          {tab === 'fleet' ? <FleetPanel team={data.team} rev={rev} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
           {tab === 'prices' ? <PricesPanel categories={data.categories} config={data.config} onChange={load} {...page} /> : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}
