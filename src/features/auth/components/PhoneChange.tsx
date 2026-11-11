@@ -11,7 +11,6 @@ import { errorMessage } from '../errors';
 import { useCountdown } from '../hooks/useCountdown';
 import { OTP_LENGTH, OtpInput } from './OtpInput';
 import { PhoneField } from './PhoneField';
-import { SmsConsent } from './SmsConsent';
 
 const EXPIRY_S = 120;
 const COOLDOWN_S = 30;
@@ -30,7 +29,6 @@ export function PhoneChange({ current, onDone, onCancel }: {
   const [verifying, setVerifying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [smsOk, setSmsOk] = useState(false);
   const ready = isNationalNumber(country, value);
 
   const send = async () => {
@@ -50,7 +48,6 @@ export function PhoneChange({ current, onDone, onCancel }: {
     <View style={s.form}>
       {error ? <Banner text={error} /> : null}
       <PhoneField country={country} onCountry={setCountry} value={value} onChangeText={setValue} onSubmitEditing={() => ready && send()} />
-      <SmsConsent checked={smsOk} onChange={setSmsOk} />
       <Text style={s.note}>{current ? `You sign in with ${formatPhone(current)} today. We'll text a code to the new number.` : "We'll text a 6-digit code to confirm it."}</Text>
       <View style={s.actions}>
         {onCancel ? <Button label="Cancel" variant="outline" onPress={onCancel} style={s.action} /> : null}
