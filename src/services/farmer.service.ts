@@ -19,6 +19,7 @@ export interface Farmer {
   momoNumber: string | null;
   momoName: string | null;
   walletVerified: boolean;
+  photoPath: string | null;
 }
 
 export interface FarmerDetails extends AddressValue {
@@ -76,7 +77,7 @@ export const MIN_PHOTOS = 3;
 export const MAX_PHOTOS = 6;
 export const produceImageUrl = (path: string) => supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
 
-const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, profiles(display_name, phone)';
+const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, photo_path, profiles(display_name, phone)';
 
 /** Profile stores the nearest collection point as this label (see DetailsForm). */
 export const pointLabel = (p: CollectionPoint) => (p.address ? `${p.name}, ${p.address}` : p.name);
@@ -116,6 +117,7 @@ async function loadFarmer(): Promise<Farmer | null> {
     momoNumber: data.momo_number,
     momoName: data.momo_name,
     walletVerified: Boolean(data.wallet_verified_at),
+    photoPath: data.photo_path,
   };
 }
 
@@ -411,4 +413,25 @@ async function loadPickups(): Promise<Pickup[]> {
     collectedAt: r.collectedAt ?? null,
     reservedAt: r.reservedAt,
   }));
+}
+
+/** Sets (or clears, with null) the optional profile photo and removes the old file. */
+export async function saveProfilePhoto(img: PickedImage | null, oldPath: string | null): Promise<void> {
+  const id = await userId();
+  const bucket = supabase.storage.from(PRODUCE_BUCKET);
+  let path: string | null = null;
+  if (img) {
+    const type = img.mimeType ?? 'image/jpeg';
+    if (!EXT[type]) throw new Error('Use a JPEG, PNG or WebP image.');
+    const body = await readBytes(img.uri);
+    if (body.byteLength === 0) throw new Error('The photo could not be read. Pick it again.');
+    path = `${id}/profile-${Date.now()}.${EXT[type]}`;
+    if ((await bucket.upload(path, body, { contentType: type })).error) throw new Error('Could not upload the photo (max 2 MB).');
+  }
+  const { error } = await supabase.from('farmers').update({ photo_path: path }).eq('id', id);
+  if (error) {
+    if (path) await bucket.remove([path]);
+    throw new Error('Could not save your photo.');
+  }
+  if (oldPath) await bucket.remove([oldPath]).catch(() => undefined);
 }

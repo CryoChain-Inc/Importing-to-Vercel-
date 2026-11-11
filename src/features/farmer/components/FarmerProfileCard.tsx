@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image, Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { detailsDone, hasWallet, saveDetails, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
+import { detailsDone, hasWallet, produceImageUrl, saveDetails, saveProfilePhoto, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
 import { composeAddress } from '../../../services/maps.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
 import { SignInCard } from '../../auth/components/SignInCard';
 import { detailsReady, walletReady } from '../validation';
+import { imageFingerprint, type PickedImage } from '../../../services/catalogueImage';
+import { CropModal } from '../../ops/components/CropModal';
 import { EditSheet } from './EditSheet';
 import { DetailsForm } from './DetailsForm';
 import { WalletForm } from './WalletForm';
@@ -54,6 +57,7 @@ export function FarmerProfileCard({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [crop, setCrop] = useState<PickedImage | null>(null);
 
   useEffect(() => {
     if (editing) return;
@@ -89,6 +93,13 @@ export function FarmerProfileCard({
     }
   };
 
+  const pick = async () => {
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    const a = r.canceled ? null : r.assets[0];
+    if (a) setCrop({ uri: a.uri, mimeType: a.mimeType, assetId: a.assetId, fingerprint: await imageFingerprint(a.uri) });
+  };
+  const setPhoto = (img: PickedImage | null) => save(() => saveProfilePhoto(img, farmer.photoPath));
+
   const saved = hasWallet(farmer);
   const hasDetails = name.trim().length > 1 && detailsDone(farmer);
   const left = (hasDetails ? 0 : 1) + (saved ? 0 : 1);
@@ -96,7 +107,18 @@ export function FarmerProfileCard({
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
       <HeroCard style={s.hero}>
-        <View style={s.avatar}><Text style={s.initials}>{initials(name)}</Text></View>
+        <View>
+          <Pressable onPress={pick} disabled={busy} accessibilityRole="button" accessibilityLabel={farmer.photoPath ? 'Change profile photo' : 'Add profile photo'} style={s.avatar}>
+            {farmer.photoPath ? <Image source={{ uri: produceImageUrl(farmer.photoPath) }} style={s.photo} /> : <Text style={s.initials}>{initials(name)}</Text>}
+          </Pressable>
+          {farmer.photoPath ? (
+            <Pressable onPress={() => setPhoto(null)} disabled={busy} accessibilityRole="button" accessibilityLabel="Remove profile photo" hitSlop={10} style={s.cam}>
+              <Icon name="close" size={12} color="#ffffff" />
+            </Pressable>
+          ) : (
+            <View style={s.cam} pointerEvents="none"><Icon name="edit" size={12} color="#ffffff" /></View>
+          )}
+        </View>
         <View style={s.heroText}>
           <Text style={s.heroName} numberOfLines={1} adjustsFontSizeToFit>{name || 'Farmer'}</Text>
           <Text style={s.heroMeta} numberOfLines={1}>{phone ? formatPhone(phone) : 'Add your farm details'}</Text>
@@ -105,6 +127,7 @@ export function FarmerProfileCard({
           <Icon name="logOut" size={20} color="#ffffff" />
         </Pressable>
       </HeroCard>
+      {crop ? <CropModal uri={crop.uri} onCancel={() => setCrop(null)} onDone={(c) => { setCrop(null); setPhoto({ ...c, assetId: crop.assetId, fingerprint: crop.fingerprint }); }} /> : null}
       {left > 0 ? (
         <Banner tone="info" text={`${left} step${left > 1 ? 's' : ''} left before you can list produce and get paid.`} />
       ) : null}
@@ -167,6 +190,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 12 },
   hero: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 16 },
   avatar: { width: 64, height: 64, borderRadius: 20, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255,255,255,0.18)' },
+  photo: { width: 64, height: 64, borderRadius: 20 },
+  cam: { position: 'absolute' as const, right: -4, bottom: -4, width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(0,0,0,0.65)' },
   initials: { fontFamily: fonts.heading, fontSize: 24, color: '#ffffff' },
   heroText: { flex: 1, gap: 2 },
   heroName: { fontFamily: fonts.heading, fontSize: 22, lineHeight: 30, letterSpacing: -0.3, color: '#ffffff' },
