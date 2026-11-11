@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Image, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { retryAllocation, type AllocationStatus, type BoardOrder, type MediaKind } from '../../../services/ops.fulfilment.service';
+import { retryAllocation, type AllocationStatus, type BoardOrder, type DriverRoute, type MediaKind } from '../../../services/ops.fulfilment.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { boardFilter, orderTrack, TRACK_STEPS } from '../orderTrack';
 import { Empty, Segmented, usePaged, when } from './OpsBits';
 import { useAction } from './useAction';
+import { OrderControls } from './OrderControls';
 
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 type Stage = 'attention' | 'farmers' | 'moving' | 'done' | 'closed';
@@ -22,7 +23,7 @@ const mapsUrl = (lat: number, lng: number) => (Platform.OS === 'ios'
   : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
 
 /** Paid orders with supply progress, farmer photos, driver readings and the live location of the truck. */
-export function OrdersBoard({ orders, onChange }: { orders: BoardOrder[]; onChange: () => Promise<void> }) {
+export function OrdersBoard({ orders, drivers, onChange }: { orders: BoardOrder[]; drivers: DriverRoute[]; onChange: () => Promise<void> }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const { busy, error, run } = useAction(onChange);
@@ -114,6 +115,7 @@ export function OrdersBoard({ orders, onChange }: { orders: BoardOrder[]; onChan
                 {o.state === 'paid' && st.stage !== 'done' ? (
                   <Button size="sm" variant="outline" label="Re-run allocation" loading={busy} onPress={() => run(() => retryAllocation(o.id))} />
                 ) : null}
+                {o.state === 'paid' ? <OrderControls order={o} drivers={drivers} onChange={onChange} /> : null}
               </View>
             ) : null}
           </Card>
