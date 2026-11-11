@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const BUCKET = 'catalogue';
-const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+export const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
 export interface PickedImage {
   uri: string;

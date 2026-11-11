@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { produceImageUrl, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
@@ -33,15 +33,21 @@ export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { lis
         </View>
       </View>
 
-      <View style={s.track} accessibilityLabel={`${kgText(l.soldKg)} sold, ${kgText(l.remainingKg)} left of ${kgText(l.weightKg)}`}>
+      {l.imagePaths.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photos}>
+          {l.imagePaths.map((p, i) => <Image key={p} source={{ uri: produceImageUrl(p) }} style={s.photo} accessibilityLabel={`${l.product} photo ${i + 1} of ${l.imagePaths.length}`} />)}
+        </ScrollView>
+      ) : null}
+
+      <View style={s.track} accessibilityLabel={`${kgText(l.reservedKg)} reserved, ${kgText(l.collectedKg)} collected, ${kgText(l.remainingKg)} available of ${kgText(l.weightKg)}`}>
         <View style={s.bar}>
-          <View style={[s.fill, s.fillDelivered, { width: pct(l.deliveredKg) }]} />
-          <View style={[s.fill, s.fillSold, { width: pct(l.soldKg - l.deliveredKg), left: pct(l.deliveredKg) }]} />
+          <View style={[s.fill, s.fillDelivered, { width: pct(l.collectedKg) }]} />
+          <View style={[s.fill, s.fillSold, { width: pct(l.reservedKg), left: pct(l.collectedKg) }]} />
         </View>
         <View style={s.legend}>
-          <Stat label="Sold" value={kgText(l.soldKg)} s={s} />
-          <Stat label="Delivered" value={kgText(l.deliveredKg)} s={s} />
-          <Stat label="Left" value={kgText(l.remainingKg)} s={s} strong />
+          <Stat label="Reserved" value={kgText(l.reservedKg)} s={s} />
+          <Stat label="Collected" value={kgText(l.collectedKg)} s={s} />
+          <Stat label="Available" value={kgText(l.remainingKg)} s={s} strong />
         </View>
       </View>
       <Text style={s.meta}>
@@ -83,8 +89,8 @@ export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { lis
       ) : null}
 
       <View style={s.actions}>
-        {l.deliveredKg > 0 ? (
-          <Text style={s.meta}>This produce has been delivered, so the listing can no longer be changed.</Text>
+        {l.deliveredKg > 0 || l.collectedKg >= l.weightKg ? (
+          <Text style={s.meta}>This produce has been {l.deliveredKg > 0 ? 'delivered' : 'collected'}, so the listing can no longer be changed.</Text>
         ) : (
           <Button label="Edit" variant="tonal" size="sm" icon="edit" onPress={() => setEditing(true)} />
         )}
@@ -120,6 +126,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   titleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
   product: { flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
+  photos: { gap: 8 },
+  photo: { width: 88, height: 88, borderRadius: 12, backgroundColor: c.surfaceSunken },
   track: { gap: 10 },
   bar: { height: 8, borderRadius: 4, overflow: 'hidden' as const, backgroundColor: c.surfaceSunken },
   fill: { position: 'absolute' as const, top: 0, bottom: 0, left: 0 },
