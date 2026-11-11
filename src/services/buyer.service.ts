@@ -22,6 +22,8 @@ export interface Order {
   paidAt: string | null;
   items: OrderItem[];
   deliveryAddress: string;
+  /** Money owed back for produce that could not be supplied. */
+  refunds: { amount: number; refunded: boolean }[];
   /** Farm pickups collected so far and the drop-off time; all zero/null until a driver is on the job. */
   progress: { pickupsTotal: number; pickupsDone: number; deliveredAt: string | null };
   /** Status of the latest Paystack attempt, if any; failed/abandoned means the buyer can retry. */
@@ -145,7 +147,7 @@ export async function checkoutCart(lines: CartLine[], addressId: string): Promis
 export async function fetchOrders(): Promise<Order[]> {
   const [{ data, error }, tracking] = await Promise.all([supabase
     .from('orders')
-    .select('id, code, amount, state, created_at, paid_at, delivery_address, order_items(unit, kg, line_total, products(name)), payments(status, created_at)')
+    .select('id, code, amount, state, created_at, paid_at, delivery_address, order_items(unit, kg, line_total, products(name)), payments(status, created_at), refunds(amount, status)')
     .order('created_at', { ascending: false }), supabase.rpc('buyer_order_progress')]);
   fail('Could not load your orders.')(error);
   // Tracking is a nicety: if it cannot load, orders still show with their paid/unpaid state.
@@ -164,6 +166,7 @@ export async function fetchOrders(): Promise<Order[]> {
     },
     items: (r.order_items ?? []).map((i: any) => ({ name: i.products?.name ?? '', unit: i.unit, kg: Number(i.kg), lineTotal: Number(i.line_total) })),
     deliveryAddress: r.delivery_address ?? '',
+    refunds: (r.refunds ?? []).filter((x: any) => x.status !== 'rejected').map((x: any) => ({ amount: Number(x.amount), refunded: x.status === 'refunded' })),
     payment: [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]?.status ?? null,
   }));
 }

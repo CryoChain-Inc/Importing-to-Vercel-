@@ -59,7 +59,7 @@ interface Data {
   details: buyer.BuyerDetails;
 }
 
-const LIVE_TABLES = ['orders', 'payments', 'truck_bookings'] as const;
+const LIVE_TABLES = ['orders', 'payments', 'truck_bookings', 'refunds'] as const;
 
 export function BuyerHome({ account, tab }: { account: Account; tab?: string }) {
   return <CartProvider><BuyerShell account={account} firstTab={TABS.find((t) => t.key === tab)?.key} /></CartProvider>;

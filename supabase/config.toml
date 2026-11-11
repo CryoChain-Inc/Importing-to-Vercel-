@@ -436,3 +436,6 @@ verify_jwt = true
 
 [functions.route-eta]
 verify_jwt = true
+
+[functions.refund-order]
+verify_jwt = true
