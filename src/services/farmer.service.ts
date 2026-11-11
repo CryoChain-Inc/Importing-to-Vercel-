@@ -315,6 +315,16 @@ export async function updateListingPhotos(id: string, keep: string[], added: Pic
   }
 }
 
+/** The farmer cannot supply everything reserved on a listing: `available` is how much of the reserved quantity they do have. */
+export async function reportShortage(id: string, available: number): Promise<void> {
+  const { error } = await supabase.rpc('report_listing_shortage', { p_listing: id, p_available: available });
+  if (!error) return;
+  const msg = error.message ?? '';
+  if (msg.includes('enter less than')) throw new Error('Enter a quantity lower than what is reserved.');
+  if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
+  throw new Error('Could not report the shortage. Please try again.');
+}
+
 function removalError(error: { message?: string; code?: string }): Error {
   const msg = error.message ?? '';
   if (msg.includes('already in a lot')) return new Error('This listing is already being fulfilled, so it can no longer be removed.');

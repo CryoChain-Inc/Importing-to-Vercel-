@@ -1,4 +1,4 @@
-import { fetchListings, updateListing, updateListingPhotos } from '../farmer.service';
+import { fetchListings, reportShortage, updateListing, updateListingPhotos } from '../farmer.service';
 import { supabase } from '../supabase';
 
 jest.mock('../supabase', () => ({
@@ -46,4 +46,12 @@ test('a refused photo save removes what was just uploaded', async () => {
   rpc.mockResolvedValue({ data: null, error: { message: 'photos of reserved produce cannot be removed' } });
   await expect(updateListingPhotos('l1', [], [{ uri: 'file://new.jpg', mimeType: 'image/jpeg' }])).rejects.toThrow('added to but not removed');
   expect(remove).toHaveBeenCalledWith([expect.stringMatching(/^farmer-1\/l1-/)]);
+});
+
+test('reporting a shortage sends what the farmer can supply and explains a refusal', async () => {
+  rpc.mockResolvedValueOnce({ error: null });
+  await reportShortage('l1', 60);
+  expect(rpc).toHaveBeenCalledWith('report_listing_shortage', { p_listing: 'l1', p_available: 60 });
+  rpc.mockResolvedValueOnce({ error: { message: 'enter less than the 100 reserved' } });
+  await expect(reportShortage('l1', 100)).rejects.toThrow('lower than what is reserved');
 });

@@ -175,6 +175,7 @@ export async function recordHandover(stopId: string, reading: {
     p_media_kind: reading.mediaKind,
   });
   if (error?.message.includes('temperature out of range')) throw new Error('That temperature is outside the allowed range.');
+  if (error?.message.includes('more than reserved')) throw new Error('That is more than was reserved here. Enter the reserved quantity or less.');
   if (error?.message.includes('enter the kilos')) throw new Error('Enter the quantity you collected.');
   if (error?.message.includes('add a photo or video')) throw new Error('Add a photo or a short video of this stop.');
   if (error?.message.includes('note is too long')) throw new Error('Notes can be at most 280 characters.');
