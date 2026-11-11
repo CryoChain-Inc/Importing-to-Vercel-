@@ -5,6 +5,10 @@ export type HandoverMediaKind = 'photo' | 'video';
 
 export interface PickupStop {
   stopId: string;
+  /** Lines with the same farmer are one visit. */
+  farmerId: string | null;
+  /** Estimated arrival, with buffer. */
+  eta: string | null;
   farmerName: string;
   farmerPhone: string;
   place: string;
@@ -25,6 +29,7 @@ export interface PickupStop {
 
 export interface DropoffStop {
   stopId: string;
+  eta: string | null;
   lat: number;
   lng: number;
   state: 'pending' | 'done';
@@ -66,6 +71,8 @@ async function signedDelivery(path: string | null): Promise<string | null> {
 
 const mapPickup = async (r: any): Promise<PickupStop> => ({
   stopId: r.stopId,
+  farmerId: r.farmerId ?? null,
+  eta: r.eta ?? null,
   farmerName: r.farmerName || 'Farmer',
   farmerPhone: r.farmerPhone ?? '',
   place: r.place ?? '',
@@ -86,6 +93,7 @@ const mapPickup = async (r: any): Promise<PickupStop> => ({
 
 const mapDropoff = async (r: any): Promise<DropoffStop> => ({
   stopId: r.stopId,
+  eta: r.eta ?? null,
   lat: Number(r.lat),
   lng: Number(r.lng),
   state: r.state,

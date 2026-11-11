@@ -72,7 +72,7 @@ const num = (v: unknown): number | null => (v == null || v === '' ? null : Numbe
 const BOARD = `id, code, amount, state, created_at, delivery_address,
   buyers(organization_name),
   order_items(unit, kg, products(name)),
-  order_allocations(id, listing_id, unit, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name),
+  order_allocations(id, listing_id, pickup_stop_id, unit, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name),
     produce_listings(image_paths, captures(recorded_kg, photo_path))),
   delivery_stops(id, kind, label, seq, state, done_at, lat, lng, allocation_id, driver_id,
     delivery_handovers(recorded_kg, temperature_c, note, media_path, media_kind),
@@ -147,7 +147,7 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
         lat: num(s.lat),
         lng: num(s.lng),
         allocationId: s.allocation_id ?? null,
-        unit: (r.order_allocations ?? []).find((a: any) => a.id === s.allocation_id)?.unit ?? 'kg',
+        unit: (r.order_allocations ?? []).find((a: any) => a.pickup_stop_id === s.id || a.id === s.allocation_id)?.unit ?? 'kg',
         takenKg: num(h?.recorded_kg),
         temperatureC: num(h?.temperature_c),
         mediaUrl: await signed('deliveries', h?.media_path),
@@ -162,7 +162,8 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
     const allocations: BoardAllocation[] = await Promise.all((r.order_allocations ?? []).map(async (a: any) => {
       const listing = one(a.produce_listings);
       const capture = one(listing?.captures);
-      const stop = byAlloc.get(a.id);
+      // A pickup line can cover several allocations; older stops point at one allocation.
+      const stop = stops.find((x) => x.id === a.pickup_stop_id) ?? byAlloc.get(a.id);
       const photos = ((listing?.image_paths ?? []) as string[]).map(publicProduce);
       return {
         id: a.id,
@@ -226,7 +227,7 @@ const readingOf = (h: any, unit = 'kg'): string | null => {
 
 export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
   const drivers = supabase.from('drivers').select('id, plate_number, vehicle_type, profiles(display_name, phone), driver_locations(lat, lng, updated_at)');
-  const withReading = 'id, driver_id, kind, label, seq, state, orders(code), order_allocations(unit), delivery_handovers(recorded_kg, temperature_c)';
+  const withReading = 'id, driver_id, kind, label, seq, state, orders(code), order_allocations!order_allocations_pickup_stop_id_fkey(unit), delivery_handovers(recorded_kg, temperature_c)';
   type StopQuery = { data: any[] | null; error: { message: string } | null };
   let stops = await supabase.from('delivery_stops').select(withReading).not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
   if (stops.error && /delivery_handovers|relationship|schema cache/i.test(stops.error.message)) {

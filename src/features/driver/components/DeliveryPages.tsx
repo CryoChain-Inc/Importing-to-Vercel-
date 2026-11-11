@@ -27,6 +27,36 @@ export function nextStop(order: DeliveryOrder): { kind: 'pickup'; pickup: Pickup
   return order.dropoff?.state === 'pending' ? { kind: 'dropoff' } : null;
 }
 
+const etaText = (iso: string | null) => (iso ? `around ${new Date(iso).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}` : '');
+
+/** Every stop still to make on this trip, across all its orders, in driving order. Lines at one farm share a number. */
+export function RouteList({ orders, onPickup, onDropoff }: { orders: DeliveryOrder[]; onPickup: (stopId: string, orderId: string) => void; onDropoff: (orderId: string) => void }) {
+  const s = useThemedStyles(styles);
+  const stops = orders.flatMap((o) => [
+    ...o.pickups.filter((p) => p.state === 'pending').map((p) => ({ seq: p.seq, place: p.farmerId ?? p.stopId, order: o, pickup: p as PickupStop | null })),
+    ...(o.dropoff?.state === 'pending' ? [{ seq: o.dropoff.seq, place: o.id, order: o, pickup: null }] : []),
+  ]).sort((a, b) => (a.seq ?? 999) - (b.seq ?? 999));
+  // Stop number per place: consecutive lines at the same farm are one visit.
+  const visits = stops.reduce<number[]>((acc, x, i) => [...acc, i > 0 && stops[i - 1].place === x.place ? acc[i - 1] : (acc[i - 1] ?? 0) + 1], []);
+  return (
+    <View style={s.list}>
+      {stops.map((x, i) => {
+        const p = x.pickup;
+        return (
+          <RowCard
+            key={p?.stopId ?? x.order.id}
+            lead={<StepDot n={visits[i]} now={i === 0} />}
+            title={p ? `${p.farmerName} · ${p.product} ${kgText(p.expectedKg, p.expectedUnit)}` : `Deliver to ${x.order.buyerName}`}
+            sub={[x.order.code, p ? p.place : x.order.address, etaText(p ? p.eta : x.order.dropoff?.eta ?? null)].filter(Boolean).join(' · ')}
+            right={<Badge label={p ? 'Collect' : 'Deliver'} tone={p ? 'info' : 'success'} />}
+            onPress={() => (p ? onPickup(p.stopId, x.order.id) : onDropoff(x.order.id))}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
 export function DeliveryList({ orders, past, onOpen }: { orders: DeliveryOrder[]; past: boolean; onOpen: (id: string) => void }) {
   const s = useThemedStyles(styles);
   const rows = orders.filter((o) => (past ? !o.ongoing : o.ongoing));
