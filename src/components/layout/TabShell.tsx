@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useRef } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import type { Refresh } from '../../services/liveReload';
 import { type PressState, focusRing, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Brand } from '../common/Brand';
 import { Icon, type IconName } from '../common/Icon';
@@ -20,10 +21,12 @@ export interface TabDef<K extends string> {
 }
 
 /** Bottom tab bar on phones, side rail on wide screens. Tab state lives in the caller, not a route. */
-export function TabShell<K extends string>({ tabs, tab, onSelect, children }: {
+export function TabShell<K extends string>({ tabs, tab, onSelect, refresh, children }: {
   tabs: TabDef<K>[];
   tab: K;
   onSelect: (k: K) => void;
+  /** Enables pull to refresh on phones. */
+  refresh?: Refresh;
   children: React.ReactNode;
 }) {
   const wide = useIsWide();
@@ -70,7 +73,7 @@ export function TabShell<K extends string>({ tabs, tab, onSelect, children }: {
           </View>
         </View>
       ) : null}
-      <ScrollView ref={scrollRef} style={s.main} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={s.main} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" refreshControl={refresh ? <RefreshControl refreshing={refresh.refreshing} onRefresh={refresh.onRefresh} /> : undefined}>
         {wide ? null : <View style={s.phoneTop}><Brand /><ThemeToggle /></View>}
         <View ref={contentRef} style={s.content}><ScrollToContext.Provider value={scrollTo}>{children}</ScrollToContext.Provider></View>
       </ScrollView>

@@ -9,6 +9,7 @@ import { authService } from '../../../services/auth.service';
 import { flushOutbox, queuedCount } from '../../../services/listingOutbox';
 import { detailsDone, fetchFarmer, fetchListings, fetchSales, hasWallet, type Farmer, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { EarningsPanel } from '../components/EarningsPanel';
 import { AccountFooter } from '../../auth/components/AccountFooter';
@@ -19,6 +20,9 @@ import { PriceBoard } from '../components/PriceBoard';
 import { ProduceListings } from '../components/ProduceListings';
 
 export type Tab = 'listings' | 'messages' | 'payments' | 'profile';
+
+/** Tables whose changes should refresh the farmer's screens. */
+export const LIVE_TABLES = ['produce_listings', 'order_allocations', 'notifications'] as const;
 
 export const TABS: { key: Tab; label: string; icon: IconName }[] = [
   { key: 'listings', label: 'Listings', icon: 'package' },
@@ -81,6 +85,8 @@ export function FarmerHome({ account, tab: initialTab }: { account: Account; tab
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [load]);
 
+  const live = useLiveReload(refresh, LIVE_TABLES);
+
   const signOut = () => authService.signOut().finally(() => reset({ name: 'landing' }));
   const walletReady = hasWallet(farmer);
   const addressReady = detailsDone(farmer);
@@ -96,7 +102,7 @@ export function FarmerHome({ account, tab: initialTab }: { account: Account; tab
   };
 
   return (
-    <TabShell tabs={TABS} tab={tab} onSelect={select}>
+    <TabShell tabs={TABS} tab={tab} onSelect={select} refresh={live}>
       <View style={s.header}>
         <View style={s.headerText}>
           <Text style={s.hello}>{TABS.find((t) => t.key === tab)?.label}</Text>
