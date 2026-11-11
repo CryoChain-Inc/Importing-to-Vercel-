@@ -8,6 +8,7 @@ import { enqueueListing } from '../../../services/listingOutbox';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { matchesSearch } from '../../../utils/search';
+import { QUICK_ADD } from '../../../utils/units';
 import { Sheet } from '../../ops/components/Sheet';
 import { useProductOptions } from '../useProductOptions';
 import { PhotoPicker } from './PhotoPicker';
@@ -75,7 +76,7 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
 
   const canNext = [chosen.length > 1, validKg && !blockedOnPrice && options.length > 0, photosShort === 0][step] ?? false;
   const shownProducts = options.filter((o) => matchesSearch(q, o.name, o.aliases));
-  const quick = unit === 'kg' ? [50, 100, 500] : [5, 10, 50];
+  const quick = QUICK_ADD[unit] ?? QUICK_ADD.piece;
   const bump = (n: number) => setWeight(String((validKg ? weightKg : 0) + n));
 
   if (!open) {
@@ -129,11 +130,11 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
         <>
           <Text style={s.q}>How much {chosen} do you have ready?</Text>
           {option ? <Text style={s.meta}>Sold by the {option.unit}. You are paid about {ghs(option.price)} per {option.unit}.</Text> : null}
-          <Input label={`Quantity (${unit || 'units'})`} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="800" />
+          <Input label={`Quantity (${unit || 'units'})`} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder={unit === 'kg' ? '800' : '100'} />
           <View style={s.quick}>
             {quick.map((n) => (
               <Pressable key={n} accessibilityRole="button" accessibilityLabel={`Add ${n} ${unit}`} onPress={() => bump(n)} style={s.add}>
-                <Text style={s.addText}>+{n} {unit}</Text>
+                <Text style={s.addText}>+{n}</Text>
               </Pressable>
             ))}
           </View>
