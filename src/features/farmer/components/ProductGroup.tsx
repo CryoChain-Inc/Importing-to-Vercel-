@@ -29,7 +29,7 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
   const money = sum((l) => (l.earned > 0 ? l.earned : l.estNet ?? 0));
   const photo = g.listings.find((l) => l.imagePaths[0])?.imagePaths[0];
   const units = [...new Set(g.listings.map((l) => l.unit))].sort();
-  const label = `${g.product}, ${qty((l) => l.remainingKg)} left of ${qty((l) => l.weightKg)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
+  const label = `${g.product}, ${qty((l) => l.remainingKg)} available of ${qty((l) => l.weightKg)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onOpen}>
       <Card style={s.card}>
@@ -39,15 +39,16 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
           </View>
           <View style={s.main}>
             <Text style={s.product} numberOfLines={1}>{g.product}</Text>
-            <Text style={s.meta} numberOfLines={1}>{g.category ? `${g.category} · ` : ''}{g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'}</Text>
+            <Text style={s.meta} numberOfLines={1}>{g.category ? `${g.category} · ` : ''}{g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'} · {qty((l) => l.weightKg)} listed</Text>
             <View style={s.grades}>{units.map((x) => <Badge key={x} label={x} tone="success" />)}</View>
           </View>
           <Icon name="chevronRight" size={22} color={colors.inkMuted} />
         </View>
         <View style={s.bar}><View style={[s.fill, { width: `${Math.min(100, sold * 100)}%` }]} /></View>
         <View style={s.legend}>
-          <Stat label="Left" value={qty((l) => l.remainingKg)} s={s} strong />
-          <Stat label="Sold" value={qty((l) => l.soldKg)} s={s} />
+          <Stat label="Available" value={qty((l) => l.remainingKg)} s={s} strong />
+          <Stat label="Reserved" value={qty((l) => l.reservedKg)} s={s} />
+          <Stat label="Collected" value={qty((l) => l.collectedKg)} s={s} />
           <Stat label={sold > 0 ? 'Earned' : 'Expected'} value={money > 0 ? `${sold > 0 ? '' : '~'}${ghs(money)}` : '—'} s={s} />
         </View>
       </Card>
