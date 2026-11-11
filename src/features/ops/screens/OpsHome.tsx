@@ -19,6 +19,7 @@ import { FarmersPanel } from '../components/FarmersPanel';
 import { PaymentsPanel } from '../components/PaymentsPanel';
 import { PayoutsPanel } from '../components/PayoutsPanel';
 import { PricesPanel } from '../components/PricesPanel';
+import { RefundsPanel } from '../components/RefundsPanel';
 import { DecisionsPanel } from '../components/DecisionsPanel';
 import { FleetPanel } from '../components/FleetPanel';
 import { OrdersBoard } from '../components/OrdersBoard';
@@ -39,6 +40,7 @@ const TITLES: Record<string, [string, string]> = {
   routes: ['Routes', 'Where each driver is and the stops planned for them.'],
   decisions: ['Decision register', 'Exceptions the system could not settle by itself.'],
   payments: ['Payments', 'Money received from buyers.'],
+  refunds: ['Buyer refunds', 'Money owed back to buyers for produce that could not be supplied. Nothing is sent until you approve it.'],
   payouts: ['Farmer payouts', 'Delivered orders to pay, payout runs and what has been sent.'],
   trucks: ['Cold trucks', 'Hour packages, bookings, and the driver you allot to each trip.'],
   fleet: ['Fleet', 'Your trucks, how much each carries and which driver has it.'],
@@ -48,7 +50,7 @@ const TITLES: Record<string, [string, string]> = {
 };
 
 const TABS = Object.keys(TITLES);
-const LIVE_TABLES = ['orders', 'payments', 'order_allocations', 'delivery_stops', 'ops_decisions', 'produce_listings', 'truck_bookings'] as const;
+const LIVE_TABLES = ['orders', 'payments', 'order_allocations', 'delivery_stops', 'ops_decisions', 'produce_listings', 'truck_bookings', 'refunds'] as const;
 
 export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
@@ -122,6 +124,7 @@ export function OpsHome({ account }: { account: Account }) {
     ] },
     { title: 'Money', items: [
       { key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments },
+      { key: 'refunds', label: 'Buyer refunds', icon: 'arrowUpRight' },
       { key: 'payouts', label: 'Farmer payouts', icon: 'arrowUpRight', badge: n.payouts },
     ] },
     { title: 'Logistics', items: [
@@ -158,6 +161,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
           {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
+          {tab === 'refunds' ? <RefundsPanel rev={rev} /> : null}
           {tab === 'payouts' ? <PayoutsPanel payables={data.payables} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
           {tab === 'fleet' ? <FleetPanel team={data.team} rev={rev} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}

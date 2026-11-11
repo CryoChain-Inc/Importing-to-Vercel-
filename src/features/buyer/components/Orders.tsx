@@ -193,6 +193,12 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
           <Text style={s.meta}>Payment</Text>
           <Text style={s.v}>{o.state === 'paid' ? (o.paidAt ? `Paid ${day(o.paidAt)}` : 'Paid') : o.state === 'cancelled' ? 'Not charged' : 'Not paid yet'}</Text>
         </View>
+        {o.refunds.map((r, i) => (
+          <View key={i} style={s.row}>
+            <Text style={s.meta}>Refund for what we could not supply</Text>
+            <Text style={s.v}>{ghs(r.amount)} · {r.refunded ? 'Refunded' : 'Being processed'}</Text>
+          </View>
+        ))}
       </Card>
 
       {o.deliveryAddress ? (

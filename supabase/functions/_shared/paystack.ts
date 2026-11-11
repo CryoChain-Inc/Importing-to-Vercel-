@@ -56,6 +56,25 @@ export function localMsisdn(number: unknown) {
   return d.startsWith('233') ? `0${d.slice(3)}` : d.startsWith('0') ? d : `0${d}`;
 }
 
+/**
+ * Applies a refund.* webhook to the refund we sent for that payment. The event carries the original transaction's
+ * reference, which leads to the one refund in flight for its order.
+ */
+export async function applyRefundEvent(event: string, data: { transaction_reference?: string; refund_reference?: string; status?: string }) {
+  const status = event === 'refund.processed' ? 'refunded' : event === 'refund.failed' || event === 'refund.needs-attention' ? 'failed' : null;
+  if (!status || !data.transaction_reference) return;
+  const db = admin();
+  const { data: pay } = await db.from('payments').select('id').eq('reference', data.transaction_reference).maybeSingle();
+  if (!pay) return;
+  const { data: r } = await db.from('refunds').select('id').eq('payment_id', pay.id).in('status', ['sending', 'sent']).maybeSingle();
+  if (!r) return;
+  const { error } = await db.rpc('apply_refund_result', {
+    p_id: r.id, p_status: status, p_provider_ref: data.refund_reference ?? null,
+    p_error: status === 'failed' ? `Paystack reported ${data.status ?? event}.` : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Applies a transfer.success / transfer.failed / transfer.reversed webhook to our transfer row (matched by reference). */
 export async function applyTransferEvent(event: string, data: { reference: string; transfer_code?: string; reason?: string }) {
   const status = event === 'transfer.success' ? 'succeeded' : 'failed';
