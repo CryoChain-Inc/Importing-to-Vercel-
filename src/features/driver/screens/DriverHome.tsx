@@ -17,6 +17,7 @@ import { DeliveryList, DeliveryOrderPage, DropoffPage, nextStop, PickupPage, Rou
 import { NextCard, SectionLabel } from '../components/bits';
 import { truckStatus, TruckDetail, TruckList, TruckMessages } from '../components/TruckPages';
 import { useDriverLocation } from '../useDriverLocation';
+import { startTripTracking, stopTripTracking, type TrackingResult } from '../backgroundLocation';
 
 const PING_MS = 30000;
 const LIVE_TABLES = ['delivery_stops', 'truck_bookings'] as const;
@@ -93,6 +94,17 @@ export function DriverHome({ account }: { account: Account }) {
     return () => { live = false; clearInterval(timer); };
   }, [load]);
 
+  // Background GPS runs only while there is a delivery on the road.
+  const [tracking, setTracking] = useState<TrackingResult | null>(null);
+  const onTrip = (book?.orders ?? []).some((o) => o.ongoing);
+  useEffect(() => {
+    if (book == null) return;
+    let live = true;
+    if (onTrip) startTripTracking().then((r) => { if (live) setTracking(r); }, () => { if (live) setTracking('foreground_only'); });
+    else stopTripTracking().then(() => { if (live) setTracking(null); });
+    return () => { live = false; };
+  }, [onTrip, book]);
+
   const orders = book?.orders ?? [];
   const allTrips = trips ?? [];
   const openTrips = allTrips.filter((t) => !t.completedAt);
@@ -121,6 +133,9 @@ export function DriverHome({ account }: { account: Account }) {
         <Text style={s.sub}>{sub}</Text>
       </View>
       {locationError && !params.view ? <Banner text={locationError} /> : null}
+      {tracking === 'foreground_only' && !params.view ? (
+        <Banner tone="info" text="Allow location “all the time” in your phone settings so buyers can follow the truck while your screen is off. Until then, keep CryoChain open while you drive." />
+      ) : null}
       {error ? (
         <>
           <Banner text={error} />
@@ -137,7 +152,7 @@ export function DriverHome({ account }: { account: Account }) {
           onDelivery={() => go('delivery')}
           onPickup={(stopId) => currentOrder && go('delivery', { view: 'pickup', id: stopId, order: currentOrder.id })}
           onDropoff={() => currentOrder && go('delivery', { view: 'dropoff', id: currentOrder.id })}
-          onSignOut={() => authService.signOut().finally(() => reset({ name: 'landing' }))}
+          onSignOut={() => stopTripTracking().finally(() => authService.signOut().finally(() => reset({ name: 'landing' })))}
         />
       ) : null}
 

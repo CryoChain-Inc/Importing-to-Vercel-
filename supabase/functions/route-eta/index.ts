@@ -1,4 +1,5 @@
-// Replaces the calling driver's estimated arrival times with Google's traffic-aware drive times.
+// Replaces the calling driver's estimated arrival times with Google's traffic-aware drive times, and saves the
+// road line of each leg for the buyer and ops maps.
 // The driver's app calls this after it reports a location. The database already holds a rough estimate for every
 // stop, so any failure here simply leaves that estimate in place.
 import { admin, asCaller, cors, json } from '../_shared/paystack.ts';
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
   const last = stops[stops.length - 1];
   const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
     method: 'POST',
-    headers: { 'X-Goog-Api-Key': key, 'Content-Type': 'application/json', 'X-Goog-FieldMask': 'routes.legs.duration' },
+    headers: { 'X-Goog-Api-Key': key, 'Content-Type': 'application/json', 'X-Goog-FieldMask': 'routes.legs.duration,routes.legs.polyline.encodedPolyline' },
     body: JSON.stringify({
       origin: point(at.lat, at.lng),
       destination: point(last.lat, last.lng),
@@ -47,7 +48,12 @@ Deno.serve(async (req) => {
   const legs = data.routes?.[0]?.legs;
   if (!res.ok || !Array.isArray(legs) || legs.length !== stops.length) return json({ updated: 0, reason: 'No route from Google.' });
 
-  const { error } = await db.rpc('set_route_etas', { p_driver: driver, p_seconds: legs.map((l: { duration?: string }) => seconds(l.duration)) });
+  const { error } = await db.rpc('set_route_etas', {
+    p_driver: driver,
+    p_seconds: legs.map((l: { duration?: string }) => seconds(l.duration)),
+    // Road line of each leg, so maps can draw the route without asking Google again.
+    p_polylines: legs.map((l: { polyline?: { encodedPolyline?: string } }) => l.polyline?.encodedPolyline ?? ''),
+  });
   if (error) return json({ updated: 0, reason: 'Could not save the arrival times.' });
   return json({ updated: legs.length });
 });

@@ -9,7 +9,7 @@ import { roadRoute } from './route';
 const ACCRA = { lat: 5.6037, lng: -0.187 };
 const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY;
 
-function loadScript(id: string, src: string): Promise<void> {
+export function loadScript(id: string, src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const found = document.getElementById(id) as HTMLScriptElement | null;
     if (found?.dataset.ready === '1') return resolve();
@@ -33,8 +33,8 @@ function loadScript(id: string, src: string): Promise<void> {
 
 const ROUTE = '#2f6fe0';
 /** CSS centimetres: 1cm = 96px / 2.54. The truck is 2cm long and 1cm tall. */
-const TRUCK_W = 2 * (96 / 2.54);
-const TRUCK_H = 1 * (96 / 2.54);
+export const TRUCK_W = 2 * (96 / 2.54);
+export const TRUCK_H = 1 * (96 / 2.54);
 const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20">
   <rect x="1" y="3" width="22" height="11" rx="1.2" fill="#f7fbff" stroke="#2a6fdb" stroke-width="1.2"/>
   <path d="M12 6.2v4.6M9.8 8.5h4.4M10.4 6.8l3.2 3.4M13.6 6.8l-3.2 3.4" stroke="#2a6fdb" stroke-width="0.8" fill="none" stroke-linecap="round"/>
@@ -45,7 +45,7 @@ const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20">
   <circle cx="29" cy="15.2" r="2.1" fill="#1b2430"/>
   <circle cx="29" cy="15.2" r="0.8" fill="#d5dde6"/>
 </svg>`;
-const TRUCK_URL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(TRUCK_SVG)}`;
+export const TRUCK_URL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(TRUCK_SVG)}`;
 
 function googleDrivingPath(google: any, from: Place, to: Place): Promise<{ lat: number; lng: number }[]> {
   return new Promise((resolve) => {
