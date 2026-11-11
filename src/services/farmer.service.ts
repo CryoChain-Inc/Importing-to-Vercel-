@@ -1,4 +1,5 @@
 import { normalizePhone } from '../utils/format';
+import { EXT, readBytes, type PickedImage } from './catalogueImage';
 import { cached } from './offlineCache';
 import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
@@ -43,6 +44,10 @@ export interface ProduceListing {
   estFee: number | null;
   /** Paid for by buyers and allocated to this listing (offered, accepted or collected). */
   soldKg: number;
+  /** Allocated to a paid order and waiting for the driver. */
+  reservedKg: number;
+  /** Picked up by the driver. */
+  collectedKg: number;
   deliveredKg: number;
   /** Declined or lapsed offers: no longer available from this listing. */
   withdrawnKg: number;
@@ -151,7 +156,7 @@ async function loadListings(): Promise<ProduceListing[]> {
       .from('produce_listings')
       .select('id, product, weight_kg, created_at, unit, image_paths, est_net, est_fee')
       .order('created_at', { ascending: false }),
-    supabase.from('listing_stock').select('listing_id, sold_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out'),
+    supabase.from('listing_stock').select('listing_id, sold_kg, reserved_kg, collected_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out'),
   ]);
   if (listed.error || stock.error) throw new Error('Could not load your listings.');
   const byId = new Map((stock.data ?? []).map((r) => [r.listing_id as string, r]));
@@ -167,6 +172,8 @@ async function loadListings(): Promise<ProduceListing[]> {
       estNet: row.est_net == null ? null : Number(row.est_net),
       estFee: row.est_fee == null ? null : Number(row.est_fee),
       soldKg: Number(st?.sold_kg ?? 0),
+      reservedKg: Number(st?.reserved_kg ?? 0),
+      collectedKg: Number(st?.collected_kg ?? 0),
       deliveredKg: Number(st?.delivered_kg ?? 0),
       withdrawnKg: Number(st?.withdrawn_kg ?? 0),
       remainingKg: Number(st?.remaining_kg ?? row.weight_kg),
@@ -264,9 +271,48 @@ export async function updateListing(id: string, product: string, weightKg: numbe
   const msg = error.message ?? '';
   if (msg.includes('already in a lot')) throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
   if (msg.includes('been delivered')) throw new Error('This produce has been delivered, so it can no longer be edited.');
+  if (msg.includes('been collected')) throw new Error('This produce has been collected, so it can no longer be edited.');
+  const reserved = msg.match(/below the (\S+ \S+) already reserved/);
+  if (reserved) throw new Error(`${reserved[1]} is already reserved for orders, so the quantity cannot go below that.`);
   if (msg.includes('no published price')) throw new Error(`No published price for ${product} (${unit}) yet.`);
   if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
   throw new Error('Could not save your changes.');
+}
+
+/**
+ * Saves a listing's photos: `keep` are paths already stored, `added` are new picks. Returns nothing; the server decides
+ * what may be removed (nothing once produce is reserved).
+ */
+export async function updateListingPhotos(id: string, keep: string[], added: PickedImage[]): Promise<void> {
+  const uid = await userId();
+  const uploaded: string[] = [];
+  const bucket = supabase.storage.from(PRODUCE_BUCKET);
+  try {
+    for (const [i, img] of added.entries()) {
+      const type = img.mimeType ?? 'image/jpeg';
+      if (!EXT[type]) throw new Error('Use a JPEG, PNG or WebP image.');
+      const body = await readBytes(img.uri);
+      if (body.byteLength === 0) throw new Error('A photo could not be read. Pick it again.');
+      const path = `${uid}/${id}-${Date.now()}-${i}.${EXT[type]}`;
+      if ((await bucket.upload(path, body, { contentType: type })).error) throw new Error('Could not upload a photo (max 2 MB each).');
+      uploaded.push(path);
+    }
+    const { data, error } = await supabase.rpc('update_own_listing_photos', { p_id: id, p_paths: [...keep, ...uploaded] });
+    if (error) {
+      const msg = error.message ?? '';
+      if (msg.includes('cannot be removed')) throw new Error('This produce is reserved for an order, so its photos can be added to but not removed.');
+      if (msg.includes('been delivered') || msg.includes('been collected')) throw new Error('This produce has been collected, so its photos can no longer change.');
+      if (msg.includes('3 to 6')) throw new Error(`Keep ${MIN_PHOTOS} to ${MAX_PHOTOS} photos.`);
+      throw new Error('Could not save the photos.');
+    }
+    const dropped = (data ?? []) as string[];
+    // The listing is saved. A leftover file should not fail the edit.
+    if (dropped.length) await bucket.remove(dropped).catch(() => undefined);
+  } catch (e) {
+    // Nothing points at these files, so they would only take up space.
+    if (uploaded.length) await bucket.remove(uploaded).catch(() => undefined);
+    throw e;
+  }
 }
 
 function removalError(error: { message?: string; code?: string }): Error {

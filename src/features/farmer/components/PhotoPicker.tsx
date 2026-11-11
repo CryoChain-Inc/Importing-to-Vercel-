@@ -17,7 +17,7 @@ async function toPicked(a: ImagePicker.ImagePickerAsset): Promise<PickedImage> {
 }
 
 /** Take a photo or choose from the library; preview each photo and remove with ×. The same picture cannot be added twice. */
-export function PhotoPicker({ value, onChange }: { value: PickedImage[]; onChange: (v: PickedImage[]) => void }) {
+export function PhotoPicker({ value, onChange, canRemove }: { value: PickedImage[]; onChange: (v: PickedImage[]) => void; /** Photos this returns false for show no ×. */ canRemove?: (img: PickedImage) => boolean }) {
   const s = useThemedStyles(styles);
   const [duplicate, setDuplicate] = useState(false);
   const room = MAX_PHOTOS - value.length;
@@ -55,9 +55,11 @@ export function PhotoPicker({ value, onChange }: { value: PickedImage[]; onChang
         {value.map((img, i) => (
           <View key={img.uri} style={s.tile}>
             <Image source={{ uri: img.uri }} style={s.thumb} accessibilityLabel={`Photo ${i + 1} preview`} />
-            <Pressable accessibilityRole="button" accessibilityLabel={`Remove photo ${i + 1}`} hitSlop={6} onPress={() => { setDuplicate(false); onChange(value.filter((_, j) => j !== i)); }} style={s.remove}>
-              <Icon name="close" size={14} color="#ffffff" />
-            </Pressable>
+            {canRemove && !canRemove(img) ? null : (
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove photo ${i + 1}`} hitSlop={6} onPress={() => { setDuplicate(false); onChange(value.filter((_, j) => j !== i)); }} style={s.remove}>
+                <Icon name="close" size={14} color="#ffffff" />
+              </Pressable>
+            )}
           </View>
         ))}
       </View>

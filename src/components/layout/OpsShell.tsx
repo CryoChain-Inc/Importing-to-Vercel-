@@ -1,5 +1,6 @@
 import React from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import type { Refresh } from '../../services/liveReload';
 import { type PressState, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 import { Brand } from '../common/Brand';
 import { Button } from '../common/Button';
@@ -11,12 +12,14 @@ export interface NavItem { key: string; label: string; icon: IconName; badge?: n
 export interface NavGroup { title: string; items: NavItem[] }
 
 /** Grouped sidebar on wide screens; on phones a header plus a swipeable strip of sections (eleven won't fit a tab bar). */
-export function OpsShell({ groups, active, onSelect, name, onSignOut, children }: {
+export function OpsShell({ groups, active, onSelect, name, onSignOut, refresh, children }: {
   groups: NavGroup[];
   active: string;
   onSelect: (k: string) => void;
   name: string;
   onSignOut: () => void;
+  /** Enables pull to refresh on phones. */
+  refresh?: Refresh;
   children: React.ReactNode;
 }) {
   const wide = useIsWide();
@@ -77,7 +80,7 @@ export function OpsShell({ groups, active, onSelect, name, onSignOut, children }
           </ScrollView>
         </View>
       )}
-      <ScrollView style={s.main} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView style={s.main} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" refreshControl={refresh ? <RefreshControl refreshing={refresh.refreshing} onRefresh={refresh.onRefresh} /> : undefined}>
         <View style={s.content}>{children}</View>
         {wide ? null : <Button label="Sign out" icon="logOut" variant="ghost" size="sm" onPress={onSignOut} />}
       </ScrollView>

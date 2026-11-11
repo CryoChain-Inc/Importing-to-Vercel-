@@ -10,6 +10,7 @@ import { fetchDeliveries, type DeliveryBook, type DeliveryOrder } from '../../..
 import { pingLocation } from '../../../services/driver.route.service';
 import { fetchDriverTrips, type TruckBooking } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { Empty } from '../../ops/components/OpsBits';
 import { DeliveryList, DeliveryOrderPage, DropoffPage, nextStop, PickupPage } from '../components/DeliveryPages';
@@ -18,6 +19,7 @@ import { truckStatus, TruckDetail, TruckList, TruckMessages } from '../component
 import { useDriverLocation } from '../useDriverLocation';
 
 const PING_MS = 30000;
+const LIVE_TABLES = ['delivery_stops', 'truck_bookings'] as const;
 type Tab = 'home' | 'truck' | 'delivery';
 const TABS: Tab[] = ['home', 'truck', 'delivery'];
 
@@ -63,6 +65,7 @@ export function DriverHome({ account }: { account: Account }) {
 
   useEffect(() => { refreshAccount(); }, [refreshAccount]);
   useEffect(() => { load(); }, [load]);
+  const live = useLiveReload(load, LIVE_TABLES);
 
   useEffect(() => {
     let live = true;
@@ -110,7 +113,7 @@ export function DriverHome({ account }: { account: Account }) {
   const backOrder = () => (order && !order.ongoing ? go('delivery', { view: 'order', id: order.id }) : backDelivery());
 
   return (
-    <TabShell tabs={bar} tab={active} onSelect={select}>
+    <TabShell tabs={bar} tab={active} onSelect={select} refresh={live}>
       <View style={s.header}>
         <Text style={s.title}>{active === 'home' ? `Hello, ${(account.name || 'driver').split(' ')[0]}` : title}</Text>
         <Text style={s.sub}>{sub}</Text>

@@ -8,6 +8,7 @@ import { authService } from '../../../services/auth.service';
 import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { AccountFooter } from '../../auth/components/AccountFooter';
 import { CartProvider, useCart } from '../cart/CartProvider';
@@ -58,6 +59,8 @@ interface Data {
   details: buyer.BuyerDetails;
 }
 
+const LIVE_TABLES = ['orders', 'payments', 'truck_bookings'] as const;
+
 export function BuyerHome({ account, tab }: { account: Account; tab?: string }) {
   return <CartProvider><BuyerShell account={account} firstTab={TABS.find((t) => t.key === tab)?.key} /></CartProvider>;
 }
@@ -88,6 +91,7 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   useEffect(() => {
     load();
   }, [load]);
+  const live = useLiveReload(load, LIVE_TABLES);
 
   // Paystack sends the buyer back with ?reference=...; confirm it (the webhook may be slower) and refresh.
   useEffect(() => {
@@ -119,7 +123,7 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   }
 
   return (
-    <TabShell tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
+    <TabShell refresh={live} tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
       <View style={s.header}>
         {toPay ? <Badge label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`} tone="warning" /> : null}
       </View>

@@ -6,9 +6,10 @@ import { TabShell } from '../../../components/layout';
 import { useNav } from '../../../navigation';
 import { deleteListing, fetchListings, fetchSales, type ProduceListing, type Sale } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { ListingCard } from '../components/ListingCard';
-import { TABS, type Tab } from './FarmerHome';
+import { LIVE_TABLES, TABS, type Tab } from './FarmerHome';
 
 /** Every listing (unit) of one product, opened from its card on the farmer's Listings tab. */
 export function ProduceDetail({ account, product }: { account: Account; product: string }) {
@@ -30,6 +31,7 @@ export function ProduceDetail({ account, product }: { account: Account; product:
     }
   }, [product]);
   useEffect(() => { load(); }, [load]);
+  const live = useLiveReload(load, LIVE_TABLES);
 
   const remove = async (id: string) => {
     try {
@@ -42,7 +44,7 @@ export function ProduceDetail({ account, product }: { account: Account; product:
   };
 
   return (
-    <TabShell tabs={TABS} tab="listings" onSelect={(t: Tab) => (t === 'listings' ? back() : reset({ name: 'home', account, role: 'farmer', tab: t }))}>
+    <TabShell tabs={TABS} tab="listings" refresh={live} onSelect={(t: Tab) => (t === 'listings' ? back() : reset({ name: 'home', account, role: 'farmer', tab: t }))}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back to listings" onPress={back} hitSlop={8} style={s.back}>
         <Icon name="arrowLeft" size={20} color={colors.ink} />
         <Text style={s.backText}>Your listings</Text>

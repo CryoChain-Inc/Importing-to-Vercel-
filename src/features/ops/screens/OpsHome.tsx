@@ -10,6 +10,7 @@ import * as fulfil from '../../../services/ops.fulfilment.service';
 import * as payouts from '../../../services/ops.payouts.service';
 import * as ops from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { BuyersPanel } from '../components/BuyersPanel';
 import { ConfigPanel } from '../components/ConfigPanel';
@@ -47,6 +48,7 @@ const TITLES: Record<string, [string, string]> = {
 };
 
 const TABS = Object.keys(TITLES);
+const LIVE_TABLES = ['orders', 'payments', 'order_allocations', 'delivery_stops', 'ops_decisions', 'produce_listings', 'truck_bookings'] as const;
 
 export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
@@ -100,6 +102,7 @@ export function OpsHome({ account }: { account: Account }) {
   useEffect(() => {
     load();
   }, [load]);
+  const live = useLiveReload(load, LIVE_TABLES);
 
   const n = {
     payments: core?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0,
@@ -133,7 +136,7 @@ export function OpsHome({ account }: { account: Account }) {
   const page = { params, setParams: (p: Record<string, string>, replace = false) => go(tab, p, replace), rev };
 
   return (
-    <OpsShell groups={groups} active={tab} onSelect={(t) => go(t)} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}>
+    <OpsShell refresh={live} groups={groups} active={tab} onSelect={(t) => go(t)} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}>
       <View style={s.header}>
         <Text style={s.title}>{title}</Text>
         <Text style={s.sub}>{sub}</Text>
