@@ -433,3 +433,6 @@ verify_jwt = true
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.route-eta]
+verify_jwt = true

@@ -35,3 +35,8 @@ export async function pingLocation(lat: number, lng: number): Promise<void> {
   const { error } = await supabase.rpc('report_driver_location', { p_lat: lat, p_lng: lng });
   if (error) throw new Error('Could not share your location.');
 }
+
+/** Asks the server to replace this driver's estimated arrival times with Google's. The estimates stay if it fails. */
+export async function refreshEtas(): Promise<void> {
+  await supabase.functions.invoke('route-eta', { body: {} }).catch(() => undefined);
+}

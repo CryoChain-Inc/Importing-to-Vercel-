@@ -7,13 +7,13 @@ import { TabShell } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
 import { fetchDeliveries, type DeliveryBook, type DeliveryOrder } from '../../../services/driver.deliveries.service';
-import { pingLocation } from '../../../services/driver.route.service';
+import { pingLocation, refreshEtas } from '../../../services/driver.route.service';
 import { fetchDriverTrips, type TruckBooking } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { Empty } from '../../ops/components/OpsBits';
-import { DeliveryList, DeliveryOrderPage, DropoffPage, nextStop, PickupPage } from '../components/DeliveryPages';
+import { DeliveryList, DeliveryOrderPage, DropoffPage, nextStop, PickupPage, RouteList } from '../components/DeliveryPages';
 import { NextCard, SectionLabel } from '../components/bits';
 import { truckStatus, TruckDetail, TruckList, TruckMessages } from '../components/TruckPages';
 import { useDriverLocation } from '../useDriverLocation';
@@ -79,6 +79,8 @@ export function DriverHome({ account }: { account: Account }) {
         }
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         await pingLocation(pos.coords.latitude, pos.coords.longitude);
+        // Google's drive times replace the rough estimates; the reload below picks them up.
+        await refreshEtas();
         if (!live) return;
         setLocationError(null);
         await load();
@@ -162,6 +164,9 @@ export function DriverHome({ account }: { account: Account }) {
                 : params.view ? <Missing label="That delivery is not on your route." onBack={backDelivery} />
                   : (
                     <DeliveryHome
+                      route={openOrders}
+                      onStop={(stopId, orderId) => go('delivery', { view: 'pickup', id: stopId, order: orderId })}
+                      onDeliver={(orderId) => go('delivery', { view: 'dropoff', id: orderId })}
                       order={currentOrder}
                       also={openOrders.slice(1)}
                       past={orders.filter((o) => !o.ongoing)}
@@ -247,8 +252,12 @@ function TruckHome({
 }
 
 function DeliveryHome({
-  order, also, past, onPickup, onDropoff, onOpen,
+  route, onStop, onDeliver, order, also, past, onPickup, onDropoff, onOpen,
 }: {
+  /** Every order on the current trip. */
+  route: DeliveryOrder[];
+  onStop: (stopId: string, orderId: string) => void;
+  onDeliver: (orderId: string) => void;
   order: DeliveryOrder | null;
   also: DeliveryOrder[];
   past: DeliveryOrder[];
@@ -257,12 +266,17 @@ function DeliveryHome({
   onOpen: (id: string) => void;
 }) {
   const s = useThemedStyles(styles);
+  const shared = route.length > 1;
   return (
     <View style={s.list}>
-      {order ? <DeliveryOrderPage order={order} onPickup={onPickup} onDropoff={onDropoff} /> : (
+      {shared ? (
+        // Several orders share the truck, so the driver follows the stops, not one order at a time.
+        <><SectionLabel text={`Your route · ${route.length} orders`} /><RouteList orders={route} onPickup={onStop} onDropoff={onDeliver} /></>
+      ) : order ? <DeliveryOrderPage order={order} onPickup={onPickup} onDropoff={onDropoff} /> : (
         <Empty icon="package" title="No delivery right now" hint="Paid orders near you are assigned here while your location is on." />
       )}
-      {also.length > 0 ? <><SectionLabel text="Up next · not started" /><DeliveryList orders={also} past={false} onOpen={onOpen} /></> : null}
+      {shared ? <><SectionLabel text="Orders on this trip" /><DeliveryList orders={route} past={false} onOpen={onOpen} /></>
+        : also.length > 0 ? <><SectionLabel text="Up next · not started" /><DeliveryList orders={also} past={false} onOpen={onOpen} /></> : null}
       {past.length > 0 ? <><SectionLabel text={`Delivered · ${past.length}`} /><DeliveryList orders={past} past onOpen={onOpen} /></> : null}
     </View>
   );
