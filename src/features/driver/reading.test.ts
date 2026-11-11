@@ -17,7 +17,11 @@ describe('parseReading', () => {
 
   it('rejects a pickup without a quantity', () => {
     expect(parseReading({ ...base, kg: '' }).ok).toBe(false);
-    expect(parseReading({ ...base, kg: '0' }).ok).toBe(false);
+    expect(parseReading({ ...base, kg: '-1' }).ok).toBe(false);
+    // The farm had nothing: zero is a real reading.
+    expect(parseReading({ ...base, kg: '0' }).ok).toBe(true);
+    expect(parseReading({ ...base, kg: '13', reservedKg: 12 }).ok).toBe(false);
+    expect(parseReading({ ...base, kg: '12', reservedKg: 12 }).ok).toBe(true);
   });
 
   it('rejects a temperature outside the safe range', () => {

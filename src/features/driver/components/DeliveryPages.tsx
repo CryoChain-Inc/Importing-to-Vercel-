@@ -208,7 +208,7 @@ export function PickupPage({
       />
       <Card tone="tint" style={s.facts}>
         <Fact label="Product" value={pickup.product} />
-        <Fact label="Listed quantity" value={kgText(pickup.expectedKg, pickup.expectedUnit)} />
+        <Fact label="Reserved quantity" value={kgText(pickup.expectedKg, pickup.expectedUnit)} />
       </Card>
       {done ? (
         <SavedReading kg={pickup.recordedKg} unit={pickup.expectedUnit} temp={pickup.temperatureC} note={pickup.note} mediaUrl={pickup.mediaUrl} mediaKind={pickup.mediaKind} onBack={onBack} backLabel="Back to route" />
@@ -218,6 +218,7 @@ export function PickupPage({
           stopId={pickup.stopId}
           range={range}
           unit={pickup.expectedUnit}
+          reservedKg={pickup.expectedKg}
           initial={{ kg: pickup.recordedKg, temp: pickup.temperatureC, note: pickup.note, mediaPath: pickup.mediaPath, mediaKind: pickup.mediaKind, mediaUrl: pickup.mediaUrl }}
           blocked={false}
           completeLabel="Confirm pickup"
@@ -310,11 +311,12 @@ function MediaPreview({ uri, kind }: { uri: string; kind: HandoverMediaKind }) {
 }
 
 function ReadingForm({
-  kind, stopId, unit, range, initial, blocked, blockedText, completeLabel, onComplete, onChange,
+  kind, stopId, unit, reservedKg, range, initial, blocked, blockedText, completeLabel, onComplete, onChange,
 }: {
   kind: 'pickup' | 'dropoff';
   stopId: string;
   unit: string;
+  reservedKg?: number;
   range: { min: number | null; max: number | null };
   initial: { kg: number | null; temp: number | null; note: string; mediaPath: string | null; mediaKind: HandoverMediaKind | null; mediaUrl: string | null };
   blocked: boolean;
@@ -336,7 +338,7 @@ function ReadingForm({
     setPicked(null);
   }, [initial.kg, initial.temp, initial.note, initial.mediaPath]);
 
-  const parsed = parseReading({ kind, kg, temp, note, min: range.min, max: range.max });
+  const parsed = parseReading({ kind, kg, temp, note, min: range.min, max: range.max, reservedKg });
   const hasMedia = Boolean(picked || initial.mediaPath);
   const ready = Boolean(parsed.ok && hasMedia && !blocked);
   const lo = range.min ?? -100;
@@ -358,7 +360,8 @@ function ReadingForm({
       <Text style={s.title}>{kind === 'pickup' ? 'Check the produce' : 'Check the temperature'}</Text>
       <Text style={s.meta}>Allowed temperature is {lo} to {hi} °C. Add a photo or a short video. This stays as you save it once the stop is done.</Text>
       {kind === 'pickup' ? (
-        <Input label={`Quantity collected (${unit})`} value={kg} onChangeText={setKg} keyboardType="decimal-pad" maxLength={8} />
+        <Input label={`Quantity collected (${unit})`} value={kg} onChangeText={setKg} keyboardType="decimal-pad" maxLength={8}
+          hint={reservedKg != null ? `Up to ${reservedKg} ${unit}. Enter 0 if there was nothing. The farmer is paid for what you record, and any gap is sourced from another farm.` : undefined} />
       ) : null}
       <Input label="Temperature (°C)" value={temp} onChangeText={setTemp} keyboardType="numbers-and-punctuation" maxLength={6} hint={`Safe range ${lo} to ${hi} °C`} />
       <Input label="Condition notes" value={note} onChangeText={setNote} maxLength={NOTE_MAX} hint={`${note.length}/${NOTE_MAX}`} />

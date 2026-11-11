@@ -53,7 +53,7 @@ export function ListingCard({ listing: l, sales = [], onRemove, onSaved }: { lis
       <Text style={s.meta}>
         {sales.length === 0 ? 'No orders yet.' : `${sales.length} ${sales.length === 1 ? 'order' : 'orders'} · ${toCollect} to collect · ${sales.length - toCollect} delivered`}
       </Text>
-      {l.withdrawnKg > 0 ? <Text style={s.meta}>{kgText(l.withdrawnKg)} came off this listing after an offer was declined or lapsed.</Text> : null}
+      {l.withdrawnKg > 0 ? <Text style={s.meta}>{kgText(l.withdrawnKg)} came off this listing because it could not be supplied.</Text> : null}
 
       <View style={s.foot}>
         <View style={s.footText}>

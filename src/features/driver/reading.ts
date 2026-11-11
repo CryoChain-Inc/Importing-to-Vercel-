@@ -9,6 +9,8 @@ export interface ReadingInput {
   note: string;
   min: number | null;
   max: number | null;
+  /** Quantity reserved on this pickup line; the driver cannot record more. */
+  reservedKg?: number;
 }
 
 export interface Reading {
@@ -30,6 +32,8 @@ export function parseReading(input: ReadingInput): { ok: true; value: Reading } 
   }
   if (input.kind === 'dropoff') return { ok: true, value: { kg: null, temp, note: note || null } };
   const kg = Number(input.kg);
-  if (!input.kg.trim() || !Number.isFinite(kg) || kg <= 0 || kg > 100000) return { ok: false, error: 'Enter the quantity you collected.' };
+  // Zero is allowed: the farm had nothing to collect.
+  if (!input.kg.trim() || !Number.isFinite(kg) || kg < 0 || kg > 100000) return { ok: false, error: 'Enter the quantity you collected. Enter 0 if there was nothing.' };
+  if (input.reservedKg != null && kg > input.reservedKg) return { ok: false, error: `Only ${input.reservedKg} is reserved here. Enter that or less.` };
   return { ok: true, value: { kg: Math.round(kg * 100) / 100, temp, note: note || null } };
 }
