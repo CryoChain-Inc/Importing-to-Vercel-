@@ -51,11 +51,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CryoChain uses your location to pin your farm or delivery address on the map, and to share the truck position with operations during a collection run."
+          "locationWhenInUsePermission": "CryoChain uses your location to pin your farm or delivery address on the map, and to share the truck position with buyers and operations during deliveries.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ],
-    "scheme": "cryochain",
     "extra": {
       "eas": {
         "projectId": "7d7afd4a-cdc9-4b29-8192-817993ad7b63"

@@ -301,3 +301,29 @@ export function orderStatus(o: Pick<Order, 'state' | 'progress'>): { label: stri
     case 'delivered': return { label: 'Delivered', tone: 'success' };
   }
 }
+
+export interface OrderTracking {
+  /** waiting: no truck yet; on_the_way: on a truck with other stops first; next: the truck is heading here. */
+  state: 'waiting' | 'on_the_way' | 'next' | 'delivered';
+  eta: string | null;
+  truck: { lat: number; lng: number; at: string } | null;
+  destination: { lat: number; lng: number } | null;
+  /** Google encoded road line from the truck to this address; only when this is the truck's next stop. */
+  polyline: string | null;
+  deliveredAt: string | null;
+}
+
+/** Where the truck is for one of the buyer's own orders. Never includes other stops. */
+export async function fetchOrderTracking(orderId: string): Promise<OrderTracking> {
+  const { data, error } = await supabase.rpc('buyer_order_tracking', { p_order: orderId });
+  if (error) throw new Error('Could not load the truck’s position.');
+  const r = (data ?? {}) as any;
+  return {
+    state: r.state ?? 'waiting',
+    eta: r.eta ?? null,
+    truck: r.truck ? { lat: Number(r.truck.lat), lng: Number(r.truck.lng), at: r.truck.at } : null,
+    destination: r.destination ? { lat: Number(r.destination.lat), lng: Number(r.destination.lng) } : null,
+    polyline: r.polyline ?? null,
+    deliveredAt: r.deliveredAt ?? null,
+  };
+}

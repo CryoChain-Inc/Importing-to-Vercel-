@@ -6,6 +6,7 @@ import { cancelOrder, orderStage, orderStatus, type Order, type OrderStage } fro
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
+import { OrderLiveMap } from './OrderLiveMap';
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
 const stamp = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -146,6 +147,8 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
           <Button size="sm" variant="outline" label="Cancel order" loading={busy} onPress={onCancel} />
         </Card>
       ) : null}
+
+      {o.state === 'paid' && !deliveredAt ? <OrderLiveMap orderId={o.id} /> : null}
 
       {stage === 'cancelled' ? (
         <Card style={s.box}>

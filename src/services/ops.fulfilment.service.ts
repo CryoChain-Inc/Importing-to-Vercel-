@@ -212,7 +212,10 @@ export interface DriverRoute {
   seenAt: string | null;
   lat: number | null;
   lng: number | null;
-  stops: { id: string; kind: 'pickup' | 'dropoff'; label: string; seq: number | null; state: 'pending' | 'done'; order: string; reading: string | null }[];
+  stops: { id: string; kind: 'pickup' | 'dropoff'; label: string; seq: number | null; state: 'pending' | 'done'; order: string; reading: string | null;
+    lat: number; lng: number; eta: string | null; legPolyline: string | null }[];
+  /** Positions reported in the last 12 hours, oldest first: the road actually driven. */
+  trail: { lat: number; lng: number }[];
 }
 
 const readingOf = (h: any, unit = 'kg'): string | null => {
@@ -227,12 +230,14 @@ const readingOf = (h: any, unit = 'kg'): string | null => {
 
 export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
   const drivers = supabase.from('drivers').select('id, plate_number, vehicle_type, profiles(display_name, phone), driver_locations(lat, lng, updated_at)');
-  const withReading = 'id, driver_id, kind, label, seq, state, orders(code), order_allocations!order_allocations_pickup_stop_id_fkey(unit), delivery_handovers(recorded_kg, temperature_c)';
+  const withReading = 'id, driver_id, kind, label, seq, state, lat, lng, eta, leg_polyline, orders(code), order_allocations!order_allocations_pickup_stop_id_fkey(unit), delivery_handovers(recorded_kg, temperature_c)';
   type StopQuery = { data: any[] | null; error: { message: string } | null };
   let stops = await supabase.from('delivery_stops').select(withReading).not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
   if (stops.error && /delivery_handovers|relationship|schema cache/i.test(stops.error.message)) {
     stops = await supabase.from('delivery_stops').select('id, driver_id, kind, label, seq, state, orders(code)').not('driver_id', 'is', null).order('seq', { nullsFirst: false }) as unknown as StopQuery;
   }
+  const since = new Date(Date.now() - 12 * 3600 * 1000).toISOString();
+  const trail = await supabase.from('driver_location_trail').select('driver_id, lat, lng').gte('at', since).order('at').limit(5000);
   const d = await drivers;
   fail('Could not load drivers.')(d.error ?? stops.error);
   return (d.data ?? []).map((r: any) => {
@@ -246,7 +251,8 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
       lat: loc ? Number(loc.lat) : null,
       lng: loc ? Number(loc.lng) : null,
       stops: (stops.data ?? []).filter((x: any) => x.driver_id === r.id)
-        .map((x: any) => ({ id: x.id, kind: x.kind, label: x.label, seq: x.seq, state: x.state, order: x.orders?.code ?? '', reading: readingOf(x.delivery_handovers, (Array.isArray(x.order_allocations) ? x.order_allocations[0] : x.order_allocations)?.unit) })),
+        .map((x: any) => ({ id: x.id, kind: x.kind, label: x.label, seq: x.seq, state: x.state, lat: Number(x.lat), lng: Number(x.lng), eta: x.eta ?? null, legPolyline: x.leg_polyline ?? null, order: x.orders?.code ?? '', reading: readingOf(x.delivery_handovers, (Array.isArray(x.order_allocations) ? x.order_allocations[0] : x.order_allocations)?.unit) })),
+      trail: (trail.data ?? []).filter((t: any) => t.driver_id === r.id).map((t: any) => ({ lat: Number(t.lat), lng: Number(t.lng) })),
     };
   });
 }
