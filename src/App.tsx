@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { Linking, Platform } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ import { HomeScreen } from './features/home/HomeScreen';
 import { NavigatorProvider, useNav } from './navigation';
 import { toAccount } from './data/demoAuth';
 import { authService } from './services/auth.service';
-import { isSupabaseConfigured } from './services/supabase';
+import { isSupabaseConfigured, supabase } from './services/supabase';
 import { onPaymentReturn } from './services/checkout';
 import { paymentReturnReference } from './utils/paymentReturn';
 import { verifyLinkStatus } from './utils/verifyLink';
@@ -70,7 +70,14 @@ function Shell() {
       if (paid) return reset({ name: 'paymentResult', reference: paid });
       const status = verifyLinkStatus(link);
       if (status) return reset({ name: 'emailVerified', ok: status === 'ok' });
-      const p = await authService.getProfile();
+      // A flaky network on launch must not look like a sign-out: the saved session is still valid, so retry before giving up.
+      let p = null;
+      for (let i = 0; ; i++) {
+        try { p = await authService.getProfile(); break; } catch (e) {
+          if (i === 3) throw e;
+          await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        }
+      }
       if (p && p.role !== 'pending') reset(afterSignIn(toAccount(p)));
     };
     if (!isSupabaseConfigured) return;
@@ -84,6 +91,15 @@ function Shell() {
     const off = onPaymentReturn((reference) => reset({ name: 'paymentResult', reference }));
     return () => { sub.remove(); off(); };
   }, [reset, startedOnVerified]);
+
+  // supabase-js has no foreground timer on native: refresh only while the app is active.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const sub = AppState.addEventListener('change', (st) => (st === 'active' ? supabase.auth.startAutoRefresh() : supabase.auth.stopAutoRefresh()));
+    supabase.auth.startAutoRefresh();
+    const { data } = supabase.auth.onAuthStateChange((event) => { if (__DEV__) console.log('auth', event); });
+    return () => { sub.remove(); data.subscription.unsubscribe(); };
+  }, []);
 
   // Greets each account once per device, right after its first sign-in or sign-up.
   const account = route.name === 'home' || route.name === 'workspace' ? route.account : null;
