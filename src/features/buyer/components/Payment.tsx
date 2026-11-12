@@ -5,6 +5,8 @@ import { Banner } from '../../../components/feedback';
 import { cancelOrder, fetchOrders, openPayment, startPayment, verifyPayment, type Order } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
+import { posthog } from '../../../config/posthog';
+import { posthogLog } from '../../../config/posthogLogs';
 
 const POLL_MS = 3000;
 
@@ -23,16 +25,19 @@ export function Payment({ orderId, onPaid, onLeave }: { orderId: string; onPaid:
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const ref = useRef<{ url: string; reference: string } | null>(null);
   const started = useRef(false);
+  const paymentCompleted = useRef(false);
 
   const begin = useCallback(async () => {
     setPhase('starting');
     setError(null);
     try {
       ref.current = await startPayment(orderId);
+      posthog?.capture('payment_started');
       setCheckoutUrl(ref.current.url);
       setPhase('waiting');
       await openPayment(ref.current.url);
     } catch (e) {
+      posthogLog.warn('payment start failed', { event: 'payment_start_failed' });
       setError(e instanceof Error ? e.message : 'Could not start the payment. Please try again.');
       setPhase('error');
     }
@@ -53,7 +58,15 @@ export function Payment({ orderId, onPaid, onLeave }: { orderId: string; onPaid:
       const mine = (await fetchOrders().catch(() => [])).find((o) => o.id === orderId);
       if (!live || !mine) return;
       setOrder(mine);
-      if (mine.state === 'paid') { setPhase('paid'); setTimeout(onPaid, 1200); }
+      if (mine.state === 'paid') {
+        if (!paymentCompleted.current) {
+          paymentCompleted.current = true;
+          posthog?.capture('payment_completed', { item_count: mine.items.length });
+          posthogLog.info('payment completed', { event: 'payment_completed', item_count: mine.items.length });
+        }
+        setPhase('paid');
+        setTimeout(onPaid, 1200);
+      }
       else if (mine.state === 'cancelled') onLeave();
     };
     tick();
@@ -62,7 +75,11 @@ export function Payment({ orderId, onPaid, onLeave }: { orderId: string; onPaid:
   }, [phase, orderId, onPaid, onLeave]);
 
   const cancel = async () => {
-    try { await cancelOrder(orderId); onLeave(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not cancel the order.'); }
+    try {
+      await cancelOrder(orderId);
+      posthog?.capture('order_cancelled');
+      onLeave();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not cancel the order.'); }
   };
 
   return (

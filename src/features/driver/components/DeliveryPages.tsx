@@ -7,6 +7,7 @@ import { completeStop } from '../../../services/driver.route.service';
 import { recordHandover, uploadHandoverMedia, type DeliveryOrder, type DropoffStop, type HandoverMediaKind, type PickupStop } from '../../../services/driver.deliveries.service';
 import type { PickedImage } from '../../../services/catalogueImage';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { posthog } from '../../../config/posthog';
 import { NOTE_MAX, parseReading } from '../reading';
 import { Empty } from '../../ops/components/OpsBits';
 import { useAction } from '../../ops/components/useAction';
@@ -385,6 +386,11 @@ function ReadingForm({
             const media = picked ? await uploadHandoverMedia(stopId, picked) : { path: initial.mediaPath as string, kind: initial.mediaKind as HandoverMediaKind };
             await recordHandover(stopId, { ...value, mediaPath: media.path, mediaKind: media.kind });
             await onComplete();
+            if (kind === 'pickup') {
+              posthog?.capture('pickup_completed', { handover_media_kind: media.kind });
+            } else {
+              posthog?.capture('delivery_completed', { handover_media_kind: media.kind });
+            }
           });
         }}
       />

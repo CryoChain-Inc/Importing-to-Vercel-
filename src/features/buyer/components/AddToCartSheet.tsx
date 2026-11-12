@@ -4,6 +4,7 @@ import { Button, Icon } from '../../../components/common';
 import type { CatalogueItem } from '../../../services/buyer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
+import { posthog } from '../../../config/posthog';
 import { Sheet } from '../../ops/components/Sheet';
 import { stepFor } from '../cart/cart';
 import { useCart } from '../cart/CartProvider';
@@ -26,7 +27,11 @@ export function AddToCartSheet({ units, onClose }: { units: CatalogueItem[]; onC
   return (
     <Sheet title={p.name} subtitle={units.length > 1 ? 'Choose a unit and how many.' : `How many ${units[0].unit}?`} onClose={onClose}
       footer={<Button label={`${update ? 'Update cart' : 'Add to cart'} · ${ghs(qty * sel.price)}`} icon="cart" disabled={qty <= 0}
-        onPress={() => { dispatch({ type: 'set', line: { productId: sel.productId, unit: sel.unit, kg: qty } }); onClose(); }} />}>
+        onPress={() => {
+          dispatch({ type: 'set', line: { productId: sel.productId, unit: sel.unit, kg: qty } });
+          posthog?.capture('cart_updated', { action: update ? 'updated' : 'added', unit: sel.unit, quantity: qty });
+          onClose();
+        }} />}>
       <View style={s.list} accessibilityRole="radiogroup">
         {units.map((g) => {
           const on = g.unit === sel.unit;

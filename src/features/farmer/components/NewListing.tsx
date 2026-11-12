@@ -7,6 +7,8 @@ import { estimateListing, MIN_PHOTOS, type Estimate } from '../../../services/fa
 import { enqueueListing } from '../../../services/listingOutbox';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
+import { posthog } from '../../../config/posthog';
+import { posthogLog } from '../../../config/posthogLogs';
 import { matchesSearch } from '../../../utils/search';
 import { QUICK_ADD } from '../../../utils/units';
 import { Sheet } from '../../ops/components/Sheet';
@@ -62,6 +64,8 @@ export function NewListing({ pickup, onCreated }: { pickup: string; onCreated: (
     setError(null);
     try {
       await enqueueListing(chosen, weightKg, unit, photos);
+      posthog?.capture('listing_created', { product: chosen, unit, quantity: weightKg, photo_count: photos.length });
+      posthogLog.info('listing created', { event: 'listing_created', product: chosen, unit, quantity: weightKg, photo_count: photos.length });
       setWeight('');
       setPhotos([]);
       setStep(0);

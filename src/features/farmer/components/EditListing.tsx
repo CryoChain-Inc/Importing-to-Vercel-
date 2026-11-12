@@ -5,6 +5,7 @@ import { Banner, Skeleton } from '../../../components/feedback';
 import type { PickedImage } from '../../../services/catalogueImage';
 import { MIN_PHOTOS, produceImageUrl, reportShortage, updateListing, updateListingPhotos, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { posthog } from '../../../config/posthog';
 import { useProductOptions } from '../useProductOptions';
 import { PhotoPicker } from './PhotoPicker';
 
@@ -43,6 +44,7 @@ export function EditListing({ listing, onDone, onSaved }: { listing: ProduceList
     setError(null);
     try {
       await reportShortage(listing.id, supply);
+      posthog?.capture('listing_shortage_reported', { unit: listing.unit, available_quantity: supply, reserved_quantity: listing.reservedKg });
       await onSaved();
       onDone();
     } catch (e) {
@@ -60,6 +62,13 @@ export function EditListing({ listing, onDone, onSaved }: { listing: ProduceList
       if (photosChanged) {
         await updateListingPhotos(listing.id, photos.flatMap((p) => stored.get(p.uri) ?? []), photos.filter((p) => !stored.has(p.uri)));
       }
+      posthog?.capture('listing_updated', {
+        fields_changed: fieldsChanged,
+        photos_changed: photosChanged,
+        unit,
+        quantity: kg,
+        photo_count: photos.length,
+      });
       await onSaved();
       onDone();
     } catch (e) {

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Platform, Text, View } from 'react-native';
+import { posthog } from '../../../config/posthog';
+import { posthogLog } from '../../../config/posthogLogs';
 import { Button, Card, Icon } from '../../../components/common';
 import { AuthLayout } from '../../../components/layout';
 import { toAccount } from '../../../data/demoAuth';
@@ -66,6 +68,16 @@ export function PaymentResultScreen({ reference }: { reference: string }) {
     const t = setTimeout(run, 0);
     return () => { live.current = false; clearTimeout(t); };
   }, [run]);
+
+  // Web pays on Paystack's page and lands here, so this is where a web payment is recorded.
+  useEffect(() => {
+    if (phase === 'paid') {
+      posthog?.capture('payment_completed', { kind: isTruck ? 'truck' : 'order' });
+      posthogLog.info('payment completed', { event: 'payment_completed', kind: isTruck ? 'truck' : 'order' });
+    } else if (phase === 'failed' || phase === 'mismatch' || phase === 'error') {
+      posthogLog.warn('payment not confirmed', { event: 'payment_not_confirmed', phase, kind: isTruck ? 'truck' : 'order' });
+    }
+  }, [phase, isTruck]);
 
   useEffect(() => {
     if (phase !== 'paid') return;

@@ -6,6 +6,7 @@ import { checkoutCart, type BuyerAddress, type CartLine, type CatalogueItem, typ
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
+import { posthog } from '../../../config/posthog';
 import { useAction } from '../../ops/components/useAction';
 import { useCart } from '../cart/CartProvider';
 import { QtyStepper } from './QtyStepper';
@@ -52,6 +53,7 @@ export function Cart({ items, addresses, onOrdered, onRefresh, onAddAddress, onS
       setShortfalls(res.shortfalls);
       return;
     }
+    posthog?.capture('order_created', { line_count: cartLines.length });
     dispatch({ type: 'clear' });
     setShortfalls([]);
     onOrdered(res.orderId);

@@ -7,6 +7,7 @@ import {
 } from '../../../services/ops.control.service';
 import type { BoardOrder, BoardStop, DriverRoute } from '../../../services/ops.fulfilment.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { posthog } from '../../../config/posthog';
 import { when } from './OpsBits';
 import { useAction } from './useAction';
 
@@ -31,7 +32,14 @@ export function OrderControls({ order: o, drivers, onChange }: { order: BoardOrd
   const collected = o.stops.some((p) => p.state === 'done');
   const delivered = o.stops.some((p) => p.kind === 'dropoff' && p.state === 'done');
   const label = (d: DriverRoute) => `${d.name}${d.vehicle ? ` · ${d.vehicle}` : ''}`;
-  const act = (fn: () => Promise<unknown>) => run(async () => { await fn(); setReason(''); setOpen(null); setKg(''); setTemp(''); });
+  const act = (action: string, fn: () => Promise<unknown>) => run(async () => {
+    await fn();
+    posthog?.capture('order_fulfilment_override_applied', { action });
+    setReason('');
+    setOpen(null);
+    setKg('');
+    setTemp('');
+  });
   const showLog = async () => {
     try { setLog(await fetchActivity(o.id)); setLogError(null); } catch (e) { setLogError(e instanceof Error ? e.message : 'Could not load the activity log.'); }
   };
@@ -44,8 +52,8 @@ export function OrderControls({ order: o, drivers, onChange }: { order: BoardOrd
         <View style={s.row}>
           {p.state === 'pending' && p.kind === 'pickup' ? (
             <>
-              <Button size="sm" variant="outline" label="Take from another farm" disabled={!why || busy} onPress={() => act(() => resourceLine(p.id, why))} />
-              <Button size="sm" variant="ghost" label="Cancel as short" disabled={!why || busy} onPress={() => act(() => cancelLine(p.id, why))} />
+              <Button size="sm" variant="outline" label="Take from another farm" disabled={!why || busy} onPress={() => act('resourced_from_another_farm', () => resourceLine(p.id, why))} />
+              <Button size="sm" variant="ghost" label="Cancel as short" disabled={!why || busy} onPress={() => act('line_cancelled_as_short', () => cancelLine(p.id, why))} />
             </>
           ) : null}
           {p.state === 'pending' && p.driver ? <Button size="sm" variant="outline" label="Complete for driver" onPress={() => setOpen(isOpen ? null : { stop: p.id, kind: 'complete' })} /> : null}
@@ -57,7 +65,7 @@ export function OrderControls({ order: o, drivers, onChange }: { order: BoardOrd
             {open?.kind === 'complete' ? <Input label="Temperature (°C)" value={temp} onChangeText={setTemp} keyboardType="numbers-and-punctuation" style={s.field} /> : null}
             <Button size="sm" label={open?.kind === 'complete' ? 'Complete stop' : 'Save correction'} loading={busy}
               disabled={!why || (p.kind === 'pickup' && kg.trim() === '') || (open?.kind === 'complete' && temp.trim() === '')}
-              onPress={() => act(() => (open?.kind === 'complete'
+              onPress={() => act(open?.kind === 'complete' ? 'stop_completed' : 'pickup_corrected', () => (open?.kind === 'complete'
                 ? completeStop(p.id, p.kind === 'pickup' ? Number(kg) : null, Number(temp), why)
                 : correctPickup(p.id, Number(kg), why)))} />
           </View>
@@ -77,7 +85,7 @@ export function OrderControls({ order: o, drivers, onChange }: { order: BoardOrd
         <View style={s.stop}>
           <ChoiceChips label="Move to" options={[WAITING, ...drivers.map(label)]} value={target} onChange={setTarget} />
           <Button size="sm" variant="outline" label={target === WAITING ? 'Send back to waiting' : 'Move to this truck'} disabled={!why || busy}
-            onPress={() => act(async () => setWarning(await reassignOrder(o.id, drivers.find((d) => label(d) === target)?.id ?? null, why)))} />
+            onPress={() => act(target === WAITING ? 'returned_to_waiting' : 'reassigned_to_driver', async () => setWarning(await reassignOrder(o.id, drivers.find((d) => label(d) === target)?.id ?? null, why)))} />
         </View>
       ) : null}
       {o.stops.map(stopRow)}

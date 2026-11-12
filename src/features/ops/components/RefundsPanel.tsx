@@ -5,6 +5,7 @@ import { Banner } from '../../../components/feedback';
 import { approveRefund, fetchRefunds, markRefundDone, rejectRefund, type Refund, type RefundStatus } from '../../../services/ops.refunds.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
+import { posthog } from '../../../config/posthog';
 import { Empty, PanelSkeleton, Stat, StatGrid, when } from './OpsBits';
 import { useAction } from './useAction';
 
@@ -66,11 +67,21 @@ export function RefundsPanel({ rev }: { /** Bumps when the dashboard reloads. */
                 <View style={s.actions}>
                   {r.online ? (
                     confirm === r.id
-                      ? <Button size="sm" variant="danger" label={`Confirm: refund ${ghs(r.amount)}`} loading={busy} onPress={() => run(async () => { await approveRefund(r.id); setConfirm(null); })} />
+                      ? <Button size="sm" variant="danger" label={`Confirm: refund ${ghs(r.amount)}`} loading={busy} onPress={() => run(async () => {
+                        await approveRefund(r.id);
+                        posthog?.capture('refund_approved');
+                        setConfirm(null);
+                      })} />
                       : <Button size="sm" label="Approve and refund" disabled={busy} onPress={() => setConfirm(r.id)} />
                   ) : null}
-                  <Button size="sm" variant="outline" label="Mark as paid by hand" disabled={busy || !note.trim()} onPress={() => run(() => markRefundDone(r.id, note))} />
-                  <Button size="sm" variant="ghost" label="Reject" disabled={busy || !note.trim()} onPress={() => run(() => rejectRefund(r.id, note))} />
+                  <Button size="sm" variant="outline" label="Mark as paid by hand" disabled={busy || !note.trim()} onPress={() => run(async () => {
+                    await markRefundDone(r.id, note);
+                    posthog?.capture('refund_manually_recorded');
+                  })} />
+                  <Button size="sm" variant="ghost" label="Reject" disabled={busy || !note.trim()} onPress={() => run(async () => {
+                    await rejectRefund(r.id, note);
+                    posthog?.capture('refund_rejected');
+                  })} />
                 </View>
               </>
             ) : null}

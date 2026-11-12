@@ -11,6 +11,7 @@ import type { TransferDetails } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { hoursLabel } from '../../../utils/duration';
 import { ghs } from '../../../utils/format';
+import { posthog } from '../../../config/posthog';
 import { useAction } from '../../ops/components/useAction';
 import { labelFor, searchPlaces } from './places';
 import { TripMap } from './TripMap';
@@ -136,6 +137,7 @@ export function TruckBooking({ transfer }: { transfer: TransferDetails | null })
   const book = () => run(async () => {
     if (!pickup || !dropoff || !quote || !hours) return;
     const id = await bookTruck({ purpose, pickup, dropoff, pickupAt: when, hours });
+    posthog?.capture('truck_booking_created', { purpose, booked_hours: hours });
     setPickup(null);
     setDropoff(null);
     setQuote(null);

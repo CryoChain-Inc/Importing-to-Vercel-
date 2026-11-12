@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Platform } from 'react-native';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +21,8 @@ import { onPaymentReturn } from './services/checkout';
 import { paymentReturnReference } from './utils/paymentReturn';
 import { verifyLinkStatus } from './utils/verifyLink';
 import { fontFiles, ThemeProvider, useTheme } from './theme';
+import { PostHogProvider } from 'posthog-react-native';
+import { posthog } from './config/posthog';
 
 // Lazy so the farmer screens stay out of the main bundle for every other role.
 const ProduceDetail = lazy(() => import('./features/farmer/screens/ProduceDetail').then((m) => ({ default: m.ProduceDetail })));
@@ -59,6 +61,7 @@ function Shell() {
   const { route, reset } = useNav();
   const [restoring, setRestoring] = useState(isSupabaseConfigured);
   const [startedOnVerified] = useState(route.name === 'emailVerified' || route.name === 'paymentResult');
+  const identifiedAccountId = useRef<string | null>(null);
 
   // Resume a saved session so a reload doesn't send a signed-in user back to the login page.
   // The emailed confirmation link (web path or app deep link) shows its own screen instead.
@@ -97,12 +100,38 @@ function Shell() {
     if (!isSupabaseConfigured) return;
     const sub = AppState.addEventListener('change', (st) => (st === 'active' ? supabase.auth.startAutoRefresh() : supabase.auth.stopAutoRefresh()));
     supabase.auth.startAutoRefresh();
-    const { data } = supabase.auth.onAuthStateChange((event) => { if (__DEV__) console.log('auth', event); });
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        posthog?.reset();
+        identifiedAccountId.current = null;
+      }
+      if (__DEV__) console.log('auth', event);
+    });
     return () => { sub.remove(); data.subscription.unsubscribe(); };
   }, []);
 
-  // Greets each account once per device, right after its first sign-in or sign-up.
+  useEffect(() => { posthog?.screen(route.name); }, [route.name]);
+
+  // Identifies only after auth has returned the stable Supabase profile id. The SDK
+  // then persists this identity for lifecycle events, captures, and exceptions.
   const account = route.name === 'home' || route.name === 'workspace' ? route.account : null;
+  useEffect(() => {
+    if (!account || !posthog || identifiedAccountId.current === account.id) return;
+
+    posthog.identify(account.id, {
+      $set: {
+        role: account.roles[0],
+        account_status: account.status,
+        is_staff: account.staff,
+        ...(account.name ? { name: account.name } : {}),
+        ...(account.email ? { email: account.email } : {}),
+        ...(account.phone ? { phone: account.phone } : {}),
+      },
+    });
+    identifiedAccountId.current = account.id;
+  }, [account]);
+
+  // Greets each account once per device, right after its first sign-in or sign-up.
   const [welcome, setWelcome] = useState<string | null>(null);
   useEffect(() => {
     if (!account) return;
@@ -130,7 +159,7 @@ export default function V1App() {
   const [fontsReady] = useFonts(fontFiles);
   // Web paints straight away and swaps fonts in; native keeps the splash until they load.
   if (!fontsReady && Platform.OS !== 'web') return <LoadingScreen message="Loading CryoChain..." />;
-  return (
+  const app = (
     <SafeAreaProvider>
       <ThemeProvider>
         <ToastProvider>
@@ -141,4 +170,6 @@ export default function V1App() {
       </ThemeProvider>
     </SafeAreaProvider>
   );
+
+  return posthog ? <PostHogProvider client={posthog}>{app}</PostHogProvider> : app;
 }
