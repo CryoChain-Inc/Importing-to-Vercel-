@@ -28,6 +28,7 @@
     "expo-web-browser": "~57.0.3",
     "i18n-iso-countries": "^7.14.0",
     "libphonenumber-js": "1.13.15",
+    "posthog-js": "^1.447.15",
     "posthog-react-native": "4",
     "posthog-react-native-session-replay": "^1.6.0",
     "react": "19.2.3",

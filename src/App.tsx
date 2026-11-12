@@ -110,7 +110,7 @@ function Shell() {
     return () => { sub.remove(); data.subscription.unsubscribe(); };
   }, []);
 
-  useEffect(() => { posthog?.screen(route.name); }, [route.name]);
+  useEffect(() => { posthog?.capture('$screen', { $screen_name: route.name }); }, [route.name]);
 
   // Identifies only after auth has returned the stable Supabase profile id. The SDK
   // then persists this identity for lifecycle events, captures, and exceptions.
@@ -119,14 +119,12 @@ function Shell() {
     if (!account || !posthog || identifiedAccountId.current === account.id) return;
 
     posthog.identify(account.id, {
-      $set: {
-        role: account.roles[0],
-        account_status: account.status,
-        is_staff: account.staff,
-        ...(account.name ? { name: account.name } : {}),
-        ...(account.email ? { email: account.email } : {}),
-        ...(account.phone ? { phone: account.phone } : {}),
-      },
+      role: account.roles[0],
+      account_status: account.status,
+      is_staff: account.staff,
+      ...(account.name ? { name: account.name } : {}),
+      ...(account.email ? { email: account.email } : {}),
+      ...(account.phone ? { phone: account.phone } : {}),
     });
     identifiedAccountId.current = account.id;
   }, [account]);
@@ -171,5 +169,6 @@ export default function V1App() {
     </SafeAreaProvider>
   );
 
-  return posthog ? <PostHogProvider client={posthog}>{app}</PostHogProvider> : app;
+  // The provider takes the native client only; web uses posthog-js directly.
+  return posthog && Platform.OS !== 'web' ? <PostHogProvider client={posthog}>{app}</PostHogProvider> : app;
 }
