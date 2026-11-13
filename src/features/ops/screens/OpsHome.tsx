@@ -152,13 +152,13 @@ export function OpsHome({ account }: { account: Account }) {
         </>
       ) : null}
       {tab === 'dashboard' && core ? (
-        <DashboardPanel data={core} onGo={(t) => go(t)} />
+        <DashboardPanel data={core} onGo={go} />
       ) : data ? (
         <>
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
-          {tab === 'orders' ? <OrdersBoard orders={data.board} drivers={data.drivers} onChange={load} params={params} setParams={page.setParams} /> : null}
+          {tab === 'orders' ? <OrdersBoard drivers={data.drivers} onChange={load} {...page} /> : null}
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
           {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}

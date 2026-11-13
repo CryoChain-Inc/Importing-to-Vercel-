@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { likeTerm, pageRange, type Paged } from './paging';
 
 const fail = (msg: string) => (error: unknown) => {
   if (error) throw new Error(msg);
@@ -121,18 +122,44 @@ function driverOf(stopsRaw: any[]): BoardDriver | null {
   return best;
 }
 
+type BoardQuery = (cols: string) => PromiseLike<{ data: any[] | null; error: { message: string } | null; count?: number | null }>;
+
+/** Runs a board query, falling back to thinner column sets while newer tables or columns are missing. */
+async function loadBoard(run: BoardQuery): Promise<{ rows: BoardOrder[]; total: number }> {
+  let res = await run(BOARD);
+  if (res.error && /media_path|media_kind|delivery_handovers|produce_listings|captures|driver_locations|listing_id/i.test(res.error.message)) res = await run(BOARD_NO_MEDIA);
+  if (res.error) res = await run(BOARD_BASE);
+  fail('Could not load orders.')(res.error);
+  return { rows: await toBoard(res.data ?? []), total: res.count ?? res.data?.length ?? 0 };
+}
+
+const cartOrders = () => supabase.from('orders');
+
 /** Every cart order with who supplies it, driver readings, listing photos and where the truck is. */
 export async function fetchBoard(): Promise<BoardOrder[]> {
-  let res = await supabase.from('orders').select(BOARD).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100);
-  if (res.error && /media_path|media_kind|delivery_handovers|produce_listings|captures|driver_locations|listing_id/i.test(res.error.message)) {
-    res = await supabase.from('orders').select(BOARD_NO_MEDIA).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100);
-  }
-  if (res.error) {
-    res = await supabase.from('orders').select(BOARD_BASE).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100);
-  }
-  fail('Could not load orders.')(res.error);
+  return (await loadBoard((cols) => cartOrders().select(cols).not('delivery_address', 'is', null).order('created_at', { ascending: false }).limit(100))).rows;
+}
 
-  const rows = await Promise.all((res.data ?? []).map(async (r: any) => {
+export type BoardState = 'all' | BoardOrder['state'];
+
+/** One page of cart orders, newest first, filtered by state and order code on the server. */
+export async function fetchBoardPage(page: number, q: string, state: BoardState): Promise<Paged<BoardOrder>> {
+  const [from, to] = pageRange(page);
+  return loadBoard((cols) => {
+    let query = cartOrders().select(cols, { count: 'exact' }).not('delivery_address', 'is', null).order('created_at', { ascending: false }).range(from, to);
+    if (state !== 'all') query = query.eq('state', state);
+    if (q.trim()) query = query.ilike('code', likeTerm(q));
+    return query;
+  });
+}
+
+/** A single order for its own page, even when it is not on the current list page. */
+export async function fetchBoardOrder(id: string): Promise<BoardOrder | null> {
+  return (await loadBoard((cols) => cartOrders().select(cols).eq('id', id).limit(1))).rows[0] ?? null;
+}
+
+async function toBoard(data: any[]): Promise<BoardOrder[]> {
+  const rows = await Promise.all(data.map(async (r: any) => {
     const stopsRaw = r.delivery_stops ?? [];
     const stops: BoardStop[] = await Promise.all(stopsRaw.map(async (s: any) => {
       const h = handoverOf(s);
