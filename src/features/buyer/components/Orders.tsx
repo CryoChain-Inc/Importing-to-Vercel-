@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { cancelOrder, orderStage, orderStatus, type Order, type OrderStage } from '../../../services/buyer.service';
+import { cancelOrder, orderStage, orderStatus, stillCollecting, type Order, type OrderStage } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
+import { warmMap } from '../../../components/location/LiveMap';
 import { OrderLiveMap } from './OrderLiveMap';
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -29,6 +30,7 @@ export function Orders({ orders, onPay, onRefresh }: {
   const { colors } = useTheme();
   const [tab, setTab] = useState<'active' | 'past'>('active');
   const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(warmMap, []);
   const { busy, error, run } = useAction(onRefresh);
 
   const opened = orders.find((o) => o.id === openId);
@@ -73,6 +75,7 @@ export function Orders({ orders, onPay, onRefresh }: {
                   <Badge label={st.label} tone={st.tone} />
                 </View>
                 <Text style={s.summary} numberOfLines={1}>{summary(o)}</Text>
+                {o.refunds.length > 0 ? <ShortageNote o={o} compact /> : null}
                 {stage !== 'cancelled' ? <MiniTrack stage={stage} s={s} /> : null}
                 <View style={s.top}>
                   <Text style={s.total}>{ghs(o.amount)}</Text>
@@ -85,6 +88,24 @@ export function Orders({ orders, onPay, onRefresh }: {
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/** Flags an order we could not fully supply, with the money owed back and where that refund stands. */
+function ShortageNote({ o, compact }: { o: Order; compact?: boolean }) {
+  const s = useThemedStyles(styles);
+  const { colors } = useTheme();
+  const total = o.refunds.reduce((n, r) => n + r.amount, 0);
+  const paid = o.refunds.every((r) => r.refunded);
+  const text = `${ghs(total)} ${paid ? 'refunded' : 'refund on its way'}`;
+  return (
+    <View style={s.alert} accessibilityRole="alert" accessibilityLabel={`Some produce was short. ${text}`}>
+      <Icon name="alert" size={compact ? 16 : 20} color={colors.warningInk} />
+      <View style={s.grow}>
+        <Text style={s.alertTitle}>{compact ? `Short supply · ${text}` : 'Some of your produce was short'}</Text>
+        {compact ? null : <Text style={s.meta}>We could not supply everything you ordered. {paid ? 'The money for it has been returned to you' : 'The money for it is being returned to you'}: {text}.</Text>}
+      </View>
     </View>
   );
 }
@@ -107,13 +128,13 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
   const stage = orderStage(o);
   const unpaid = o.state === 'awaiting_payment';
   const retry = o.payment === 'failed' || o.payment === 'abandoned';
-  const { pickupsTotal, pickupsDone, deliveredAt } = o.progress;
+  const { pickupsTotal, deliveredAt } = o.progress;
 
   const steps: { title: string; note: string }[] = [
     { title: 'Order placed', note: stamp(o.createdAt) },
     { title: 'Payment', note: o.paidAt ? `Received ${stamp(o.paidAt)}` : 'Waiting for your payment' },
-    { title: 'Preparing your produce', note: stage === 'preparing' ? 'We are lining up farms near you' : pickupsTotal > 0 ? `${pickupsDone} of ${pickupsTotal} farm pickups collected` : 'Farms are matched once you have paid' },
-    { title: 'On the way', note: stage === 'on_the_way' ? `${pickupsDone} of ${pickupsTotal} farm pickups collected, heading to you` : 'A driver collects it from the farms and brings it to you' },
+    { title: 'Preparing your produce', note: stage === 'preparing' ? 'We are lining up farms near you' : pickupsTotal > 0 ? 'Matched with farms near you' : 'Farms are matched once you have paid' },
+    { title: 'On the way', note: stage === 'on_the_way' ? (stillCollecting(o) ? 'Your produce is on a truck' : 'Heading to you') : 'A driver collects it and brings it to you' },
     { title: 'Delivered', note: deliveredAt ? stamp(deliveredAt) : 'Arrives at your delivery address' },
   ];
   const done = stage === 'cancelled' ? 0 : DONE[stage];
@@ -148,7 +169,9 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
         </Card>
       ) : null}
 
-      {o.state === 'paid' && !deliveredAt ? <OrderLiveMap orderId={o.id} /> : null}
+      {o.refunds.length > 0 ? <ShortageNote o={o} /> : null}
+
+      {o.state === 'paid' && !deliveredAt ? <OrderLiveMap orderId={o.id} preparing={stage === 'preparing'} /> : null}
 
       {stage === 'cancelled' ? (
         <Card style={s.box}>
@@ -239,6 +262,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted, flexShrink: 1 },
   more: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2 },
   moreText: { fontFamily: fonts.sansBold, fontSize: 13, color: c.brandInk },
+  alert: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, padding: 12, borderRadius: 12, backgroundColor: c.harvestTint },
+  alertTitle: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
   mini: { flexDirection: 'row' as const, gap: 4 },
   seg5: { flex: 1, height: 5, borderRadius: 3, backgroundColor: c.borderSubtle },
   seg5Done: { backgroundColor: c.brand600 },

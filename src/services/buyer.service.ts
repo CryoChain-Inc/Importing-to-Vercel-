@@ -291,13 +291,17 @@ export function orderStage(o: Pick<Order, 'state' | 'progress'>): OrderStage {
   return o.progress.pickupsDone > 0 ? 'on_the_way' : 'preparing';
 }
 
+/** On the way, but the truck is still picking up more produce. */
+export const stillCollecting = (o: Pick<Order, 'state' | 'progress'>) =>
+  orderStage(o) === 'on_the_way' && o.progress.pickupsDone < o.progress.pickupsTotal;
+
 /** What the buyer sees: just the order, not who farmed or hauled it. */
 export function orderStatus(o: Pick<Order, 'state' | 'progress'>): { label: string; tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' } {
   switch (orderStage(o)) {
     case 'cancelled': return { label: 'Cancelled', tone: 'neutral' };
     case 'placed': return { label: 'Awaiting payment', tone: 'warning' };
     case 'preparing': return { label: 'Preparing', tone: 'info' };
-    case 'on_the_way': return { label: 'On the way', tone: 'info' };
+    case 'on_the_way': return { label: stillCollecting(o) ? 'On a truck' : 'On the way', tone: 'info' };
     case 'delivered': return { label: 'Delivered', tone: 'success' };
   }
 }

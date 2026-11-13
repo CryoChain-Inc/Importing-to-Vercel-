@@ -10,6 +10,8 @@ const PROVIDER = Platform.OS === 'ios' && Constants.executionEnvironment === Exe
 const ACCRA = { latitude: 5.6037, longitude: -0.187 };
 const PIN = { pickup: '#d98b1f', dropoff: '#2E7D4F', done: '#9aa5a0' } as const;
 
+export const warmMap = () => undefined;
+
 /** A read-only map of a truck, the places it serves, the road ahead and (for ops) the road already driven. */
 export function LiveMap({ truck, places = [], route = [], trail = [], height = 280 }: LiveMapProps) {
   const map = useRef<MapView>(null);
