@@ -60,6 +60,8 @@ export interface BoardOrder {
   createdAt: string;
   address: string;
   itemKg: number;
+  /** The one unit every line uses, or 'units' when lines mix units. */
+  itemUnit: string;
   items: string[];
   allocations: BoardAllocation[];
   stops: BoardStop[];
@@ -194,6 +196,7 @@ export async function fetchBoard(): Promise<BoardOrder[]> {
       address: r.delivery_address ?? '',
       // Summed across units; only ever compared with the collected total, which is summed the same way.
       itemKg: (r.order_items ?? []).reduce((n: number, i: any) => n + Number(i.kg || 0), 0),
+      itemUnit: new Set((r.order_items ?? []).map((i: any) => i.unit)).size === 1 ? r.order_items[0].unit : 'units',
       items: (r.order_items ?? []).map((i: any) => `${i.products?.name ?? 'Item'} · ${Number(i.kg).toLocaleString('en-GH')} ${i.unit}`),
       allocations,
       stops,

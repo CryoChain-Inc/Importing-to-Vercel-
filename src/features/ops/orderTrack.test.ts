@@ -10,6 +10,7 @@ const base = (): BoardOrder => ({
   createdAt: '2026-11-01T10:00:00Z',
   address: 'Accra',
   items: ['Tomato A · 10 kg'],
+  itemUnit: 'kg',
   itemKg: 10,
   allocations: [],
   stops: [],

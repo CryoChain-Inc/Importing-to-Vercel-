@@ -144,7 +144,7 @@ function Progress({ track }: { track: ReturnType<typeof orderTrack> }) {
           );
         })}
       </View>
-      <Text style={s.meta}>Supply {kgText(track.collectedKg)} taken of {kgText(ordered)} ordered · {kgText(track.allocatedKg)} allocated ({pct(track.collectedKg)}% collected)</Text>
+      <Text style={s.meta}>Supply {kgText(track.collectedKg, track.unit)} taken of {kgText(ordered, track.unit)} ordered · {kgText(track.allocatedKg, track.unit)} allocated ({pct(track.collectedKg)}% collected)</Text>
       <View style={s.bar} accessibilityLabel={`${pct(track.collectedKg)} percent collected`}>
         <View style={[s.fill, { width: `${pct(track.allocatedKg)}%` as `${number}%` }, s.fillAlloc]} />
         <View style={[s.fill, { width: `${pct(track.collectedKg)}%` as `${number}%` }]} />
