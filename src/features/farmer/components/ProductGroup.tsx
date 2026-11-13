@@ -4,8 +4,7 @@ import { Badge, Card, Icon } from '../../../components/common';
 import { produceImageUrl, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-
-const fmt = (n: number) => n.toLocaleString('en-GH', { maximumFractionDigits: 2 });
+import { inStock, qtyByUnit, soldShare } from './qty';
 
 export interface Group {
   product: string;
@@ -13,25 +12,22 @@ export interface Group {
   listings: ProduceListing[];
 }
 
-/** One product with all its units rolled up. Tapping opens the product's detail page. */
+/** One crop with all its batches rolled up. Tapping opens the crop's detail page. */
 export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const sum = (f: (l: ProduceListing) => number) => g.listings.reduce((a, l) => a + f(l), 0);
-  // Quantities only add up within one unit, so a product sold in several units shows one figure per unit.
-  const qty = (f: (l: ProduceListing) => number) => {
-    const m = new Map<string, number>();
-    for (const l of g.listings) m.set(l.unit, (m.get(l.unit) ?? 0) + f(l));
-    return [...m].map(([u, n]) => `${fmt(n)} ${u}`).join(' + ');
-  };
-  const sold =
-    g.listings.reduce((a, l) => a + (l.weightKg > 0 ? l.soldKg / l.weightKg : 0), 0) /
-    g.listings.length;
-  // Money already earned on sold quantity, plus the estimate for what is still unsold on listings with no sales yet.
-  const money = sum((l) => (l.earned > 0 ? l.earned : (l.estNet ?? 0)));
+  const live = g.listings.filter(inStock);
+  const out = live.length === 0;
+  const sold = soldShare(g.listings);
+  // Money already earned on sold quantity, plus the estimate for batches with no sales yet.
+  const money = g.listings.reduce((a, l) => a + (l.earned > 0 ? l.earned : (l.estNet ?? 0)), 0);
   const photo = g.listings.find((l) => l.imagePaths[0])?.imagePaths[0];
-  const units = [...new Set(g.listings.map((l) => l.unit))].sort();
-  const label = `${g.product}, ${qty((l) => l.remainingKg)} available of ${qty((l) => l.weightKg)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
+  const n = g.listings.length;
+  const batches = `${n} ${n === 1 ? 'batch' : 'batches'}`;
+  const headline = out
+    ? qtyByUnit(g.listings, (l) => l.soldKg)
+    : qtyByUnit(live, (l) => l.remainingKg);
+  const label = `${g.product}, ${out ? 'sold out' : `${headline} in stock`}, ${qtyByUnit(g.listings, (l) => l.soldKg)} sold, ${batches}`;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onOpen}>
       <Card style={s.card}>
@@ -44,7 +40,7 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
                 accessibilityIgnoresInvertColors
               />
             ) : (
-              <Icon name="leaf" size={24} color={colors.brandInk} />
+              <Icon name="leaf" size={26} color={colors.brandInk} />
             )}
           </View>
           <View style={s.main}>
@@ -53,28 +49,37 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
             </Text>
             <Text style={s.meta} numberOfLines={1}>
               {g.category ? `${g.category} · ` : ''}
-              {g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'} ·{' '}
-              {qty((l) => l.weightKg)} listed
+              {batches}
             </Text>
-            <View style={s.grades}>
-              {units.map((x) => (
-                <Badge key={x} label={x} tone="success" />
-              ))}
-            </View>
+            <Badge
+              label={
+                out ? 'Sold out' : live.length < n ? `${live.length} of ${n} in stock` : 'In stock'
+              }
+              tone={out ? 'neutral' : 'success'}
+            />
           </View>
           <Icon name="chevronRight" size={22} color={colors.inkMuted} />
         </View>
-        <View style={s.bar}>
+        <View style={s.hero}>
+          <Text style={s.heroVal} numberOfLines={1}>
+            {headline}
+          </Text>
+          <Text style={s.meta}>{out ? 'sold' : 'in stock'}</Text>
+        </View>
+        <View
+          style={s.bar}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
           <View style={[s.fill, { width: `${Math.min(100, sold * 100)}%` }]} />
         </View>
         <View style={s.legend}>
-          <Stat label="Available" value={qty((l) => l.remainingKg)} s={s} strong />
-          <Stat label="Reserved" value={qty((l) => l.reservedKg)} s={s} />
-          <Stat label="Collected" value={qty((l) => l.collectedKg)} s={s} />
+          <Stat label="Sold" value={`${Math.round(Math.min(100, sold * 100))}%`} s={s} />
           <Stat
             label={sold > 0 ? 'Earned' : 'Expected'}
             value={money > 0 ? `${sold > 0 ? '' : '~'}${ghs(money)}` : '—'}
             s={s}
+            strong
           />
         </View>
       </Card>
@@ -107,19 +112,28 @@ const styles = (c: Record<ColorToken, string>) => ({
   card: { gap: 14, minHeight: TOUCH },
   top: { flexDirection: 'row' as const, gap: 14, alignItems: 'center' as const },
   thumb: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
+    width: 72,
+    height: 72,
+    borderRadius: 16,
     overflow: 'hidden' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     backgroundColor: c.brandTint,
   },
-  img: { width: 64, height: 64 },
-  main: { flex: 1, gap: 3 },
+  img: { width: 72, height: 72 },
+  main: { flex: 1, gap: 4 },
+  hero: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 8 },
+  heroVal: {
+    flexShrink: 1,
+    fontFamily: fonts.heading,
+    fontSize: 26,
+    lineHeight: 30,
+    letterSpacing: -0.5,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
   product: { fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  grades: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginTop: 2 },
   bar: {
     height: 8,
     borderRadius: 4,
@@ -127,7 +141,7 @@ const styles = (c: Record<ColorToken, string>) => ({
     backgroundColor: c.surfaceSunken,
   },
   fill: { position: 'absolute' as const, top: 0, bottom: 0, left: 0, backgroundColor: c.brand500 },
-  legend: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 8 },
+  legend: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 16 },
   stat: { gap: 2, flexShrink: 1 },
   statVal: {
     fontFamily: fonts.sansSemiBold,

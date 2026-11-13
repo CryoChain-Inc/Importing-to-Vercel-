@@ -9,24 +9,10 @@ import {
 } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ProductGroup, type Group } from './ProductGroup';
+import { inStock } from './qty';
 import { NewListing } from './NewListing';
 
 const PAGE = 6;
-const FILTERS = [
-  {
-    key: 'active',
-    label: 'On sale',
-    has: (l: ProduceListing) => l.remainingKg > 0,
-    empty: 'Nothing on sale right now.',
-  },
-  {
-    key: 'sold',
-    label: 'Sold out',
-    has: (l: ProduceListing) => l.remainingKg <= 0,
-    empty: 'Nothing has sold out yet.',
-  },
-] as const;
-
 /** Listing form is locked until the farm address and a wallet are saved (the database enforces this too). */
 export function ProduceListings({
   listings,
@@ -50,7 +36,6 @@ export function ProduceListings({
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active');
   const [shown, setShown] = useState(PAGE);
   const queued = useOutbox();
   const [q, setQ] = useState('');
@@ -61,27 +46,29 @@ export function ProduceListings({
       .then(setCats)
       .catch(() => {});
   }, []);
-  const active = FILTERS.find((f) => f.key === filter)!;
-  // Group by product; a product is "on sale" while any of its listings has stock left.
+  // One card per crop; crops with stock come first, sold-out ones sink below.
   const groups = useMemo<Group[]>(() => {
     const m = new Map<string, ProduceListing[]>();
     for (const l of listings) m.set(l.product, [...(m.get(l.product) ?? []), l]);
-    return [...m].map(([product, ls]) => ({
+    const g = [...m].map(([product, ls]) => ({
       product,
       category: cats[product],
-      listings: ls.sort((a, b) => a.unit.localeCompare(b.unit)),
+      listings: ls,
     }));
+    return g.sort(
+      (a, b) =>
+        Number(b.listings.some(inStock)) - Number(a.listings.some(inStock)) ||
+        a.product.localeCompare(b.product),
+    );
   }, [listings, cats]);
   const catNames = [
     ...new Set(groups.map((g) => g.category).filter((x): x is string => !!x)),
   ].sort();
   const needle = q.trim().toLowerCase();
-  const inTab = (f: (typeof FILTERS)[number]) => groups.filter((g) => g.listings.some(f.has));
-  const rows = inTab(active)
-    .filter(
-      (g) => (!cat || g.category === cat) && (!needle || g.product.toLowerCase().includes(needle)),
-    )
-    .map((g) => ({ ...g, listings: g.listings.filter(active.has) }));
+  const rows = groups.filter(
+    (g) => (!cat || g.category === cat) && (!needle || g.product.toLowerCase().includes(needle)),
+  );
+  const inStockCount = groups.filter((g) => g.listings.some(inStock)).length;
 
   return (
     <View style={s.wrap}>
@@ -139,30 +126,9 @@ export function ProduceListings({
       <View style={s.head}>
         <Text style={s.title}>Your listings</Text>
         <Text style={s.copy}>
-          {groups.length} {groups.length === 1 ? 'product' : 'products'}
+          {groups.length} {groups.length === 1 ? 'crop' : 'crops'}
+          {groups.length > 0 ? ` · ${inStockCount} in stock` : ''}
         </Text>
-      </View>
-      <View style={s.seg} accessibilityRole="tablist">
-        {FILTERS.map((f) => {
-          const n = inTab(f).length;
-          const on = f.key === filter;
-          return (
-            <Pressable
-              key={f.key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
-              onPress={() => {
-                setFilter(f.key);
-                setShown(PAGE);
-              }}
-              style={[s.segBtn, on && s.segOn]}
-            >
-              <Text style={[s.segText, on && s.segTextOn]}>
-                {f.label} <Text style={s.segCount}>{n}</Text>
-              </Text>
-            </Pressable>
-          );
-        })}
       </View>
       {groups.length > 0 ? (
         <>
@@ -208,25 +174,17 @@ export function ProduceListings({
         <Card style={s.emptyCard}>
           <Icon name="package" size={26} color={colors.inkMuted} />
           <Text style={s.copy}>
-            {listings.length === 0
-              ? 'No produce listed yet.'
-              : needle || cat
-                ? 'No produce matches your search.'
-                : active.empty}
+            {listings.length === 0 ? 'No produce listed yet.' : 'No produce matches your search.'}
           </Text>
         </Card>
       ) : (
         <>
           {rows.slice(0, shown).map((g) => (
-            <ProductGroup
-              key={`${filter}:${g.product}`}
-              group={g}
-              onOpen={() => onOpen(g.product)}
-            />
+            <ProductGroup key={g.product} group={g} onOpen={() => onOpen(g.product)} />
           ))}
           {rows.length > shown ? (
             <Button
-              label={`Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown} products`}
+              label={`Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown} crops`}
               variant="outline"
               onPress={() => setShown(shown + PAGE)}
             />
@@ -247,30 +205,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   copy: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted },
-  seg: {
-    flexDirection: 'row' as const,
-    padding: 4,
-    borderRadius: 14,
-    backgroundColor: c.surfaceSunken,
-  },
-  segBtn: {
-    flex: 1,
-    minHeight: 44,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    borderRadius: 11,
-  },
-  segOn: {
-    backgroundColor: c.surfaceCard,
-    shadowColor: c.brand900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  segText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.inkMuted },
-  segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
-  segCount: { fontVariant: ['tabular-nums' as const], color: c.inkMuted },
   chips: { gap: 8, paddingRight: 4 },
   chip: {
     minHeight: 44,
