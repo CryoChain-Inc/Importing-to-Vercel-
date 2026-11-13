@@ -158,7 +158,7 @@ export function OpsHome({ account }: { account: Account }) {
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
-          {tab === 'orders' ? <OrdersBoard orders={data.board} drivers={data.drivers} onChange={load} /> : null}
+          {tab === 'orders' ? <OrdersBoard orders={data.board} drivers={data.drivers} onChange={load} params={params} setParams={page.setParams} /> : null}
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
           {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
           {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
