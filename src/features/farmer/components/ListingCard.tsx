@@ -40,14 +40,11 @@ export function ListingCard({
       : l.estNet != null
         ? { value: `~${ghs(l.estNet)}`, note: 'Expected' }
         : null;
-  if (editing)
-    return (
-      <Card style={s.card}>
-        <EditListing listing={l} onDone={() => setEditing(false)} onSaved={onSaved} />
-      </Card>
-    );
   return (
     <Card style={s.card}>
+      {editing ? (
+        <EditListing listing={l} onDone={() => setEditing(false)} onSaved={onSaved} />
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
