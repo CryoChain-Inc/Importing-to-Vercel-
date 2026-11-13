@@ -8,7 +8,14 @@ export function Brand({ size = 36, light = false }: { size?: number; light?: boo
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       <AppIcon size={size} />
-      <Text style={{ fontFamily: fonts.heading, fontSize: size * 0.58, color: light ? '#ffffff' : colors.ink, letterSpacing: -0.4 }}>
+      <Text
+        style={{
+          fontFamily: fonts.heading,
+          fontSize: size * 0.58,
+          color: light ? '#ffffff' : colors.ink,
+          letterSpacing: -0.4,
+        }}
+      >
         CryoChain
       </Text>
     </View>

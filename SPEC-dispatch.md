@@ -18,6 +18,7 @@ truck, a short wait to fill the truck, and an arrival time for every stop that f
 ## Behaviour
 
 ### 1. One line per farm, product and order
+
 A pickup stop covers every allocation of one product from one farm for one order. Two 50 kg tomato listings from the
 same farmer for the same order become one line, "Tomato 100 kg". The driver weighs once. The recorded quantity is
 split across the listings oldest first, so stock and payouts per listing still add up.
@@ -25,6 +26,7 @@ split across the listings oldest first, so stock and payouts per listing still a
 Lines at the same farm are driven consecutively and shown to the driver as one farm visit.
 
 ### 2. Loads that fit the truck
+
 - A driver is dispatchable when they have an in-service truck (from `fleet`), have shared a location in the last
   30 minutes, and have no unfinished stops.
 - Waiting orders are loaded oldest first while the total stays within the truck's capacity. An order is never split
@@ -33,7 +35,9 @@ Lines at the same farm are driven consecutively and shown to the driver as one f
 - A driver with a trip in progress can still take a nearby order that fits (see Decisions).
 
 ### 3. Dispatch window
+
 A load leaves when either is true:
+
 - the next waiting order no longer fits (the truck is as full as it will get), or
 - the oldest order in the load has waited the dispatch window (default 120 minutes).
 
@@ -41,10 +45,12 @@ Dispatch only starts inside working hours (default 06:00 to 17:00, Africa/Accra)
 5 minutes, so nothing depends on someone opening the app.
 
 ### 4. Route order
+
 Unchanged rule: nearest next stop from the truck's position, and an order's drop-off only after all its pickups.
 Because same-farm lines share a location they stay together.
 
 ### 5. Arrival times with buffer
+
 Every stop gets an estimated arrival, recalculated when the route is planned, when a stop is completed, and when the
 driver's location updates:
 
@@ -57,6 +63,7 @@ At dispatch the farmer gets an in-app notice and SMS with the real pickup window
 "08:00 tomorrow". At allocation they are only told the produce is reserved.
 
 ### 6. Driver screen
+
 The Delivery tab shows the trip as an ordered route: farm visits (each listing its lines per order and product) and
 drop-offs, each with its estimated arrival. Recording a line keeps today's form (quantity, temperature, photo).
 

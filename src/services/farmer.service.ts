@@ -75,9 +75,11 @@ export interface CollectionPoint {
 const PRODUCE_BUCKET = 'produce';
 export const MIN_PHOTOS = 3;
 export const MAX_PHOTOS = 6;
-export const produceImageUrl = (path: string) => supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
+export const produceImageUrl = (path: string) =>
+  supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
 
-const FARMER_COLUMNS = 'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, photo_path, profiles(display_name, phone)';
+const FARMER_COLUMNS =
+  'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, photo_path, profiles(display_name, phone)';
 
 /** Profile stores the nearest collection point as this label (see DetailsForm). */
 export const pointLabel = (p: CollectionPoint) => (p.address ? `${p.name}, ${p.address}` : p.name);
@@ -98,7 +100,11 @@ export async function createFarmer(): Promise<void> {
 export const fetchFarmer = () => cached('fetchFarmer', loadFarmer);
 async function loadFarmer(): Promise<Farmer | null> {
   const id = await userId();
-  const { data, error } = await supabase.from('farmers').select(FARMER_COLUMNS).eq('id', id).maybeSingle();
+  const { data, error } = await supabase
+    .from('farmers')
+    .select(FARMER_COLUMNS)
+    .eq('id', id)
+    .maybeSingle();
   if (error) throw new Error('Could not load your farm.');
   if (!data) return null;
   const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
@@ -138,7 +144,9 @@ export async function saveDetails(d: FarmerDetails): Promise<void> {
 
 /** Registered name for a MoMo wallet, or null when it can't be checked. Advisory: saving never depends on it. */
 export async function lookupWalletName(network: string, number: string): Promise<string | null> {
-  const { data, error } = await supabase.functions.invoke('verify-wallet', { body: { network, number: normalizePhone(number) } });
+  const { data, error } = await supabase.functions.invoke('verify-wallet', {
+    body: { network, number: normalizePhone(number) },
+  });
   return error || !data?.name ? null : String(data.name);
 }
 
@@ -146,7 +154,11 @@ export async function saveWallet(w: Wallet): Promise<void> {
   const id = await userId();
   const { error } = await supabase
     .from('farmers')
-    .update({ momo_network: w.network, momo_number: normalizePhone(w.number), momo_name: w.name.trim() })
+    .update({
+      momo_network: w.network,
+      momo_number: normalizePhone(w.number),
+      momo_name: w.name.trim(),
+    })
     .eq('id', id);
   if (error) throw new Error('Could not save your wallet.');
 }
@@ -158,7 +170,11 @@ async function loadListings(): Promise<ProduceListing[]> {
       .from('produce_listings')
       .select('id, product, weight_kg, created_at, unit, image_paths, est_net, est_fee')
       .order('created_at', { ascending: false }),
-    supabase.from('listing_stock').select('listing_id, sold_kg, reserved_kg, collected_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out'),
+    supabase
+      .from('listing_stock')
+      .select(
+        'listing_id, sold_kg, reserved_kg, collected_kg, delivered_kg, withdrawn_kg, remaining_kg, earned, paid_out',
+      ),
   ]);
   if (listed.error || stock.error) throw new Error('Could not load your listings.');
   const byId = new Map((stock.data ?? []).map((r) => [r.listing_id as string, r]));
@@ -205,7 +221,9 @@ export const fetchSales = () => cached('fetchSales', loadSales);
 async function loadSales(): Promise<Sale[]> {
   const { data, error } = await supabase
     .from('order_allocations')
-    .select('id, listing_id, unit, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)')
+    .select(
+      'id, listing_id, unit, kg, farmer_price, amount, payout_status, created_at, delivered_at, paid_at, products(name)',
+    )
     .in('status', ['accepted', 'collected', 'offered'])
     .order('created_at', { ascending: false });
   if (error) throw new Error('Could not load your sales.');
@@ -239,7 +257,12 @@ export const fetchProductOptions = () => cached('fetchProductOptions', loadProdu
 async function loadProductOptions(): Promise<ProductOption[]> {
   const { data, error } = await supabase.rpc('price_board');
   if (error) throw new Error('Could not load products.');
-  return (data ?? []).map((r: any): ProductOption => ({ name: r.product_name, aliases: r.aliases ?? '', unit: r.unit, price: Number(r.price) }));
+  return (data ?? []).map((r: any): ProductOption => ({
+    name: r.product_name,
+    aliases: r.aliases ?? '',
+    unit: r.unit,
+    price: Number(r.price),
+  }));
 }
 
 /** Category name per product name, for grouping a farmer's listings. */
@@ -248,13 +271,22 @@ async function loadProductCategories(): Promise<Record<string, string>> {
   const { data, error } = await supabase.from('products').select('name, categories(name)');
   if (error) throw new Error('Could not load categories.');
   const out: Record<string, string> = {};
-  for (const r of (data ?? []) as { name: string; categories?: { name?: string } | null }[]) if (r.categories?.name) out[r.name] = r.categories.name;
+  for (const r of (data ?? []) as { name: string; categories?: { name?: string } | null }[])
+    if (r.categories?.name) out[r.name] = r.categories.name;
   return out;
 }
 
 /** Expected payout for a listing: farm-gate price for the chosen unit x quantity, less the collection fee. Null when no price is published. */
-export async function estimateListing(product: string, kg: number, unit: string): Promise<Estimate | null> {
-  const { data, error } = await supabase.rpc('estimate_listing', { p_product: product, p_kg: kg, p_unit: unit });
+export async function estimateListing(
+  product: string,
+  kg: number,
+  unit: string,
+): Promise<Estimate | null> {
+  const { data, error } = await supabase.rpc('estimate_listing', {
+    p_product: product,
+    p_kg: kg,
+    p_unit: unit,
+  });
   if (error) throw new Error('Could not work out the expected payout.');
   const row = (Array.isArray(data) ? data[0] : data) as {
     price_per_kg?: number | string | null;
@@ -264,20 +296,44 @@ export async function estimateListing(product: string, kg: number, unit: string)
     net?: number | string | null;
   } | null;
   if (row?.price_per_kg == null) return null;
-  return { pricePerKg: Number(row.price_per_kg), gross: Number(row.gross), feeRate: Number(row.fee_rate), fee: Number(row.fee), net: Number(row.net) };
+  return {
+    pricePerKg: Number(row.price_per_kg),
+    gross: Number(row.gross),
+    feeRate: Number(row.fee_rate),
+    fee: Number(row.fee),
+    net: Number(row.net),
+  };
 }
 
-export async function updateListing(id: string, product: string, weightKg: number, unit: string): Promise<void> {
-  const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_unit: unit, p_weight_kg: weightKg });
+export async function updateListing(
+  id: string,
+  product: string,
+  weightKg: number,
+  unit: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_own_listing', {
+    p_id: id,
+    p_product: product,
+    p_unit: unit,
+    p_weight_kg: weightKg,
+  });
   if (!error) return;
   const msg = error.message ?? '';
-  if (msg.includes('already in a lot')) throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
-  if (msg.includes('been delivered')) throw new Error('This produce has been delivered, so it can no longer be edited.');
-  if (msg.includes('been collected')) throw new Error('This produce has been collected, so it can no longer be edited.');
+  if (msg.includes('already in a lot'))
+    throw new Error('This listing is already being fulfilled, so it can no longer be edited.');
+  if (msg.includes('been delivered'))
+    throw new Error('This produce has been delivered, so it can no longer be edited.');
+  if (msg.includes('been collected'))
+    throw new Error('This produce has been collected, so it can no longer be edited.');
   const reserved = msg.match(/below the (\S+ \S+) already reserved/);
-  if (reserved) throw new Error(`${reserved[1]} is already reserved for orders, so the quantity cannot go below that.`);
-  if (msg.includes('no published price')) throw new Error(`No published price for ${product} (${unit}) yet.`);
-  if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
+  if (reserved)
+    throw new Error(
+      `${reserved[1]} is already reserved for orders, so the quantity cannot go below that.`,
+    );
+  if (msg.includes('no published price'))
+    throw new Error(`No published price for ${product} (${unit}) yet.`);
+  if (msg.includes('listing not found'))
+    throw new Error('That listing is no longer on your account.');
   throw new Error('Could not save your changes.');
 }
 
@@ -285,7 +341,11 @@ export async function updateListing(id: string, product: string, weightKg: numbe
  * Saves a listing's photos: `keep` are paths already stored, `added` are new picks. Returns nothing; the server decides
  * what may be removed (nothing once produce is reserved).
  */
-export async function updateListingPhotos(id: string, keep: string[], added: PickedImage[]): Promise<void> {
+export async function updateListingPhotos(
+  id: string,
+  keep: string[],
+  added: PickedImage[],
+): Promise<void> {
   const uid = await userId();
   const uploaded: string[] = [];
   const bucket = supabase.storage.from(PRODUCE_BUCKET);
@@ -296,14 +356,22 @@ export async function updateListingPhotos(id: string, keep: string[], added: Pic
       const body = await readBytes(img.uri);
       if (body.byteLength === 0) throw new Error('A photo could not be read. Pick it again.');
       const path = `${uid}/${id}-${Date.now()}-${i}.${EXT[type]}`;
-      if ((await bucket.upload(path, body, { contentType: type })).error) throw new Error('Could not upload a photo (max 2 MB each).');
+      if ((await bucket.upload(path, body, { contentType: type })).error)
+        throw new Error('Could not upload a photo (max 2 MB each).');
       uploaded.push(path);
     }
-    const { data, error } = await supabase.rpc('update_own_listing_photos', { p_id: id, p_paths: [...keep, ...uploaded] });
+    const { data, error } = await supabase.rpc('update_own_listing_photos', {
+      p_id: id,
+      p_paths: [...keep, ...uploaded],
+    });
     if (error) {
       const msg = error.message ?? '';
-      if (msg.includes('cannot be removed')) throw new Error('This produce is reserved for an order, so its photos can be added to but not removed.');
-      if (msg.includes('been delivered') || msg.includes('been collected')) throw new Error('This produce has been collected, so its photos can no longer change.');
+      if (msg.includes('cannot be removed'))
+        throw new Error(
+          'This produce is reserved for an order, so its photos can be added to but not removed.',
+        );
+      if (msg.includes('been delivered') || msg.includes('been collected'))
+        throw new Error('This produce has been collected, so its photos can no longer change.');
       if (msg.includes('3 to 6')) throw new Error(`Keep ${MIN_PHOTOS} to ${MAX_PHOTOS} photos.`);
       throw new Error('Could not save the photos.');
     }
@@ -319,24 +387,33 @@ export async function updateListingPhotos(id: string, keep: string[], added: Pic
 
 /** The farmer cannot supply everything reserved on a listing: `available` is how much of the reserved quantity they do have. */
 export async function reportShortage(id: string, available: number): Promise<void> {
-  const { error } = await supabase.rpc('report_listing_shortage', { p_listing: id, p_available: available });
+  const { error } = await supabase.rpc('report_listing_shortage', {
+    p_listing: id,
+    p_available: available,
+  });
   if (!error) return;
   const msg = error.message ?? '';
-  if (msg.includes('enter less than')) throw new Error('Enter a quantity lower than what is reserved.');
-  if (msg.includes('listing not found')) throw new Error('That listing is no longer on your account.');
+  if (msg.includes('enter less than'))
+    throw new Error('Enter a quantity lower than what is reserved.');
+  if (msg.includes('listing not found'))
+    throw new Error('That listing is no longer on your account.');
   throw new Error('Could not report the shortage. Please try again.');
 }
 
 function removalError(error: { message?: string; code?: string }): Error {
   const msg = error.message ?? '';
-  if (msg.includes('already in a lot')) return new Error('This listing is already being fulfilled, so it can no longer be removed.');
-  if (msg.includes('listing not found')) return new Error('That listing is no longer on your account.');
+  if (msg.includes('already in a lot'))
+    return new Error('This listing is already being fulfilled, so it can no longer be removed.');
+  if (msg.includes('listing not found'))
+    return new Error('That listing is no longer on your account.');
   return new Error('Could not remove that listing.');
 }
 
 export async function deleteListing(id: string): Promise<void> {
   const removed = await supabase.rpc('delete_own_listing', { p_id: id });
-  const missing = removed.error?.code === 'PGRST202' || (removed.error?.message ?? '').includes('Could not find the function');
+  const missing =
+    removed.error?.code === 'PGRST202' ||
+    (removed.error?.message ?? '').includes('Could not find the function');
   const paths = missing ? await deleteListingDirect(id) : ((removed.data ?? []) as string[]);
   if (!missing && removed.error) throw removalError(removed.error);
   if (!paths.length) return;
@@ -349,9 +426,18 @@ export async function deleteListing(id: string): Promise<void> {
 
 /** Used when the withdraw function is not on the database yet. Confirms a row actually went. */
 async function deleteListingDirect(id: string): Promise<string[]> {
-  const { data: row } = await supabase.from('produce_listings').select('image_paths, lot_id').eq('id', id).maybeSingle();
-  if (row?.lot_id) throw new Error('This listing is already being fulfilled, so it can no longer be removed.');
-  const { data, error } = await supabase.from('produce_listings').delete().eq('id', id).select('id');
+  const { data: row } = await supabase
+    .from('produce_listings')
+    .select('image_paths, lot_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (row?.lot_id)
+    throw new Error('This listing is already being fulfilled, so it can no longer be removed.');
+  const { data, error } = await supabase
+    .from('produce_listings')
+    .delete()
+    .eq('id', id)
+    .select('id');
   if (error) throw removalError(error);
   if (!data?.length) throw new Error('Could not remove that listing.');
   return (row?.image_paths ?? []) as string[];
@@ -366,12 +452,22 @@ export interface Notice {
 
 /** Updates the system sent this farmer: bought, pickup scheduled, weighed, delivered. */
 export async function fetchNotices(): Promise<Notice[]> {
-  const { data, error } = await supabase.from('notifications').select('id, title, body, created_at').order('created_at', { ascending: false }).limit(10);
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, title, body, created_at')
+    .order('created_at', { ascending: false })
+    .limit(10);
   if (error) throw new Error('Could not load your updates.');
-  return (data ?? []).map((r) => ({ id: r.id, title: r.title, body: r.body, createdAt: r.created_at }));
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    title: r.title,
+    body: r.body,
+    createdAt: r.created_at,
+  }));
 }
 
-export type PickupState = 'waiting' | 'on_the_way' | 'collected' | 'delivered' | 'paid' | 'not_supplied';
+export type PickupState =
+  'waiting' | 'on_the_way' | 'collected' | 'delivered' | 'paid' | 'not_supplied';
 
 /** One pickup line: one product from this farm for one order. The buyer is never shown. */
 export interface Pickup {
@@ -416,7 +512,10 @@ async function loadPickups(): Promise<Pickup[]> {
 }
 
 /** Sets (or clears, with null) the optional profile photo and removes the old file. */
-export async function saveProfilePhoto(img: PickedImage | null, oldPath: string | null): Promise<void> {
+export async function saveProfilePhoto(
+  img: PickedImage | null,
+  oldPath: string | null,
+): Promise<void> {
   const id = await userId();
   const bucket = supabase.storage.from(PRODUCE_BUCKET);
   let path: string | null = null;
@@ -426,7 +525,8 @@ export async function saveProfilePhoto(img: PickedImage | null, oldPath: string 
     const body = await readBytes(img.uri);
     if (body.byteLength === 0) throw new Error('The photo could not be read. Pick it again.');
     path = `${id}/profile-${Date.now()}.${EXT[type]}`;
-    if ((await bucket.upload(path, body, { contentType: type })).error) throw new Error('Could not upload the photo (max 2 MB).');
+    if ((await bucket.upload(path, body, { contentType: type })).error)
+      throw new Error('Could not upload the photo (max 2 MB).');
   }
   const { error } = await supabase.from('farmers').update({ photo_path: path }).eq('id', id);
   if (error) {

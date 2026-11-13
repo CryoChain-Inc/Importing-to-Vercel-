@@ -19,6 +19,7 @@ see on a map where it is, the road it will take, and when it will arrive.
 ## Behaviour
 
 ### 1. Driver: background GPS during a trip
+
 - Starts automatically when the driver has a dispatched stop; stops when the last stop is done or the driver signs out.
 - Sends a position every 30 seconds or 100 m, whichever comes first, also with the phone locked.
 - Android shows a persistent notification while it runs: "CryoChain is sharing your location for today's deliveries."
@@ -27,18 +28,22 @@ see on a map where it is, the road it will take, and when it will arrive.
 - Each position also refreshes the Google arrival times (`route-eta`, at most every 3 minutes, as now).
 
 ### 2. Trail
+
 Positions during a trip are kept in `driver_location_trail` so ops can see the route driven. Kept 30 days, then
 deleted by a daily job. Outside a trip, nothing is stored beyond the latest position.
 
 ### 3. Buyer: live order map
+
 On a paid order that is on a truck, the order detail shows a map with the truck's position (updated every 15 seconds
 while the map is open), the buyer's own address and the arrival time with buffer.
+
 - **No other stops are revealed**: no markers, no count, no addresses. While other stops come first the map shows the
   truck and the buyer's address only, with "The driver is collecting produce on the way".
 - Once the buyer's drop-off is the truck's next stop, the road line from the truck to them is drawn.
-Before dispatch nothing is shown; after delivery the map is replaced by the delivered time.
+  Before dispatch nothing is shown; after delivery the map is replaced by the delivered time.
 
 ### 4. Ops: live map
+
 The Routes page gets a map with every active truck, its remaining stops in order, and its planned road route. A truck
 that has not reported for 10 minutes is marked "No signal".
 

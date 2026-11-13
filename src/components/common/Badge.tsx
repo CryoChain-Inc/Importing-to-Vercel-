@@ -2,7 +2,6 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 
-
 export interface BadgeProps {
   label: string;
   tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -18,7 +17,12 @@ export function Badge({ label, tone = 'neutral' }: BadgeProps) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' as const },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start' as const,
+  },
   success: { backgroundColor: c.brandTint },
   warning: { backgroundColor: c.harvestTint },
   danger: { backgroundColor: c.dangerFill },

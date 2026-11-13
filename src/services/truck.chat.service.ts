@@ -8,7 +8,12 @@ export interface TruckMessage {
   createdAt: string;
 }
 
-const mapMessage = (r: { id: string; sender_id: string; body: string; created_at: string }): TruckMessage => ({
+const mapMessage = (r: {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+}): TruckMessage => ({
   id: r.id,
   senderId: r.sender_id,
   body: r.body,
@@ -44,7 +49,9 @@ export async function fetchTruckMessages(bookingId: string): Promise<TruckMessag
     .order('created_at', { ascending: true });
   if (error) {
     if (/truck_messages|schema cache/i.test(error.message)) {
-      throw new Error('Chat is not available yet. Apply the latest database update, then try again.');
+      throw new Error(
+        'Chat is not available yet. Apply the latest database update, then try again.',
+      );
     }
     throw new Error('Could not load messages.');
   }
@@ -62,7 +69,9 @@ export async function sendTruckMessage(bookingId: string, text: string): Promise
     .single();
   if (error || !data) {
     if (/truck_messages|schema cache/i.test(error?.message ?? '')) {
-      throw new Error('Chat is not available yet. Apply the latest database update, then try again.');
+      throw new Error(
+        'Chat is not available yet. Apply the latest database update, then try again.',
+      );
     }
     if (/row-level security|violates/i.test(error?.message ?? '')) {
       throw new Error('Messaging opens once a driver is assigned to this trip.');

@@ -2,17 +2,17 @@
 
 Status: approved 2026-11-11. One branch per module off `dev`, named `feat/<module id>`, merged in build order.
 
-| Module id | Responsibility | Depends on |
-|---|---|---|
-| `farmer-supply` | Listing edit rules, stock breakdown per listing, all photos shown | — |
-| `app-sync` | Pull to refresh, refetch on app foreground, Supabase Realtime refetch — every role | — |
-| `fleet` | Ops add and edit trucks (plate, capacity), assign a truck to a driver | — |
-| `dispatch` | One pickup stop per farm, truck capacity, dispatch window, road ETA with buffer | `farmer-supply`, `fleet` |
-| `shortfall` | Pickup tolerance, pay on collected quantity, farmer or driver reports a shortage, automatic re-sourcing from the nearest farm, escalate when no stock | `dispatch` |
-| `refunds` | Buyer shortage notice, ops approval, Paystack refund, webhook confirmation | `shortfall` |
-| `live-tracking` | Driver GPS during a trip, buyer and ops live map with ETA | `dispatch`, `app-sync` |
-| `farmer-pickups` | Farmer pickup schedule and history: expected, collected, paid | `shortfall`, `app-sync` |
-| `ops-control` | Ops overrides (reassign driver, edit allocation, reorder stops), exception views, config for every tunable above | all |
+| Module id        | Responsibility                                                                                                                                        | Depends on               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `farmer-supply`  | Listing edit rules, stock breakdown per listing, all photos shown                                                                                     | —                        |
+| `app-sync`       | Pull to refresh, refetch on app foreground, Supabase Realtime refetch — every role                                                                    | —                        |
+| `fleet`          | Ops add and edit trucks (plate, capacity), assign a truck to a driver                                                                                 | —                        |
+| `dispatch`       | One pickup stop per farm, truck capacity, dispatch window, road ETA with buffer                                                                       | `farmer-supply`, `fleet` |
+| `shortfall`      | Pickup tolerance, pay on collected quantity, farmer or driver reports a shortage, automatic re-sourcing from the nearest farm, escalate when no stock | `dispatch`               |
+| `refunds`        | Buyer shortage notice, ops approval, Paystack refund, webhook confirmation                                                                            | `shortfall`              |
+| `live-tracking`  | Driver GPS during a trip, buyer and ops live map with ETA                                                                                             | `dispatch`, `app-sync`   |
+| `farmer-pickups` | Farmer pickup schedule and history: expected, collected, paid                                                                                         | `shortfall`, `app-sync`  |
+| `ops-control`    | Ops overrides (reassign driver, edit allocation, reorder stops), exception views, config for every tunable above                                      | all                      |
 
 Build order: `farmer-supply`, `app-sync`, `fleet` → `dispatch` → `shortfall` → `refunds`, `live-tracking`, `farmer-pickups` → `ops-control`
 

@@ -3,7 +3,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { detailsDone, hasWallet, produceImageUrl, saveDetails, saveProfilePhoto, saveWallet, type Farmer, type FarmerDetails, type Wallet } from '../../../services/farmer.service';
+import {
+  detailsDone,
+  hasWallet,
+  produceImageUrl,
+  saveDetails,
+  saveProfilePhoto,
+  saveWallet,
+  type Farmer,
+  type FarmerDetails,
+  type Wallet,
+} from '../../../services/farmer.service';
 import { composeAddress } from '../../../services/maps.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone } from '../../../utils/format';
@@ -96,7 +106,13 @@ export function FarmerProfileCard({
   const pick = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     const a = r.canceled ? null : r.assets[0];
-    if (a) setCrop({ uri: a.uri, mimeType: a.mimeType, assetId: a.assetId, fingerprint: await imageFingerprint(a.uri) });
+    if (a)
+      setCrop({
+        uri: a.uri,
+        mimeType: a.mimeType,
+        assetId: a.assetId,
+        fingerprint: await imageFingerprint(a.uri),
+      });
   };
   const setPhoto = (img: PickedImage | null) => save(() => saveProfilePhoto(img, farmer.photoPath));
 
@@ -108,73 +124,167 @@ export function FarmerProfileCard({
       {error ? <Banner text={error} /> : null}
       <HeroCard style={s.hero}>
         <View>
-          <Pressable onPress={pick} disabled={busy} accessibilityRole="button" accessibilityLabel={farmer.photoPath ? 'Change profile photo' : 'Add profile photo'} style={s.avatar}>
-            {farmer.photoPath ? <Image source={{ uri: produceImageUrl(farmer.photoPath) }} style={s.photo} /> : <Text style={s.initials}>{initials(name)}</Text>}
+          <Pressable
+            onPress={pick}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={farmer.photoPath ? 'Change profile photo' : 'Add profile photo'}
+            style={s.avatar}
+          >
+            {farmer.photoPath ? (
+              <Image source={{ uri: produceImageUrl(farmer.photoPath) }} style={s.photo} />
+            ) : (
+              <Text style={s.initials}>{initials(name)}</Text>
+            )}
           </Pressable>
           {farmer.photoPath ? (
-            <Pressable onPress={() => setPhoto(null)} disabled={busy} accessibilityRole="button" accessibilityLabel="Remove profile photo" hitSlop={10} style={s.cam}>
+            <Pressable
+              onPress={() => setPhoto(null)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Remove profile photo"
+              hitSlop={10}
+              style={s.cam}
+            >
               <Icon name="close" size={12} color="#ffffff" />
             </Pressable>
           ) : (
-            <View style={s.cam} pointerEvents="none"><Icon name="edit" size={12} color="#ffffff" /></View>
+            <View style={s.cam} pointerEvents="none">
+              <Icon name="edit" size={12} color="#ffffff" />
+            </View>
           )}
         </View>
         <View style={s.heroText}>
-          <Text style={s.heroName} numberOfLines={1} adjustsFontSizeToFit>{name || 'Farmer'}</Text>
-          <Text style={s.heroMeta} numberOfLines={1}>{phone ? formatPhone(phone) : 'Add your farm details'}</Text>
+          <Text style={s.heroName} numberOfLines={1} adjustsFontSizeToFit>
+            {name || 'Farmer'}
+          </Text>
+          <Text style={s.heroMeta} numberOfLines={1}>
+            {phone ? formatPhone(phone) : 'Add your farm details'}
+          </Text>
         </View>
-        <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out" hitSlop={8} style={s.out}>
+        <Pressable
+          onPress={onSignOut}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          hitSlop={8}
+          style={s.out}
+        >
           <Icon name="logOut" size={20} color="#ffffff" />
         </Pressable>
       </HeroCard>
-      {crop ? <CropModal uri={crop.uri} onCancel={() => setCrop(null)} onDone={(c) => { setCrop(null); setPhoto({ ...c, assetId: crop.assetId, fingerprint: crop.fingerprint }); }} /> : null}
+      {crop ? (
+        <CropModal
+          uri={crop.uri}
+          onCancel={() => setCrop(null)}
+          onDone={(c) => {
+            setCrop(null);
+            setPhoto({ ...c, assetId: crop.assetId, fingerprint: crop.fingerprint });
+          }}
+        />
+      ) : null}
       {left > 0 ? (
-        <Banner tone="info" text={`${left} step${left > 1 ? 's' : ''} left before you can list produce and get paid.`} />
+        <Banner
+          tone="info"
+          text={`${left} step${left > 1 ? 's' : ''} left before you can list produce and get paid.`}
+        />
       ) : null}
       <Card>
         <View style={s.head}>
-          <View style={s.tile}><Icon name="pin" size={18} color={colors.brandInk} /></View>
+          <View style={s.tile}>
+            <Icon name="pin" size={18} color={colors.brandInk} />
+          </View>
           <Text style={s.title}>Farm details</Text>
-          <Badge label={hasDetails ? 'Complete' : 'Needed'} tone={hasDetails ? 'success' : 'warning'} />
+          <Badge
+            label={hasDetails ? 'Complete' : 'Needed'}
+            tone={hasDetails ? 'success' : 'warning'}
+          />
         </View>
-        {farmer.address ? null : <Text style={s.empty}>Add your farm address so our truck knows where to collect.</Text>}
+        {farmer.address ? null : (
+          <Text style={s.empty}>Add your farm address so our truck knows where to collect.</Text>
+        )}
         <View style={s.rows}>
           <Row label="Name" value={name} />
-          <Row label="Address" value={farmer.address ? composeAddress({ line1: farmer.line1 ?? '', address: farmer.address }) : null} />
+          <Row
+            label="Address"
+            value={
+              farmer.address
+                ? composeAddress({ line1: farmer.line1 ?? '', address: farmer.address })
+                : null
+            }
+          />
           <Row label="Landmark" value={farmer.landmark} />
         </View>
-        <Button label={hasDetails ? 'Edit details' : 'Add details'} variant={hasDetails ? 'outline' : 'primary'} icon="edit" onPress={() => onEdit('details')} />
+        <Button
+          label={hasDetails ? 'Edit details' : 'Add details'}
+          variant={hasDetails ? 'outline' : 'primary'}
+          icon="edit"
+          onPress={() => onEdit('details')}
+        />
       </Card>
       <Card>
         <View style={s.head}>
-          <View style={s.tile}><Icon name="wallet" size={18} color={colors.brandInk} /></View>
+          <View style={s.tile}>
+            <Icon name="wallet" size={18} color={colors.brandInk} />
+          </View>
           <Text style={s.title}>MoMo wallet</Text>
-          <Badge label={farmer.walletVerified ? 'Verified' : saved ? 'Saved' : 'Needed'} tone={farmer.walletVerified ? 'success' : saved ? 'info' : 'warning'} />
+          <Badge
+            label={farmer.walletVerified ? 'Verified' : saved ? 'Saved' : 'Needed'}
+            tone={farmer.walletVerified ? 'success' : saved ? 'info' : 'warning'}
+          />
         </View>
         {saved ? (
           <HeroCard style={s.momo}>
             <Text style={s.momoNet}>{farmer.momoNetwork}</Text>
-            <Text style={s.momoNum} numberOfLines={1} adjustsFontSizeToFit>{formatPhone(farmer.momoNumber)}</Text>
+            <Text style={s.momoNum} numberOfLines={1} adjustsFontSizeToFit>
+              {formatPhone(farmer.momoNumber)}
+            </Text>
             <Text style={s.momoName}>{farmer.momoName}</Text>
           </HeroCard>
         ) : (
           <Text style={s.empty}>Add the mobile money wallet we pay you into.</Text>
         )}
-        <Button label={saved ? 'Change wallet' : 'Add wallet'} variant={saved ? 'outline' : 'primary'} icon="wallet" onPress={() => onEdit('wallet')} />
+        <Button
+          label={saved ? 'Change wallet' : 'Add wallet'}
+          variant={saved ? 'outline' : 'primary'}
+          icon="wallet"
+          onPress={() => onEdit('wallet')}
+        />
       </Card>
       <SignInCard phone={phone ?? ''} email={email ?? ''} onRefresh={onSaved} />
 
-      <EditSheet visible={editing === 'details'} title="Farm details" saveLabel="Save details" busy={busy} canSave={detailsReady(details)} onClose={() => onEdit(null)} onSave={() => save(() => saveDetails(details))}>
+      <EditSheet
+        visible={editing === 'details'}
+        title="Farm details"
+        saveLabel="Save details"
+        busy={busy}
+        canSave={detailsReady(details)}
+        onClose={() => onEdit(null)}
+        onSave={() => save(() => saveDetails(details))}
+      >
         <DetailsForm value={details} onChange={(p) => setDetails({ ...details, ...p })} />
       </EditSheet>
-      <EditSheet visible={editing === 'wallet'} title="MoMo wallet" saveLabel="Save wallet" busy={busy} canSave={walletReady(wallet)} onClose={() => onEdit(null)} onSave={() => save(() => saveWallet(wallet))}>
+      <EditSheet
+        visible={editing === 'wallet'}
+        title="MoMo wallet"
+        saveLabel="Save wallet"
+        busy={busy}
+        canSave={walletReady(wallet)}
+        onClose={() => onEdit(null)}
+        onSave={() => save(() => saveWallet(wallet))}
+      >
         <WalletForm value={wallet} onChange={(p) => setWallet({ ...wallet, ...p })} />
       </EditSheet>
     </View>
   );
 }
 
-const initials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || 'F';
+const initials = (n: string) =>
+  n
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('') || 'F';
 
 function Row({ label, value }: { label: string; value: string | null }) {
   const s = useThemedStyles(styles);
@@ -189,24 +299,88 @@ function Row({ label, value }: { label: string; value: string | null }) {
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 12 },
   hero: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 16 },
-  avatar: { width: 64, height: 64, borderRadius: 20, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255,255,255,0.18)' },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
   photo: { width: 64, height: 64, borderRadius: 20 },
-  cam: { position: 'absolute' as const, right: -4, bottom: -4, width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(0,0,0,0.65)' },
+  cam: {
+    position: 'absolute' as const,
+    right: -4,
+    bottom: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
   initials: { fontFamily: fonts.heading, fontSize: 24, color: '#ffffff' },
   heroText: { flex: 1, gap: 2 },
-  heroName: { fontFamily: fonts.heading, fontSize: 22, lineHeight: 30, letterSpacing: -0.3, color: '#ffffff' },
+  heroName: {
+    fontFamily: fonts.heading,
+    fontSize: 22,
+    lineHeight: 30,
+    letterSpacing: -0.3,
+    color: '#ffffff',
+  },
   heroMeta: { fontFamily: fonts.sansMedium, fontSize: 13, color: 'rgba(255,255,255,0.78)' },
-  out: { width: 44, height: 44, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255,255,255,0.18)' },
+  out: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
   head: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 4 },
-  tile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
+  tile: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
   title: { flex: 1, fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   momo: { gap: 4, borderRadius: 20, marginBottom: 12 },
   momoNet: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: 'rgba(255,255,255,0.78)' },
-  momoNum: { fontFamily: fonts.heading, fontSize: 22, lineHeight: 30, letterSpacing: 0.5, color: '#ffffff', fontVariant: ['tabular-nums' as const], marginTop: 12 },
+  momoNum: {
+    fontFamily: fonts.heading,
+    fontSize: 22,
+    lineHeight: 30,
+    letterSpacing: 0.5,
+    color: '#ffffff',
+    fontVariant: ['tabular-nums' as const],
+    marginTop: 12,
+  },
   momoName: { fontFamily: fonts.sansMedium, fontSize: 14, color: 'rgba(255,255,255,0.85)' },
-  empty: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted, marginBottom: 12 },
+  empty: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: c.inkMuted,
+    marginBottom: 12,
+  },
   rows: { gap: 0, marginBottom: 12 },
-  row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: c.surfaceSunken },
+  row: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    gap: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: c.surfaceSunken,
+  },
   label: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
-  value: { flex: 1, textAlign: 'right' as const, fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
+  value: {
+    flex: 1,
+    textAlign: 'right' as const,
+    fontFamily: fonts.sansMedium,
+    fontSize: 15,
+    color: c.ink,
+  },
 });

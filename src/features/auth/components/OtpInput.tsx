@@ -5,7 +5,17 @@ import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 export const OTP_LENGTH = 6;
 
 /** Six visible boxes backed by one hidden input: paste, SMS autofill and backspace all just work. */
-export function OtpInput({ value, onChange, onSubmit, hasError }: { value: string; onChange: (v: string) => void; onSubmit?: () => void; hasError?: boolean }) {
+export function OtpInput({
+  value,
+  onChange,
+  onSubmit,
+  hasError,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit?: () => void;
+  hasError?: boolean;
+}) {
   const ref = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   const s = useThemedStyles(styles);
@@ -17,7 +27,11 @@ export function OtpInput({ value, onChange, onSubmit, hasError }: { value: strin
   }, []);
 
   return (
-    <Pressable onPress={() => ref.current?.focus()} style={s.row} accessibilityLabel="6-digit verification code">
+    <Pressable
+      onPress={() => ref.current?.focus()}
+      style={s.row}
+      accessibilityLabel="6-digit verification code"
+    >
       {Array.from({ length: OTP_LENGTH }, (_, i) => {
         const active = focused && i === Math.min(value.length, OTP_LENGTH - 1);
         return (

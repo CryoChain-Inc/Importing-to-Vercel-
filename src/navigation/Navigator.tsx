@@ -35,12 +35,26 @@ const START: Route = !isWeb
     ? { name: 'ops' }
     : window.location.pathname === '/email-verified' && verifyLinkStatus(window.location.href)
       ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
-      : window.location.pathname === '/payment/verify' && paymentReturnReference(window.location.href)
+      : window.location.pathname === '/payment/verify' &&
+          paymentReturnReference(window.location.href)
         ? { name: 'paymentResult', reference: paymentReturnReference(window.location.href)! }
         : { name: 'landing' };
-const PATH: Record<Route['name'], string> = { landing: '/', ops: '/ops', emailVerified: '/email-verified', paymentResult: '/payment/verify', verify: '/verify', role: '/role', workspace: '/workspace', produce: '/produce', home: '/home' };
+const PATH: Record<Route['name'], string> = {
+  landing: '/',
+  ops: '/ops',
+  emailVerified: '/email-verified',
+  paymentResult: '/payment/verify',
+  verify: '/verify',
+  role: '/role',
+  workspace: '/workspace',
+  produce: '/produce',
+  home: '/home',
+};
 /** The ops console owns its URL (/ops/<section>?page=2), so entering it, or reloading on a deep link, keeps the address as is. */
-const pathFor = (r: Route) => (r.name === 'home' && r.role === 'ops' ? window.location.pathname + window.location.search : PATH[r.name]);
+const pathFor = (r: Route) =>
+  r.name === 'home' && r.role === 'ops'
+    ? window.location.pathname + window.location.search
+    : PATH[r.name];
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)
@@ -53,7 +67,12 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
   stackRef.current = stack;
 
   useEffect(() => {
-    if (isWeb) window.history.replaceState({ idx: 0 }, '', START.name === 'ops' ? window.location.pathname + window.location.search : PATH[START.name]);
+    if (isWeb)
+      window.history.replaceState(
+        { idx: 0 },
+        '',
+        START.name === 'ops' ? window.location.pathname + window.location.search : PATH[START.name],
+      );
   }, []);
 
   const push = useCallback((r: Route) => {
@@ -73,7 +92,12 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
       const top = s[i];
       if (!top || (top.name !== 'home' && top.name !== 'workspace')) return s;
       const account = { ...top.account, ...patch };
-      if (account.name === top.account.name && account.phone === top.account.phone && account.email === top.account.email) return s;
+      if (
+        account.name === top.account.name &&
+        account.phone === top.account.phone &&
+        account.email === top.account.email
+      )
+        return s;
       const next = s.slice();
       next[i] = { ...top, account };
       return next;
@@ -82,7 +106,8 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
 
   const back = useCallback(() => {
     if (stackRef.current.length < 2) return;
-    if (isWeb) window.history.back(); // popstate below trims the stack
+    if (isWeb)
+      window.history.back(); // popstate below trims the stack
     else setStack((s) => s.slice(0, -1));
   }, []);
 
@@ -103,7 +128,14 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []);
 
-  const value: Nav = { route: stack[stack.length - 1], canGoBack: stack.length > 1, push, reset, patchAccount, back };
+  const value: Nav = {
+    route: stack[stack.length - 1],
+    canGoBack: stack.length > 1,
+    push,
+    reset,
+    patchAccount,
+    back,
+  };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

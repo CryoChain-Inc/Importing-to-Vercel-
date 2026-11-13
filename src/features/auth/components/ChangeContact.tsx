@@ -8,10 +8,17 @@ import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../them
 import { errorMessage } from '../errors';
 
 // Where the confirmation link in the email lands: the site on web, the app's scheme on devices (must be an allowed redirect URL in Supabase).
-const EMAIL_REDIRECT = Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/email-verified` : 'cryochain://email-verified';
+const EMAIL_REDIRECT =
+  Platform.OS === 'web' && typeof window !== 'undefined'
+    ? `${window.location.origin}/email-verified`
+    : 'cryochain://email-verified';
 
 /** Adds or changes the signed-in user's email: sends a confirmation link. Saved only once the link is opened. */
-export function ChangeContact({ current, onDone, onCancel }: {
+export function ChangeContact({
+  current,
+  onDone,
+  onCancel,
+}: {
   current: string;
   onDone: () => void | Promise<void>;
   onCancel?: () => void;
@@ -72,10 +79,20 @@ export function ChangeContact({ current, onDone, onCancel }: {
       <View style={s.waiting}>
         <ActivityIndicator color={colors.brandInk} />
         <Text style={s.title}>Check your inbox</Text>
-        <Text style={s.copy}>We sent a link to {value.trim()}. Tap it and this page updates on its own.</Text>
+        <Text style={s.copy}>
+          We sent a link to {value.trim()}. Tap it and this page updates on its own.
+        </Text>
         {error ? <Banner text={error} /> : null}
         <Button label="Resend email" variant="ghost" size="sm" onPress={send} disabled={busy} />
-        <Button label="Wrong address? Edit" variant="ghost" size="sm" onPress={() => { setSent(false); setError(null); }} />
+        <Button
+          label="Wrong address? Edit"
+          variant="ghost"
+          size="sm"
+          onPress={() => {
+            setSent(false);
+            setError(null);
+          }}
+        />
       </View>
     );
 
@@ -89,7 +106,11 @@ export function ChangeContact({ current, onDone, onCancel }: {
         maxLength={EMAIL_MAX}
         keyboardType="email-address"
         autoCapitalize="none"
-        hint={current ? `Currently ${current}. We'll email a link to confirm the new one.` : "We'll email a link to confirm it."}
+        hint={
+          current
+            ? `Currently ${current}. We'll email a link to confirm the new one.`
+            : "We'll email a link to confirm it."
+        }
       />
       <Button label="Send confirmation email" onPress={send} loading={busy} disabled={!valid} />
       {onCancel ? <Button label="Not now" variant="ghost" onPress={onCancel} /> : null}

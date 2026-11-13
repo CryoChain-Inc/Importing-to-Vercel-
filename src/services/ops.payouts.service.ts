@@ -56,10 +56,16 @@ export async function fetchPayables(): Promise<PayableRow[]> {
   const [{ data, error }, live] = await Promise.all([
     supabase
       .from('order_allocations')
-      .select('id, farmer_id, unit, kg, amount, payout_status, delivered_at, paid_at, orders(code), products(name), profiles:farmer_id(display_name)')
+      .select(
+        'id, farmer_id, unit, kg, amount, payout_status, delivered_at, paid_at, orders(code), products(name), profiles:farmer_id(display_name)',
+      )
       .in('status', ['offered', 'accepted', 'collected'])
       .order('created_at', { ascending: false }),
-    supabase.from('payout_transfers').select('allocation_id').neq('status', 'cancelled').not('allocation_id', 'is', null),
+    supabase
+      .from('payout_transfers')
+      .select('allocation_id')
+      .neq('status', 'cancelled')
+      .not('allocation_id', 'is', null),
   ]);
   fail('Could not load payouts.')(error ?? live.error);
   const inRun = new Set((live.data ?? []).map((t) => t.allocation_id as string));
@@ -116,7 +122,9 @@ export async function fetchPayoutRuns(): Promise<PayoutRun[]> {
 
 export async function createPayoutRun(allocationIds: string[]): Promise<void> {
   const { error } = await supabase.rpc('create_payout_run', { p_allocations: allocationIds });
-  fail('Could not create the payout run. Check each payout is for a delivered order and the farmer has a wallet.')(error);
+  fail(
+    'Could not create the payout run. Check each payout is for a delivered order and the farmer has a wallet.',
+  )(error);
 }
 
 export async function approvePayoutRun(id: string): Promise<void> {
@@ -132,7 +140,14 @@ export async function cancelPayoutRun(id: string): Promise<void> {
 async function call(body: object): Promise<any> {
   const { data, error } = await supabase.functions.invoke('payout-run', { body });
   // A non-2xx carries the server's message in the response body.
-  const msg = data?.error ?? (error ? await (error as any).context?.json?.().then((j: any) => j?.error).catch(() => null) : null);
+  const msg =
+    data?.error ??
+    (error
+      ? await (error as any).context
+          ?.json?.()
+          .then((j: any) => j?.error)
+          .catch(() => null)
+      : null);
   if (msg || error) throw new Error(msg ?? 'Payout service is unavailable.');
   return data;
 }

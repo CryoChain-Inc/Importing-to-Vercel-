@@ -24,7 +24,13 @@ const loadMaps = () =>
   }));
 
 /** Web map (Maps JavaScript API). Same contract as the native MapCanvas. */
-export function MapCanvas({ target, onSettle }: { target: MapTarget; onSettle: (latitude: number, longitude: number) => void }) {
+export function MapCanvas({
+  target,
+  onSettle,
+}: {
+  target: MapTarget;
+  onSettle: (latitude: number, longitude: number) => void;
+}) {
   const host = useRef<View>(null);
   const map = useRef<any>(null);
   const settle = useRef(onSettle);
@@ -56,7 +62,12 @@ export function MapCanvas({ target, onSettle }: { target: MapTarget; onSettle: (
           const lat = c.lat();
           const lng = c.lng();
           // `idle` also fires on container resizes; the address card resizing the map on every lookup made this loop.
-          if (last.current && Math.abs(last.current.lat - lat) < 1e-6 && Math.abs(last.current.lng - lng) < 1e-6) return;
+          if (
+            last.current &&
+            Math.abs(last.current.lat - lat) < 1e-6 &&
+            Math.abs(last.current.lng - lng) < 1e-6
+          )
+            return;
           last.current = { lat, lng };
           settle.current(lat, lng);
         });

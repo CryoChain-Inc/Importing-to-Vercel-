@@ -15,12 +15,7 @@ export interface AppIconProps {
  * - 'transparent': The isolated chevron glyph with transparent background.
  * Works seamlessly across Mobile (iOS/Android) and Web.
  */
-export function AppIcon({
-  size = 48,
-  rounded = true,
-  variant = 'full',
-  style,
-}: AppIconProps) {
+export function AppIcon({ size = 48, rounded = true, variant = 'full', style }: AppIconProps) {
   const borderRadius = rounded && variant === 'full' ? Math.round(size * 0.22) : 0;
   const source = variant === 'transparent' ? ASSETS.iconForeground : ASSETS.appIcon;
 

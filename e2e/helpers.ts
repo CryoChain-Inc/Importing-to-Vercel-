@@ -14,7 +14,10 @@ export async function signInWithPhone(page: Page, national: string) {
   await page.keyboard.type(CODE);
   await page.getByRole('button', { name: 'Confirm' }).click();
   // First sign-in on a fresh browser shows a welcome dialog that blocks the tabs.
-  await page.getByRole('button', { name: 'Get started' }).click({ timeout: 8000 }).catch(() => undefined);
+  await page
+    .getByRole('button', { name: 'Get started' })
+    .click({ timeout: 8000 })
+    .catch(() => undefined);
 }
 
 export async function signInOps(page: Page) {
@@ -22,11 +25,18 @@ export async function signInOps(page: Page) {
   await page.getByLabel('Work email').fill(OPS.email);
   await page.getByLabel('Password', { exact: true }).fill(OPS.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.getByRole('button', { name: 'Get started' }).click({ timeout: 8000 }).catch(() => undefined);
+  await page
+    .getByRole('button', { name: 'Get started' })
+    .click({ timeout: 8000 })
+    .catch(() => undefined);
 }
 
 /** Bottom/side tab by its visible label. */
-export const tab = (page: Page, name: string) => page.getByRole('tab', { name }).or(page.getByRole('button', { name, exact: true })).first();
+export const tab = (page: Page, name: string) =>
+  page
+    .getByRole('tab', { name })
+    .or(page.getByRole('button', { name, exact: true }))
+    .first();
 
 /** Collects uncaught page errors so every visited screen is also checked for crashes. */
 export function trackErrors(page: Page) {

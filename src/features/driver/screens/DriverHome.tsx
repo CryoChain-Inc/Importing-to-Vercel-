@@ -6,14 +6,25 @@ import { Banner } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
-import { fetchDeliveries, type DeliveryBook, type DeliveryOrder } from '../../../services/driver.deliveries.service';
+import {
+  fetchDeliveries,
+  type DeliveryBook,
+  type DeliveryOrder,
+} from '../../../services/driver.deliveries.service';
 import { pingLocation, refreshEtas } from '../../../services/driver.route.service';
 import { fetchDriverTrips, type TruckBooking } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { Empty } from '../../ops/components/OpsBits';
-import { DeliveryList, DeliveryOrderPage, DropoffPage, nextStop, PickupPage, RouteList } from '../components/DeliveryPages';
+import {
+  DeliveryList,
+  DeliveryOrderPage,
+  DropoffPage,
+  nextStop,
+  PickupPage,
+  RouteList,
+} from '../components/DeliveryPages';
 import { NextCard, SectionLabel } from '../components/bits';
 import { truckStatus, TruckDetail, TruckList, TruckMessages } from '../components/TruckPages';
 import { useDriverLocation } from '../useDriverLocation';
@@ -52,7 +63,10 @@ export function DriverHome({ account }: { account: Account }) {
 
   const load = useCallback(async () => {
     const [deliveryResult, tripRows] = await Promise.all([
-      fetchDeliveries().then((v) => ({ ok: true as const, v }), (e: unknown) => ({ ok: false as const, e })),
+      fetchDeliveries().then(
+        (v) => ({ ok: true as const, v }),
+        (e: unknown) => ({ ok: false as const, e }),
+      ),
       fetchDriverTrips(),
     ]);
     setTrips(tripRows);
@@ -60,12 +74,20 @@ export function DriverHome({ account }: { account: Account }) {
       setBook(deliveryResult.v);
       setError(null);
     } else {
-      setError(deliveryResult.e instanceof Error ? deliveryResult.e.message : 'Could not load your deliveries.');
+      setError(
+        deliveryResult.e instanceof Error
+          ? deliveryResult.e.message
+          : 'Could not load your deliveries.',
+      );
     }
   }, []);
 
-  useEffect(() => { refreshAccount(); }, [refreshAccount]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    refreshAccount();
+  }, [refreshAccount]);
+  useEffect(() => {
+    load();
+  }, [load]);
   const live = useLiveReload(load, LIVE_TABLES);
 
   useEffect(() => {
@@ -78,7 +100,9 @@ export function DriverHome({ account }: { account: Account }) {
           setLocationError('Allow location so new orders near you can be assigned to you.');
           return;
         }
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
         await pingLocation(pos.coords.latitude, pos.coords.longitude);
         // Google's drive times replace the rough estimates; the reload below picks them up.
         await refreshEtas();
@@ -91,7 +115,10 @@ export function DriverHome({ account }: { account: Account }) {
     };
     ping();
     const timer = setInterval(ping, PING_MS);
-    return () => { live = false; clearInterval(timer); };
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, [load]);
 
   // Background GPS runs only while there is a delivery on the road.
@@ -100,9 +127,22 @@ export function DriverHome({ account }: { account: Account }) {
   useEffect(() => {
     if (book == null) return;
     let live = true;
-    if (onTrip) startTripTracking().then((r) => { if (live) setTracking(r); }, () => { if (live) setTracking('foreground_only'); });
-    else stopTripTracking().then(() => { if (live) setTracking(null); });
-    return () => { live = false; };
+    if (onTrip)
+      startTripTracking().then(
+        (r) => {
+          if (live) setTracking(r);
+        },
+        () => {
+          if (live) setTracking('foreground_only');
+        },
+      );
+    else
+      stopTripTracking().then(() => {
+        if (live) setTracking(null);
+      });
+    return () => {
+      live = false;
+    };
   }, [onTrip, book]);
 
   const orders = book?.orders ?? [];
@@ -124,17 +164,23 @@ export function DriverHome({ account }: { account: Account }) {
   const range = { min: book?.tempMin ?? null, max: book?.tempMax ?? null };
   const backTruck = () => go('truck');
   const backDelivery = () => go('delivery');
-  const backOrder = () => (order && !order.ongoing ? go('delivery', { view: 'order', id: order.id }) : backDelivery());
+  const backOrder = () =>
+    order && !order.ongoing ? go('delivery', { view: 'order', id: order.id }) : backDelivery();
 
   return (
     <TabShell tabs={bar} tab={active} onSelect={select} refresh={live}>
       <View style={s.header}>
-        <Text style={s.title}>{active === 'home' ? `Hello, ${(account.name || 'driver').split(' ')[0]}` : title}</Text>
+        <Text style={s.title}>
+          {active === 'home' ? `Hello, ${(account.name || 'driver').split(' ')[0]}` : title}
+        </Text>
         <Text style={s.sub}>{sub}</Text>
       </View>
       {locationError && !params.view ? <Banner text={locationError} /> : null}
       {tracking === 'foreground_only' && !params.view ? (
-        <Banner tone="info" text="Allow location “all the time” in your phone settings so buyers can follow the truck while your screen is off. Until then, keep CryoChain open while you drive." />
+        <Banner
+          tone="info"
+          text="Allow location “all the time” in your phone settings so buyers can follow the truck while your screen is off. Until then, keep CryoChain open while you drive."
+        />
       ) : null}
       {error ? (
         <>
@@ -142,7 +188,9 @@ export function DriverHome({ account }: { account: Account }) {
           {book ? null : <Button label="Try again" variant="outline" onPress={load} />}
         </>
       ) : null}
-      {trips == null && book == null && !error ? <Text style={s.sub}>Loading your work…</Text> : null}
+      {trips == null && book == null && !error ? (
+        <Text style={s.sub}>Loading your work…</Text>
+      ) : null}
 
       {active === 'home' && (trips != null || book != null) ? (
         <Home
@@ -150,46 +198,88 @@ export function DriverHome({ account }: { account: Account }) {
           order={currentOrder}
           onTruck={() => go('truck')}
           onDelivery={() => go('delivery')}
-          onPickup={(stopId) => currentOrder && go('delivery', { view: 'pickup', id: stopId, order: currentOrder.id })}
+          onPickup={(stopId) =>
+            currentOrder && go('delivery', { view: 'pickup', id: stopId, order: currentOrder.id })
+          }
           onDropoff={() => currentOrder && go('delivery', { view: 'dropoff', id: currentOrder.id })}
-          onSignOut={() => stopTripTracking().finally(() => authService.signOut().finally(() => reset({ name: 'landing' })))}
+          onSignOut={() =>
+            stopTripTracking().finally(() =>
+              authService.signOut().finally(() => reset({ name: 'landing' })),
+            )
+          }
         />
       ) : null}
 
       {active === 'truck' ? (
-        trips == null ? null
-          : params.view === 'messages' && trip ? <TruckMessages trip={trip} onBack={trip.completedAt ? () => go('truck', { view: 'trip', id: trip.id }) : backTruck} />
-            : params.view === 'trip' && trip ? <TruckDetail trip={trip} onBack={backTruck} onMessages={() => go('truck', { view: 'messages', id: trip.id })} />
-              : params.view ? <Missing label="That trip is not assigned to you." onBack={backTruck} />
-                : <TruckHome trip={currentTrip} also={openTrips.slice(1)} past={allTrips.filter((t) => t.completedAt)} onMessages={(id) => go('truck', { view: 'messages', id })} onOpen={(id) => go('truck', { view: 'trip', id })} />
+        trips == null ? null : params.view === 'messages' && trip ? (
+          <TruckMessages
+            trip={trip}
+            onBack={trip.completedAt ? () => go('truck', { view: 'trip', id: trip.id }) : backTruck}
+          />
+        ) : params.view === 'trip' && trip ? (
+          <TruckDetail
+            trip={trip}
+            onBack={backTruck}
+            onMessages={() => go('truck', { view: 'messages', id: trip.id })}
+          />
+        ) : params.view ? (
+          <Missing label="That trip is not assigned to you." onBack={backTruck} />
+        ) : (
+          <TruckHome
+            trip={currentTrip}
+            also={openTrips.slice(1)}
+            past={allTrips.filter((t) => t.completedAt)}
+            onMessages={(id) => go('truck', { view: 'messages', id })}
+            onOpen={(id) => go('truck', { view: 'trip', id })}
+          />
+        )
       ) : null}
 
       {active === 'delivery' ? (
-        book == null ? null
-          : params.view === 'pickup' && order && pickup ? <PickupPage order={order} pickup={pickup} range={range} onBack={backOrder} onChange={load} />
-            : params.view === 'dropoff' && order?.dropoff ? <DropoffPage order={order} dropoff={order.dropoff} range={range} onBack={backOrder} onChange={load} />
-              : params.view === 'order' && order ? (
-                <DeliveryOrderPage
-                  order={order}
-                  onBack={backDelivery}
-                  onPickup={(stopId) => go('delivery', { view: 'pickup', id: stopId, order: order.id })}
-                  onDropoff={() => go('delivery', { view: 'dropoff', id: order.id })}
-                />
-              )
-                : params.view ? <Missing label="That delivery is not on your route." onBack={backDelivery} />
-                  : (
-                    <DeliveryHome
-                      route={openOrders}
-                      onStop={(stopId, orderId) => go('delivery', { view: 'pickup', id: stopId, order: orderId })}
-                      onDeliver={(orderId) => go('delivery', { view: 'dropoff', id: orderId })}
-                      order={currentOrder}
-                      also={openOrders.slice(1)}
-                      past={orders.filter((o) => !o.ongoing)}
-                      onPickup={(stopId) => currentOrder && go('delivery', { view: 'pickup', id: stopId, order: currentOrder.id })}
-                      onDropoff={() => currentOrder && go('delivery', { view: 'dropoff', id: currentOrder.id })}
-                      onOpen={(id) => go('delivery', { view: 'order', id })}
-                    />
-                  )
+        book == null ? null : params.view === 'pickup' && order && pickup ? (
+          <PickupPage
+            order={order}
+            pickup={pickup}
+            range={range}
+            onBack={backOrder}
+            onChange={load}
+          />
+        ) : params.view === 'dropoff' && order?.dropoff ? (
+          <DropoffPage
+            order={order}
+            dropoff={order.dropoff}
+            range={range}
+            onBack={backOrder}
+            onChange={load}
+          />
+        ) : params.view === 'order' && order ? (
+          <DeliveryOrderPage
+            order={order}
+            onBack={backDelivery}
+            onPickup={(stopId) => go('delivery', { view: 'pickup', id: stopId, order: order.id })}
+            onDropoff={() => go('delivery', { view: 'dropoff', id: order.id })}
+          />
+        ) : params.view ? (
+          <Missing label="That delivery is not on your route." onBack={backDelivery} />
+        ) : (
+          <DeliveryHome
+            route={openOrders}
+            onStop={(stopId, orderId) =>
+              go('delivery', { view: 'pickup', id: stopId, order: orderId })
+            }
+            onDeliver={(orderId) => go('delivery', { view: 'dropoff', id: orderId })}
+            order={currentOrder}
+            also={openOrders.slice(1)}
+            past={orders.filter((o) => !o.ongoing)}
+            onPickup={(stopId) =>
+              currentOrder && go('delivery', { view: 'pickup', id: stopId, order: currentOrder.id })
+            }
+            onDropoff={() =>
+              currentOrder && go('delivery', { view: 'dropoff', id: currentOrder.id })
+            }
+            onOpen={(id) => go('delivery', { view: 'order', id })}
+          />
+        )
       ) : null}
     </TabShell>
   );
@@ -205,7 +295,13 @@ function Missing({ label, onBack }: { label: string; onBack: () => void }) {
 }
 
 function Home({
-  trip, order, onTruck, onDelivery, onPickup, onDropoff, onSignOut,
+  trip,
+  order,
+  onTruck,
+  onDelivery,
+  onPickup,
+  onDropoff,
+  onSignOut,
 }: {
   trip: TruckBooking | null;
   order: DeliveryOrder | null;
@@ -222,10 +318,31 @@ function Home({
       {order ? (
         <NextCard
           eyebrow={`Delivery · ${order.code}`}
-          title={next?.kind === 'pickup' ? `Collect from ${next.pickup.farmerName}` : next?.kind === 'dropoff' ? `Deliver to ${order.buyerName}` : 'All stops done'}
-          lines={[next?.kind === 'pickup' ? next.pickup.place : order.address, `${order.pickups.length} farmer${order.pickups.length === 1 ? '' : 's'} · buyer ${order.buyerName}`]}
-          label={next?.kind === 'pickup' ? 'Start pickup' : next?.kind === 'dropoff' ? 'Deliver now' : 'View route'}
-          onPress={next?.kind === 'pickup' ? () => onPickup(next.pickup.stopId) : next?.kind === 'dropoff' ? onDropoff : onDelivery}
+          title={
+            next?.kind === 'pickup'
+              ? `Collect from ${next.pickup.farmerName}`
+              : next?.kind === 'dropoff'
+                ? `Deliver to ${order.buyerName}`
+                : 'All stops done'
+          }
+          lines={[
+            next?.kind === 'pickup' ? next.pickup.place : order.address,
+            `${order.pickups.length} farmer${order.pickups.length === 1 ? '' : 's'} · buyer ${order.buyerName}`,
+          ]}
+          label={
+            next?.kind === 'pickup'
+              ? 'Start pickup'
+              : next?.kind === 'dropoff'
+                ? 'Deliver now'
+                : 'View route'
+          }
+          onPress={
+            next?.kind === 'pickup'
+              ? () => onPickup(next.pickup.stopId)
+              : next?.kind === 'dropoff'
+                ? onDropoff
+                : onDelivery
+          }
         />
       ) : null}
       {trip ? (
@@ -238,15 +355,30 @@ function Home({
         />
       ) : null}
       {!trip && !order ? (
-        <Empty icon="truck" title="Nothing assigned yet" hint="Keep location on. Deliveries and cold-truck bookings allotted to you appear here." />
+        <Empty
+          icon="truck"
+          title="Nothing assigned yet"
+          hint="Keep location on. Deliveries and cold-truck bookings allotted to you appear here."
+        />
       ) : null}
-      <Button label="Sign out" icon="logOut" variant="ghost" size="sm" onPress={onSignOut} style={{ alignSelf: 'center' }} />
+      <Button
+        label="Sign out"
+        icon="logOut"
+        variant="ghost"
+        size="sm"
+        onPress={onSignOut}
+        style={{ alignSelf: 'center' }}
+      />
     </View>
   );
 }
 
 function TruckHome({
-  trip, also, past, onMessages, onOpen,
+  trip,
+  also,
+  past,
+  onMessages,
+  onOpen,
 }: {
   trip: TruckBooking | null;
   also: TruckBooking[];
@@ -257,17 +389,41 @@ function TruckHome({
   const s = useThemedStyles(styles);
   return (
     <View style={s.list}>
-      {trip ? <TruckDetail trip={trip} onMessages={() => onMessages(trip.id)} /> : (
-        <Empty icon="truck" title="No trip right now" hint="Your next cold-truck booking shows here once operations allots it to you." />
+      {trip ? (
+        <TruckDetail trip={trip} onMessages={() => onMessages(trip.id)} />
+      ) : (
+        <Empty
+          icon="truck"
+          title="No trip right now"
+          hint="Your next cold-truck booking shows here once operations allots it to you."
+        />
       )}
-      {also.length > 0 ? <><SectionLabel text="Up next · not started" /><TruckList trips={also} past={false} onOpen={onOpen} /></> : null}
-      {past.length > 0 ? <><SectionLabel text="Past trips" /><TruckList trips={past} past onOpen={onOpen} /></> : null}
+      {also.length > 0 ? (
+        <>
+          <SectionLabel text="Up next · not started" />
+          <TruckList trips={also} past={false} onOpen={onOpen} />
+        </>
+      ) : null}
+      {past.length > 0 ? (
+        <>
+          <SectionLabel text="Past trips" />
+          <TruckList trips={past} past onOpen={onOpen} />
+        </>
+      ) : null}
     </View>
   );
 }
 
 function DeliveryHome({
-  route, onStop, onDeliver, order, also, past, onPickup, onDropoff, onOpen,
+  route,
+  onStop,
+  onDeliver,
+  order,
+  also,
+  past,
+  onPickup,
+  onDropoff,
+  onOpen,
 }: {
   /** Every order on the current trip. */
   route: DeliveryOrder[];
@@ -286,20 +442,49 @@ function DeliveryHome({
     <View style={s.list}>
       {shared ? (
         // Several orders share the truck, so the driver follows the stops, not one order at a time.
-        <><SectionLabel text={`Your route · ${route.length} orders`} /><RouteList orders={route} onPickup={onStop} onDropoff={onDeliver} /></>
-      ) : order ? <DeliveryOrderPage order={order} onPickup={onPickup} onDropoff={onDropoff} /> : (
-        <Empty icon="package" title="No delivery right now" hint="Paid orders near you are assigned here while your location is on." />
+        <>
+          <SectionLabel text={`Your route · ${route.length} orders`} />
+          <RouteList orders={route} onPickup={onStop} onDropoff={onDeliver} />
+        </>
+      ) : order ? (
+        <DeliveryOrderPage order={order} onPickup={onPickup} onDropoff={onDropoff} />
+      ) : (
+        <Empty
+          icon="package"
+          title="No delivery right now"
+          hint="Paid orders near you are assigned here while your location is on."
+        />
       )}
-      {shared ? <><SectionLabel text="Orders on this trip" /><DeliveryList orders={route} past={false} onOpen={onOpen} /></>
-        : also.length > 0 ? <><SectionLabel text="Up next · not started" /><DeliveryList orders={also} past={false} onOpen={onOpen} /></> : null}
-      {past.length > 0 ? <><SectionLabel text={`Delivered · ${past.length}`} /><DeliveryList orders={past} past onOpen={onOpen} /></> : null}
+      {shared ? (
+        <>
+          <SectionLabel text="Orders on this trip" />
+          <DeliveryList orders={route} past={false} onOpen={onOpen} />
+        </>
+      ) : also.length > 0 ? (
+        <>
+          <SectionLabel text="Up next · not started" />
+          <DeliveryList orders={also} past={false} onOpen={onOpen} />
+        </>
+      ) : null}
+      {past.length > 0 ? (
+        <>
+          <SectionLabel text={`Delivered · ${past.length}`} />
+          <DeliveryList orders={past} past onOpen={onOpen} />
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   header: { gap: 2 },
-  title: { fontFamily: fonts.heading, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.ink },
+  title: {
+    fontFamily: fonts.heading,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: c.ink,
+  },
   sub: { fontFamily: fonts.sansRegular, fontSize: 14, color: c.inkMuted },
   list: { gap: 14 },
 });

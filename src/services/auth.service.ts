@@ -42,9 +42,15 @@ export const authService = {
   },
 
   async getProfile(): Promise<UserProfile | null> {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) return null;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle();
     if (error) throw error;
     return data as UserProfile | null;
   },
@@ -58,10 +64,14 @@ export const authService = {
   /** Starts adding or changing the signed-in user's email/phone. A code goes to the new phone; pass `redirectTo` to email a confirmation link instead. */
   async requestContactChange(identifier: string, redirectTo?: string) {
     const attrs = target(identifier);
-    const { error } = redirectTo ? await supabase.auth.updateUser(attrs, { emailRedirectTo: redirectTo }) : await supabase.auth.updateUser(attrs);
+    const { error } = redirectTo
+      ? await supabase.auth.updateUser(attrs, { emailRedirectTo: redirectTo })
+      : await supabase.auth.updateUser(attrs);
     if (!error) return markCodeSent(identifier);
     if (error.code === 'email_exists' || error.code === 'phone_exists')
-      throw new Error(`That ${isEmail(identifier) ? 'email' : 'phone number'} belongs to another account.`);
+      throw new Error(
+        `That ${isEmail(identifier) ? 'email' : 'phone number'} belongs to another account.`,
+      );
     throw error;
   },
 

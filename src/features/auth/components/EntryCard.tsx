@@ -46,18 +46,62 @@ export function EntryCard({ onFieldFocus }: { onFieldFocus?: (focused: boolean) 
     <View style={s.card}>
       {error ? <Banner text={error} /> : null}
       {viaEmail ? (
-        <Input label="Email" onFocus={() => onFieldFocus?.(true)} onBlur={() => onFieldFocus?.(false)} value={email} onChangeText={setEmail} maxLength={EMAIL_MAX} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" onSubmitEditing={() => ready && submit()} />
+        <Input
+          label="Email"
+          onFocus={() => onFieldFocus?.(true)}
+          onBlur={() => onFieldFocus?.(false)}
+          value={email}
+          onChangeText={setEmail}
+          maxLength={EMAIL_MAX}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          placeholder="you@example.com"
+          onSubmitEditing={() => ready && submit()}
+        />
       ) : (
-        <PhoneField onFocus={() => onFieldFocus?.(true)} onBlur={() => onFieldFocus?.(false)} country={country} onCountry={setCountry} value={phone} onChangeText={setPhone} onSubmitEditing={() => ready && submit()} />
+        <PhoneField
+          onFocus={() => onFieldFocus?.(true)}
+          onBlur={() => onFieldFocus?.(false)}
+          country={country}
+          onCountry={setCountry}
+          value={phone}
+          onChangeText={setPhone}
+          onSubmitEditing={() => ready && submit()}
+        />
       )}
-      <Button label="Continue" size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
-      <TextLink label={viaEmail ? 'Use my phone number instead' : 'Use my email instead'} onPress={() => switchTo(!viaEmail)} />
+      <Button
+        label="Continue"
+        size="lg"
+        icon="arrowRight"
+        onPress={submit}
+        loading={busy}
+        disabled={!ready}
+      />
+      <TextLink
+        label={viaEmail ? 'Use my phone number instead' : 'Use my email instead'}
+        onPress={() => switchTo(!viaEmail)}
+      />
       <Text style={s.note}>
         By continuing, you agree to our{' '}
-        <Text accessibilityRole="link" style={s.legal} onPress={() => Linking.openURL(`${SITE}/terms.html`)}>Terms of Service</Text>
+        <Text
+          accessibilityRole="link"
+          style={s.legal}
+          onPress={() => Linking.openURL(`${SITE}/terms.html`)}
+        >
+          Terms of Service
+        </Text>
         {' and '}
-        <Text accessibilityRole="link" style={s.legal} onPress={() => Linking.openURL(`${SITE}/privacy.html`)}>Privacy Policy</Text>
-        {viaEmail ? '.' : ', and to receive a one-time login code by SMS. Message & data rates may apply.'}
+        <Text
+          accessibilityRole="link"
+          style={s.legal}
+          onPress={() => Linking.openURL(`${SITE}/privacy.html`)}
+        >
+          Privacy Policy
+        </Text>
+        {viaEmail
+          ? '.'
+          : ', and to receive a one-time login code by SMS. Message & data rates may apply.'}
       </Text>
     </View>
   );
@@ -66,7 +110,12 @@ export function EntryCard({ onFieldFocus }: { onFieldFocus?: (focused: boolean) 
 function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
   const s = useThemedStyles(styles);
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" hitSlop={8} style={({ pressed }) => [s.linkBox, pressed && { opacity: 0.6 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      hitSlop={8}
+      style={({ pressed }) => [s.linkBox, pressed && { opacity: 0.6 }]}
+    >
       <Text style={s.link}>{label}</Text>
     </Pressable>
   );
@@ -76,6 +125,16 @@ const styles = (c: Record<ColorToken, string>) => ({
   card: { gap: 14 },
   linkBox: { minHeight: 36, justifyContent: 'center' as const },
   link: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.brandInk },
-  legal: { fontFamily: fonts.sansMedium, color: c.brandInk, textDecorationLine: 'underline' as const },
-  note: { fontFamily: fonts.sansRegular, fontSize: 12, lineHeight: 17, color: c.inkMuted, textAlign: 'center' as const },
+  legal: {
+    fontFamily: fonts.sansMedium,
+    color: c.brandInk,
+    textDecorationLine: 'underline' as const,
+  },
+  note: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+  },
 });

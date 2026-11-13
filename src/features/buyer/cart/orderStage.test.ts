@@ -10,7 +10,12 @@ describe('orderStage', () => {
     expect(orderStage({ state: 'paid', progress: none })).toBe('preparing');
   });
   it('is on the way after the first farm pickup', () => {
-    expect(orderStage({ state: 'paid', progress: { pickupsTotal: 3, pickupsDone: 1, deliveredAt: null } })).toBe('on_the_way');
+    expect(
+      orderStage({
+        state: 'paid',
+        progress: { pickupsTotal: 3, pickupsDone: 1, deliveredAt: null },
+      }),
+    ).toBe('on_the_way');
   });
   it('is delivered once the drop-off is done, and cancelled wins over progress', () => {
     const delivered = { pickupsTotal: 2, pickupsDone: 2, deliveredAt: '2026-10-27T10:00:00Z' };
@@ -21,7 +26,10 @@ describe('orderStage', () => {
 
 describe('orderStatus', () => {
   it('says on a truck while pickups remain, on the way once all are collected', () => {
-    const at = (pickupsDone: number) => ({ state: 'paid' as const, progress: { pickupsTotal: 3, pickupsDone, deliveredAt: null } });
+    const at = (pickupsDone: number) => ({
+      state: 'paid' as const,
+      progress: { pickupsTotal: 3, pickupsDone, deliveredAt: null },
+    });
     expect(orderStatus(at(1)).label).toBe('On a truck');
     expect(orderStatus(at(3)).label).toBe('On the way');
   });

@@ -31,12 +31,29 @@ export async function fetchTrucks(): Promise<Truck[]> {
 }
 
 /** Adds a truck, or updates the one with `id`. A retired truck is also taken off its driver. */
-export async function saveTruck(t: { id?: string; plate: string; name: string; capacityKg: number; driverId: string | null; active: boolean }): Promise<void> {
-  const row = { plate: cleanPlate(t.plate), name: t.name.trim(), capacity_kg: t.capacityKg, driver_id: t.active ? t.driverId : null, active: t.active };
-  const { error } = t.id ? await supabase.from('trucks').update(row).eq('id', t.id) : await supabase.from('trucks').insert(row);
+export async function saveTruck(t: {
+  id?: string;
+  plate: string;
+  name: string;
+  capacityKg: number;
+  driverId: string | null;
+  active: boolean;
+}): Promise<void> {
+  const row = {
+    plate: cleanPlate(t.plate),
+    name: t.name.trim(),
+    capacity_kg: t.capacityKg,
+    driver_id: t.active ? t.driverId : null,
+    active: t.active,
+  };
+  const { error } = t.id
+    ? await supabase.from('trucks').update(row).eq('id', t.id)
+    : await supabase.from('trucks').insert(row);
   if (!error) return;
   const msg = error.message ?? '';
-  if (msg.includes('trucks_plate_key')) throw new Error(`A truck with plate ${row.plate} already exists.`);
-  if (msg.includes('trucks_driver_key')) throw new Error('That driver already has a truck. Unassign it first.');
+  if (msg.includes('trucks_plate_key'))
+    throw new Error(`A truck with plate ${row.plate} already exists.`);
+  if (msg.includes('trucks_driver_key'))
+    throw new Error('That driver already has a truck. Unassign it first.');
   throw new Error('Could not save the truck.');
 }

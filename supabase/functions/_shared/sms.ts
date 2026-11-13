@@ -14,19 +14,26 @@ export async function flushSms(): Promise<{ sent: number; failed: number }> {
   const from = Deno.env.get('TWILIO_SMS_FROM');
   if (!sid || !token || (!service && !from)) return { sent: 0, failed: 0 };
 
-  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const db = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
   const { data: batch } = await db.rpc('claim_sms', { p_limit: 20 });
   let sent = 0;
   let failed = 0;
   for (const m of (batch ?? []) as { id: string; phone: string; body: string }[]) {
     const form = new URLSearchParams({ To: e164(m.phone), Body: m.body });
-    if (service) form.set('MessagingServiceSid', service); else form.set('From', from!);
+    if (service) form.set('MessagingServiceSid', service);
+    else form.set('From', from!);
     let ok = false;
     let error = '';
     try {
       const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
         method: 'POST',
-        headers: { Authorization: `Basic ${btoa(`${sid}:${token}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          Authorization: `Basic ${btoa(`${sid}:${token}`)}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
         body: form,
       });
       ok = res.ok;
@@ -35,7 +42,8 @@ export async function flushSms(): Promise<{ sent: number; failed: number }> {
       error = e instanceof Error ? e.message : 'network error';
     }
     await db.rpc('finish_sms', { p_id: m.id, p_ok: ok, p_error: ok ? null : error });
-    if (ok) sent++; else failed++;
+    if (ok) sent++;
+    else failed++;
   }
   return { sent, failed };
 }

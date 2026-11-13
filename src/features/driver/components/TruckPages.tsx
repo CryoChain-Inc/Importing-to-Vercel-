@@ -9,16 +9,28 @@ import { hoursLabel } from '../../../utils/duration';
 import { Empty } from '../../ops/components/OpsBits';
 import { BackButton, openMaps, openPhone, placed, QuickActions, RowCard } from './bits';
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { dateStyle: 'medium', timeStyle: 'short' });
+const when = (iso: string) =>
+  new Date(iso).toLocaleString('en-GH', { dateStyle: 'medium', timeStyle: 'short' });
 
-export function truckStatus(t: TruckBooking): { label: string; tone: 'success' | 'warning' | 'info' } {
+export function truckStatus(t: TruckBooking): {
+  label: string;
+  tone: 'success' | 'warning' | 'info';
+} {
   if (t.completedAt) return { label: 'Completed', tone: 'success' };
   if (t.startedAt) return { label: 'On the way', tone: 'info' };
   if (t.state === 'paid') return { label: 'Ready to start', tone: 'success' };
   return { label: 'Awaiting payment', tone: 'warning' };
 }
 
-export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past: boolean; onOpen: (id: string) => void }) {
+export function TruckList({
+  trips,
+  past,
+  onOpen,
+}: {
+  trips: TruckBooking[];
+  past: boolean;
+  onOpen: (id: string) => void;
+}) {
   const s = useThemedStyles(styles);
   const rows = trips.filter((t) => (past ? !!t.completedAt : !t.completedAt));
   if (rows.length === 0) {
@@ -26,7 +38,11 @@ export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past
       <Empty
         icon="truck"
         title={past ? 'No past trips' : 'No ongoing trips'}
-        hint={past ? 'Finished cold-truck bookings will be listed here.' : 'When operations allots you to a booking, the trip shows up here.'}
+        hint={
+          past
+            ? 'Finished cold-truck bookings will be listed here.'
+            : 'When operations allots you to a booking, the trip shows up here.'
+        }
       />
     );
   }
@@ -48,15 +64,33 @@ export function TruckList({ trips, past, onOpen }: { trips: TruckBooking[]; past
   );
 }
 
-export function TruckDetail({ trip, onBack, onMessages }: { trip: TruckBooking; onBack?: () => void; onMessages: () => void }) {
+export function TruckDetail({
+  trip,
+  onBack,
+  onMessages,
+}: {
+  trip: TruckBooking;
+  onBack?: () => void;
+  onMessages: () => void;
+}) {
   const s = useThemedStyles(styles);
   const status = truckStatus(trip);
   const target = trip.startedAt
     ? { label: 'Drop-off', lat: trip.dropoffLat, lng: trip.dropoffLng }
     : { label: 'Pickup', lat: trip.pickupLat, lng: trip.pickupLng };
   const actions = [
-    ...(trip.buyerPhone ? [{ icon: 'phone' as const, label: 'Call', onPress: () => openPhone(trip.buyerPhone) }] : []),
-    ...(placed(target.lat, target.lng) ? [{ icon: 'pin' as const, label: `Go to ${target.label.toLowerCase()}`, onPress: () => openMaps(target.lat, target.lng) }] : []),
+    ...(trip.buyerPhone
+      ? [{ icon: 'phone' as const, label: 'Call', onPress: () => openPhone(trip.buyerPhone) }]
+      : []),
+    ...(placed(target.lat, target.lng)
+      ? [
+          {
+            icon: 'pin' as const,
+            label: `Go to ${target.label.toLowerCase()}`,
+            onPress: () => openMaps(target.lat, target.lng),
+          },
+        ]
+      : []),
     { icon: 'message' as const, label: 'Chat', onPress: onMessages },
   ];
   return (
@@ -72,7 +106,9 @@ export function TruckDetail({ trip, onBack, onMessages }: { trip: TruckBooking; 
           <Stop tag="To" text={trip.dropoffLabel} />
         </View>
         <Text style={s.meta}>
-          {when(trip.pickupAt)}{trip.bookedHours ? ` · ${hoursLabel(trip.bookedHours)}` : ''} · Buyer {trip.buyerName || 'Buyer'}
+          {when(trip.pickupAt)}
+          {trip.bookedHours ? ` · ${hoursLabel(trip.bookedHours)}` : ''} · Buyer{' '}
+          {trip.buyerName || 'Buyer'}
         </Text>
         <QuickActions items={actions} />
       </Card>
@@ -95,7 +131,12 @@ export function TruckMessages({ trip, onBack }: { trip: TruckBooking; onBack: ()
   return (
     <View style={{ gap: 12 }}>
       <BackButton label="Back to trip" onPress={onBack} />
-      <TripChat bookingId={trip.id} peerName={trip.buyerName || 'the buyer'} peerPhone={trip.buyerPhone} peerRole="buyer" />
+      <TripChat
+        bookingId={trip.id}
+        peerName={trip.buyerName || 'the buyer'}
+        peerPhone={trip.buyerPhone}
+        peerRole="buyer"
+      />
     </View>
   );
 }
@@ -104,11 +145,22 @@ const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 10 },
   stack: { gap: 14 },
   card: { gap: 14 },
-  top: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 8 },
+  top: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 8,
+  },
   code: { fontFamily: fonts.sansBold, fontSize: 14, color: c.inkMuted },
   route: { gap: 12 },
   stop: { gap: 2 },
-  tag: { fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase' as const, color: c.brandInk },
+  tag: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: c.brandInk,
+  },
   place: { fontFamily: fonts.heading, fontSize: 20, lineHeight: 26, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

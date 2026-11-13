@@ -20,14 +20,23 @@ export interface AddressValue {
   longitude: number | null;
 }
 
-export const emptyAddress: AddressValue = { address: '', line1: '', landmark: '', city: '', postcode: '', latitude: null, longitude: null };
+export const emptyAddress: AddressValue = {
+  address: '',
+  line1: '',
+  landmark: '',
+  city: '',
+  postcode: '',
+  latitude: null,
+  longitude: null,
+};
 
 /** Ready to save: a pin, a street address and the flat/house line. */
 export const addressReady = (v: AddressValue) =>
   v.latitude != null && v.address.trim().length >= 2 && v.line1.trim().length >= 1;
 
 /** One-line form for lists and summaries: house/flat first, then the street address. */
-export const composeAddress = (v: Pick<AddressValue, 'line1' | 'address'>) => [v.line1.trim(), v.address.trim()].filter(Boolean).join(', ');
+export const composeAddress = (v: Pick<AddressValue, 'line1' | 'address'>) =>
+  [v.line1.trim(), v.address.trim()].filter(Boolean).join(', ');
 
 export interface Suggestion {
   placeId: string;
@@ -45,9 +54,13 @@ async function call<T>(body: Record<string, unknown>, fallback: string): Promise
 }
 
 export const searchPlaces = (query: string, near?: { latitude: number; longitude: number }) =>
-  call<{ suggestions: Suggestion[] }>({ action: 'autocomplete', query, ...near }, 'Search failed. Try again.').then((r) => r.suggestions);
+  call<{ suggestions: Suggestion[] }>(
+    { action: 'autocomplete', query, ...near },
+    'Search failed. Try again.',
+  ).then((r) => r.suggestions);
 
-export const placeDetails = (placeId: string) => call<PlaceInfo>({ action: 'place', placeId }, 'Could not load that place.');
+export const placeDetails = (placeId: string) =>
+  call<PlaceInfo>({ action: 'place', placeId }, 'Could not load that place.');
 
 export const reverseGeocode = (latitude: number, longitude: number) =>
   call<PlaceInfo>({ action: 'reverse', latitude, longitude }, 'Could not read the address here.');

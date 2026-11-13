@@ -25,7 +25,9 @@ import { PostHogProvider } from 'posthog-react-native';
 import { posthog } from './config/posthog';
 
 // Lazy so the farmer screens stay out of the main bundle for every other role.
-const ProduceDetail = lazy(() => import('./features/farmer/screens/ProduceDetail').then((m) => ({ default: m.ProduceDetail })));
+const ProduceDetail = lazy(() =>
+  import('./features/farmer/screens/ProduceDetail').then((m) => ({ default: m.ProduceDetail })),
+);
 
 // Auth is Supabase (services/auth.service.ts); payout and review are still demo data.
 function Routes() {
@@ -60,7 +62,9 @@ function Shell() {
   const { colors, isDark } = useTheme();
   const { route, reset } = useNav();
   const [restoring, setRestoring] = useState(isSupabaseConfigured);
-  const [startedOnVerified] = useState(route.name === 'emailVerified' || route.name === 'paymentResult');
+  const [startedOnVerified] = useState(
+    route.name === 'emailVerified' || route.name === 'paymentResult',
+  );
   const identifiedAccountId = useRef<string | null>(null);
 
   // Resume a saved session so a reload doesn't send a signed-in user back to the login page.
@@ -76,7 +80,10 @@ function Shell() {
       // A flaky network on launch must not look like a sign-out: the saved session is still valid, so retry before giving up.
       let p = null;
       for (let i = 0; ; i++) {
-        try { p = await authService.getProfile(); break; } catch (e) {
+        try {
+          p = await authService.getProfile();
+          break;
+        } catch (e) {
           if (i === 3) throw e;
           await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
         }
@@ -84,7 +91,9 @@ function Shell() {
       if (p && p.role !== 'pending') reset(afterSignIn(toAccount(p)));
     };
     if (!isSupabaseConfigured) return;
-    resume().catch(() => undefined).finally(() => setRestoring(false));
+    resume()
+      .catch(() => undefined)
+      .finally(() => setRestoring(false));
     const sub = Linking.addEventListener('url', (e) => {
       const paid = e.url.includes('payment/verify') ? paymentReturnReference(e.url) : null;
       if (paid) return reset({ name: 'paymentResult', reference: paid });
@@ -92,13 +101,18 @@ function Shell() {
       if (status) reset({ name: 'emailVerified', ok: status === 'ok' });
     });
     const off = onPaymentReturn((reference) => reset({ name: 'paymentResult', reference }));
-    return () => { sub.remove(); off(); };
+    return () => {
+      sub.remove();
+      off();
+    };
   }, [reset, startedOnVerified]);
 
   // supabase-js has no foreground timer on native: refresh only while the app is active.
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-    const sub = AppState.addEventListener('change', (st) => (st === 'active' ? supabase.auth.startAutoRefresh() : supabase.auth.stopAutoRefresh()));
+    const sub = AppState.addEventListener('change', (st) =>
+      st === 'active' ? supabase.auth.startAutoRefresh() : supabase.auth.stopAutoRefresh(),
+    );
     supabase.auth.startAutoRefresh();
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
@@ -107,10 +121,15 @@ function Shell() {
       }
       if (__DEV__) console.log('auth', event);
     });
-    return () => { sub.remove(); data.subscription.unsubscribe(); };
+    return () => {
+      sub.remove();
+      data.subscription.unsubscribe();
+    };
   }, []);
 
-  useEffect(() => { posthog?.capture('$screen', { $screen_name: route.name }); }, [route.name]);
+  useEffect(() => {
+    posthog?.capture('$screen', { $screen_name: route.name });
+  }, [route.name]);
 
   // Identifies only after auth has returned the stable Supabase profile id. The SDK
   // then persists this identity for lifecycle events, captures, and exceptions.
@@ -170,5 +189,9 @@ export default function V1App() {
   );
 
   // The provider takes the native client only; web uses posthog-js directly.
-  return posthog && Platform.OS !== 'web' ? <PostHogProvider client={posthog}>{app}</PostHogProvider> : app;
+  return posthog && Platform.OS !== 'web' ? (
+    <PostHogProvider client={posthog}>{app}</PostHogProvider>
+  ) : (
+    app
+  );
 }

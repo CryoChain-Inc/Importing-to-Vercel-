@@ -56,12 +56,32 @@ export function PriceCardsSkeleton({ cards = 3 }: { cards?: number }) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  table: { borderRadius: 16, backgroundColor: c.surfaceCard, borderWidth: 1, borderColor: c.borderSubtle, overflow: 'hidden' as const },
-  row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.borderSubtle },
+  table: {
+    borderRadius: 16,
+    backgroundColor: c.surfaceCard,
+    borderWidth: 1,
+    borderColor: c.borderSubtle,
+    overflow: 'hidden' as const,
+  },
+  row: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderSubtle,
+  },
   lines: { flex: 1, gap: 8 },
   cards: { gap: 14 },
   card: { gap: 14, padding: 16 },
   head: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
   grid: { borderRadius: 12, backgroundColor: c.surfaceSunken, paddingHorizontal: 12 },
-  gridRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 10, height: 48 },
+  gridRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 10,
+    height: 48,
+  },
 });

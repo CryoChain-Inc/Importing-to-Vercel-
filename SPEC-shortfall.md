@@ -15,6 +15,7 @@ quantity and the farmer is paid for the reserved quantity (`create_payout_run` s
 ## Behaviour
 
 ### 1. At pickup
+
 The driver records the quantity collected for a line (zero is allowed: "nothing to collect").
 
 - The recorded quantity is spread over the line's allocations, oldest listing first. Each allocation's quantity and
@@ -24,20 +25,24 @@ The driver records the quantity collected for a line (zero is allowed: "nothing 
 - The missing quantity is taken off the farmer's listing, so it is not offered to another buyer.
 
 ### 2. Tolerance
+
 If the missing quantity is within the tolerance (`ops_config.pickup_tolerance_pct`, default 2 %) of what the line
 expected, nothing else happens: no top-up, no refund, no ops item. It is recorded on the order as tolerated.
 
 ### 3. Automatic top-up
+
 Beyond tolerance, the missing quantity is allocated straight away from other farms with stock, using the normal
 allocation order (nearest first), limited to farms within `detour_km` (25) of the truck's remaining route. The new
 pickup joins the same truck's route and the farmers involved get the usual reserved and truck-on-the-way messages.
 
 ### 4. No stock
+
 Whatever cannot be topped up is recorded on the order as short. The buyer gets an in-app notice stating the product
 and quantity that will not arrive and that a refund will follow. Ops get a decision-register item ("Short supply").
 The delivery of the rest continues. Creating and paying the refund is the `refunds` module.
 
 ### 5. Farmer reports a shortage before pickup
+
 From the edit screen, a farmer who cannot supply what is reserved enters what they really have. The newest
 reservations on that listing are reduced first, and steps 2 to 4 run for the affected orders. The farmer is not
 paid for what they did not supply.

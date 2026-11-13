@@ -35,7 +35,8 @@ const layout = (preheader: string, title: string, body: string, footer: string) 
   `<span style="color:${MUTED}"> &nbsp;&middot;&nbsp; Cold-chain produce, from farm to table</span></td></tr>` +
   `</table></td></tr></table></body></html>`;
 
-const p = (t: string) => `<p style="margin:0 0 22px;font-size:16px;line-height:1.6;color:${MUTED}">${t}</p>`;
+const p = (t: string) =>
+  `<p style="margin:0 0 22px;font-size:16px;line-height:1.6;color:${MUTED}">${t}</p>`;
 
 export const codeEmail = (code: string, purpose: 'sign-in' | 'confirmation') => {
   const signIn = purpose === 'sign-in';
@@ -44,7 +45,9 @@ export const codeEmail = (code: string, purpose: 'sign-in' | 'confirmation') => 
     html: layout(
       `Your code is ${code}. It expires shortly.`,
       signIn ? 'Welcome back' : 'Confirm your email',
-      p(`Enter this code to ${signIn ? 'sign in to' : 'confirm your email on'} your CryoChain account.`) +
+      p(
+        `Enter this code to ${signIn ? 'sign in to' : 'confirm your email on'} your CryoChain account.`,
+      ) +
         `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px"><tr><td align="center" bgcolor="${TINT}" style="background:${TINT};border:1px solid #bfe6cf;border-radius:16px;padding:22px 12px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:38px;font-weight:700;letter-spacing:10px;color:${BRAND_DEEP}">${code}</td></tr></table>` +
         `<p style="margin:0 0 20px;font-size:13px;color:${MUTED}">This code expires shortly, so use it soon.</p>`,
       `Didn't ask for this? You can safely ignore this email. CryoChain will never ask you to share this code with anyone.`,
@@ -57,7 +60,9 @@ export const confirmEmail = (link: string) => ({
   html: layout(
     'One tap to confirm this email on your CryoChain account.',
     'Confirm your email',
-    p(`You're one tap away. Confirm this address and it becomes part of your CryoChain account, so you'll get order and pickup updates here.`) +
+    p(
+      `You're one tap away. Confirm this address and it becomes part of your CryoChain account, so you'll get order and pickup updates here.`,
+    ) +
       // Bulletproof button: the padding lives on the <td>, so Outlook renders it too.
       `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 26px"><tr><td align="center" bgcolor="${BRAND}" style="background:${BRAND};border-radius:12px"><a href="${link}" clicktracking="off" style="display:inline-block;padding:16px 36px;font-family:${FONT};font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px">Confirm email &rarr;</a></td></tr></table>` +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px"><tr><td bgcolor="#f4f6f4" style="background:#f4f6f4;border-radius:12px;padding:14px 16px;font-size:12px;line-height:1.6;color:${MUTED}">Button not working? Copy this link into your browser:<br><a href="${link}" clicktracking="off" style="color:${BRAND};word-break:break-all">${link}</a></td></tr></table>`,

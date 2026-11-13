@@ -13,19 +13,22 @@ const ETA_EVERY_MS = 3 * 60 * 1000;
 let lastEta = 0;
 
 if (Platform.OS !== 'web') {
-  TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TRIP_TASK, async ({ data, error }) => {
-    const last = data?.locations?.[data.locations.length - 1];
-    if (error || !last) return;
-    try {
-      await pingLocation(last.coords.latitude, last.coords.longitude);
-      if (Date.now() - lastEta > ETA_EVERY_MS) {
-        lastEta = Date.now();
-        await refreshEtas();
+  TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
+    TRIP_TASK,
+    async ({ data, error }) => {
+      const last = data?.locations?.[data.locations.length - 1];
+      if (error || !last) return;
+      try {
+        await pingLocation(last.coords.latitude, last.coords.longitude);
+        if (Date.now() - lastEta > ETA_EVERY_MS) {
+          lastEta = Date.now();
+          await refreshEtas();
+        }
+      } catch {
+        // No signal: the next position will try again.
       }
-    } catch {
-      // No signal: the next position will try again.
-    }
-  });
+    },
+  );
 }
 
 export type TrackingResult = 'background' | 'foreground_only' | 'denied' | 'unsupported';
@@ -37,7 +40,9 @@ export async function startTripTracking(): Promise<TrackingResult> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') return 'denied';
   const bg = await Location.getBackgroundPermissionsAsync();
-  const granted = bg.status === 'granted' || (bg.canAskAgain && (await Location.requestBackgroundPermissionsAsync()).status === 'granted');
+  const granted =
+    bg.status === 'granted' ||
+    (bg.canAskAgain && (await Location.requestBackgroundPermissionsAsync()).status === 'granted');
   if (!granted) return 'foreground_only';
   if (await Location.hasStartedLocationUpdatesAsync(TRIP_TASK)) return 'background';
   await Location.startLocationUpdatesAsync(TRIP_TASK, {
@@ -57,7 +62,8 @@ export async function startTripTracking(): Promise<TrackingResult> {
 export async function stopTripTracking(): Promise<void> {
   if (Platform.OS !== 'android') return;
   try {
-    if (await Location.hasStartedLocationUpdatesAsync(TRIP_TASK)) await Location.stopLocationUpdatesAsync(TRIP_TASK);
+    if (await Location.hasStartedLocationUpdatesAsync(TRIP_TASK))
+      await Location.stopLocationUpdatesAsync(TRIP_TASK);
   } catch {
     // Nothing was running.
   }

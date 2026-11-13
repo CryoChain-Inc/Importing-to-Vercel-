@@ -16,7 +16,12 @@ export function TopBar({ right }: { right?: React.ReactNode }) {
     <View style={s.bar}>
       <View style={s.left}>
         {canGoBack ? (
-          <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={s.back}>
+          <Pressable
+            onPress={back}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            style={s.back}
+          >
             <Icon name="arrowLeft" size={20} color={colors.ink} />
           </Pressable>
         ) : null}
@@ -31,7 +36,12 @@ export function TopBar({ right }: { right?: React.ReactNode }) {
 }
 
 const styles = (_c: Record<ColorToken, string>) => ({
-  bar: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, minHeight: 56 },
+  bar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    minHeight: 56,
+  },
   left: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
   right: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   back: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },

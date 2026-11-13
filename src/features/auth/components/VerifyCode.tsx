@@ -19,7 +19,12 @@ export interface VerifyCodeProps {
   submitLabel?: string;
 }
 
-export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Confirm' }: VerifyCodeProps) {
+export function VerifyCode({
+  identifier,
+  onSubmit,
+  onResend,
+  submitLabel = 'Confirm',
+}: VerifyCodeProps) {
   const s = useThemedStyles(styles);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -66,14 +71,31 @@ export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Conf
 
   return (
     <View style={s.wrap}>
-      <OtpInput value={code} onChange={setCode} onSubmit={() => code.length === OTP_LENGTH && !expired && !busy && submit()} hasError={failed} />
+      <OtpInput
+        value={code}
+        onChange={setCode}
+        onSubmit={() => code.length === OTP_LENGTH && !expired && !busy && submit()}
+        hasError={failed}
+      />
       <Text style={[s.hint, expired && s.expired]}>
-        {expired ? 'This code has expired' : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, '0')}`}
+        {expired
+          ? 'This code has expired'
+          : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, '0')}`}
       </Text>
-      {expired ? null : <Button label={submitLabel} size="lg" onPress={submit} loading={busy} disabled={code.length !== OTP_LENGTH} />}
+      {expired ? null : (
+        <Button
+          label={submitLabel}
+          size="lg"
+          onPress={submit}
+          loading={busy}
+          disabled={code.length !== OTP_LENGTH}
+        />
+      )}
       <Button
         key={expired ? 'expired' : 'live'}
-        label={cooldown > 0 ? `Resend code in ${cooldown}s` : expired ? 'Send a new code' : 'Resend code'}
+        label={
+          cooldown > 0 ? `Resend code in ${cooldown}s` : expired ? 'Send a new code' : 'Resend code'
+        }
         variant={expired ? 'primary' : 'outline'}
         size={expired ? 'lg' : 'md'}
         onPress={resend}
@@ -87,5 +109,10 @@ export function VerifyCode({ identifier, onSubmit, onResend, submitLabel = 'Conf
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 16 },
   expired: { color: c.dangerInk },
-  hint: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted, textAlign: 'center' as const },
+  hint: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+  },
 });

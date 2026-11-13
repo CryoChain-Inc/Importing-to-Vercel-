@@ -17,11 +17,11 @@ product group shows their combined totals. Collecting them in one visit is `disp
 2. **Photos.** The listing detail screen shows all 3 to 6 photos, not only the first.
 3. **Edit rules.** "Reserved" below means the listing has at least one allocation that is not cancelled.
 
-   | Listing state | Change product | Change quantity | Photos | Delete |
-   |---|---|---|---|---|
-   | Nothing reserved | Yes | Any value above zero | Add, replace, remove (keep 3 to 6) | Yes |
-   | Partly or fully reserved | No | Up, or down to the reserved + collected amount | Add only (up to 6) | No |
-   | Everything collected or delivered | No | No | No | No |
+   | Listing state                     | Change product | Change quantity                                | Photos                             | Delete |
+   | --------------------------------- | -------------- | ---------------------------------------------- | ---------------------------------- | ------ |
+   | Nothing reserved                  | Yes            | Any value above zero                           | Add, replace, remove (keep 3 to 6) | Yes    |
+   | Partly or fully reserved          | No             | Up, or down to the reserved + collected amount | Add only (up to 6)                 | No     |
+   | Everything collected or delivered | No             | No                                             | No                                 | No     |
 
    Reducing below the reserved amount is refused with a message that names the reserved quantity. Telling CryoChain
    "I cannot supply what is reserved" is a shortage report and belongs to `shortfall`.
@@ -73,11 +73,22 @@ src/features/farmer/screens/ProduceDetail.tsx   photo gallery, stock breakdown
 Follow the existing service pattern: one exported function per call, database errors mapped to a plain sentence.
 
 ```ts
-export async function updateListing(id: string, product: string, weightKg: number, unit: string): Promise<void> {
-  const { error } = await supabase.rpc('update_own_listing', { p_id: id, p_product: product, p_unit: unit, p_weight_kg: weightKg });
+export async function updateListing(
+  id: string,
+  product: string,
+  weightKg: number,
+  unit: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_own_listing', {
+    p_id: id,
+    p_product: product,
+    p_unit: unit,
+    p_weight_kg: weightKg,
+  });
   if (!error) return;
   const msg = error.message ?? '';
-  if (msg.includes('been delivered')) throw new Error('This produce has been delivered, so it can no longer be edited.');
+  if (msg.includes('been delivered'))
+    throw new Error('This produce has been delivered, so it can no longer be edited.');
   throw new Error('Could not save your changes.');
 }
 ```

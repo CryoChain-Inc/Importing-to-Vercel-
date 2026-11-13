@@ -29,12 +29,22 @@ async function signIn(page, phone) {
     await page.keyboard.type(CODE);
     await page.getByRole('button', { name: 'Confirm' }).click();
   }
-  await page.getByRole('button', { name: 'Get started' }).click({ timeout: 8000 }).catch(() => undefined);
-  await page.getByRole('tab').first().waitFor({ timeout: 20000 }).catch(() => undefined); // ops uses links, not tabs
+  await page
+    .getByRole('button', { name: 'Get started' })
+    .click({ timeout: 8000 })
+    .catch(() => undefined);
+  await page
+    .getByRole('tab')
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(() => undefined); // ops uses links, not tabs
   await page.waitForLoadState('networkidle');
 }
 
-const server = spawn('npx', ['serve', '-s', 'dist', '-l', '4175'], { stdio: 'ignore', timeout: 240000 });
+const server = spawn('npx', ['serve', '-s', 'dist', '-l', '4175'], {
+  stdio: 'ignore',
+  timeout: 240000,
+});
 await new Promise((r) => setTimeout(r, 3000));
 const rows = [];
 
@@ -52,7 +62,22 @@ try {
     for (const device of ['mobile', 'desktop']) {
       const file = `${OUT}/${role}-${device}.json`;
       const preset = device === 'desktop' ? ['--preset=desktop'] : [];
-      execFileSync('npx', ['--yes', 'lighthouse', url, `--chrome-flags=--headless=new --user-data-dir=${profile}`, '--disable-storage-reset', '--only-categories=performance', '--output=json', `--output-path=${file}`, '--quiet', ...preset], { stdio: 'ignore', timeout: 240000 });
+      execFileSync(
+        'npx',
+        [
+          '--yes',
+          'lighthouse',
+          url,
+          `--chrome-flags=--headless=new --user-data-dir=${profile}`,
+          '--disable-storage-reset',
+          '--only-categories=performance',
+          '--output=json',
+          `--output-path=${file}`,
+          '--quiet',
+          ...preset,
+        ],
+        { stdio: 'ignore', timeout: 240000 },
+      );
       const r = JSON.parse(readFileSync(file, 'utf8'));
       const a = r.audits;
       // A run that landed on a sign-in screen would score high and mean nothing; a signed-in page always hits Supabase.

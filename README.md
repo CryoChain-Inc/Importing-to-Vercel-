@@ -10,12 +10,12 @@ One Expo / React Native codebase runs on Android, iOS and the web. The backend i
 
 ## Roles
 
-| Role | Who | How they get in | Home screen |
-|---|---|---|---|
-| Farmer | Sells produce | Self-signup (phone or email code), picks "Farmer" | Listings, Messages, Payments, Profile |
-| Buyer | Orders produce, books trucks | Self-signup, picks "Buyer" | Shop, Cart, Orders, Truck, Account |
-| Driver | Collects and delivers | Invited by ops (Team tab) | Today's route, cold truck trips |
-| Ops | Runs the operation | Invited by ops, signs in at `/ops` with email and password | Dashboard and a side menu of panels |
+| Role   | Who                          | How they get in                                            | Home screen                           |
+| ------ | ---------------------------- | ---------------------------------------------------------- | ------------------------------------- |
+| Farmer | Sells produce                | Self-signup (phone or email code), picks "Farmer"          | Listings, Messages, Payments, Profile |
+| Buyer  | Orders produce, books trucks | Self-signup, picks "Buyer"                                 | Shop, Cart, Orders, Truck, Account    |
+| Driver | Collects and delivers        | Invited by ops (Team tab)                                  | Today's route, cold truck trips       |
+| Ops    | Runs the operation           | Invited by ops, signs in at `/ops` with email and password | Dashboard and a side menu of panels   |
 
 A new account that has not picked a role is `pending`. Farmer and buyer are the only roles offered at signup. Drivers and ops can't be self-assigned; the server assigns them on invite.
 
@@ -86,12 +86,12 @@ npx expo start                 # press w for web, a for Android, i for iOS
 
 `.env.local`:
 
-| Variable | Needed for |
-|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | Everything. Without it the app can't sign in. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` (or `EXPO_PUBLIC_SUPABASE_KEY`, a `sb_publishable_` key) | Everything |
-| `EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY` | Maps on web |
-| `GOOGLE_MAPS_ANDROID_KEY`, `GOOGLE_MAPS_IOS_KEY` | Maps in native builds (read by `app.config.js`) |
+| Variable                                                                                 | Needed for                                      |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `EXPO_PUBLIC_SUPABASE_URL`                                                               | Everything. Without it the app can't sign in.   |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` (or `EXPO_PUBLIC_SUPABASE_KEY`, a `sb_publishable_` key) | Everything                                      |
+| `EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY`                                                        | Maps on web                                     |
+| `GOOGLE_MAPS_ANDROID_KEY`, `GOOGLE_MAPS_IOS_KEY`                                         | Maps in native builds (read by `app.config.js`) |
 
 Edge Function secrets are set in Supabase, never in the app: `PAYSTACK_SECRET_KEY`, `APP_URL`, `GOOGLE_MAPS_SERVER_KEY`, and the SMS provider keys (see `.env.example`).
 

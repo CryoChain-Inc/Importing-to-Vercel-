@@ -20,10 +20,15 @@ export function watchChanges(tables: readonly string[], onChange: () => void): (
     timer = setTimeout(onChange, SETTLE_MS);
   };
   const channel = supabase.channel(`live-${tables.join('-')}-${Date.now()}`);
-  for (const table of tables) channel.on('postgres_changes', { event: '*', schema: 'public', table }, soon);
+  for (const table of tables)
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, soon);
   channel.subscribe();
-  const app = AppState.addEventListener('change', (state) => { if (state === 'active') soon(); });
-  const poll = setInterval(() => { if (AppState.currentState === 'active') onChange(); }, POLL_MS);
+  const app = AppState.addEventListener('change', (state) => {
+    if (state === 'active') soon();
+  });
+  const poll = setInterval(() => {
+    if (AppState.currentState === 'active') onChange();
+  }, POLL_MS);
   return () => {
     stopped = true;
     clearTimeout(timer);
@@ -37,7 +42,13 @@ export function watchChanges(tables: readonly string[], onChange: () => void): (
 export function useLiveReload(load: () => Promise<unknown>, tables: readonly string[]) {
   const [refreshing, setRefreshing] = useState(false);
   const key = tables.join(',');
-  useEffect(() => watchChanges(key.split(','), () => { load().catch(() => undefined); }), [load, key]);
+  useEffect(
+    () =>
+      watchChanges(key.split(','), () => {
+        load().catch(() => undefined);
+      }),
+    [load, key],
+  );
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {

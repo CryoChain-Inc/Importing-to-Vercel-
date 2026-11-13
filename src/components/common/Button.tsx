@@ -1,6 +1,20 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { type PressState, focusRing, fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import {
+  type PressState,
+  focusRing,
+  fonts,
+  useTheme,
+  useThemedStyles,
+  type ColorToken,
+} from '../../theme';
 import { Icon, type IconName } from './Icon';
 
 export interface ButtonProps {
@@ -23,7 +37,16 @@ const TEXT: Record<string, ColorToken> = {
   danger: 'onDanger',
 };
 
-export function Button({ label, onPress, variant = 'primary', size = 'md', icon, loading = false, disabled = false, style }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  size = 'md',
+  icon,
+  loading = false,
+  disabled = false,
+  style,
+}: ButtonProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const off = disabled || loading;
@@ -57,12 +80,29 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
       {isPrimary && !quiet ? <View pointerEvents="none" style={s.sheen} /> : null}
       <View style={s.row}>
         {loading ? <ActivityIndicator size="small" color={textColor} /> : null}
-        <Text style={[s.text, size === 'sm' && s.textSm, size === 'lg' && s.textLg, { color: textColor }]}>{label}</Text>
+        <Text
+          style={[
+            s.text,
+            size === 'sm' && s.textSm,
+            size === 'lg' && s.textLg,
+            { color: textColor },
+          ]}
+        >
+          {label}
+        </Text>
         {!loading && icon ? (
           size === 'sm' ? (
             <Icon name={icon} size={16} color={textColor} />
           ) : (
-            <View style={[s.chip, { backgroundColor: isPrimary && !quiet ? 'rgba(255,255,255,0.2)' : colors.borderSubtle }]}>
+            <View
+              style={[
+                s.chip,
+                {
+                  backgroundColor:
+                    isPrimary && !quiet ? 'rgba(255,255,255,0.2)' : colors.borderSubtle,
+                },
+              ]}
+            >
               <Icon name={icon} size={16} color={textColor} />
             </View>
           )
@@ -73,13 +113,31 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', icon,
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  base: { borderRadius: 999, alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const },
+  base: {
+    borderRadius: 999,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    overflow: 'hidden' as const,
+  },
   sm: { minHeight: 36, paddingHorizontal: 16 },
   md: { minHeight: 48, paddingHorizontal: 22 },
   lg: { minHeight: 58, paddingHorizontal: 24 },
   fill: { backgroundColor: c.brand600 },
-  glow: { shadowColor: c.brand700, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.32, shadowRadius: 16, elevation: 5 },
-  sheen: { position: 'absolute' as const, top: 0, left: 0, right: 0, height: '50%' as const, backgroundColor: 'rgba(255,255,255,0.1)' },
+  glow: {
+    shadowColor: c.brand700,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  sheen: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%' as const,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
   tonal: { backgroundColor: c.brandTint },
   outline: { borderWidth: 1.5, borderColor: c.borderStrong },
   danger: { backgroundColor: c.dangerFill },
@@ -87,7 +145,13 @@ const styles = (c: Record<ColorToken, string>) => ({
   hovered: { transform: [{ translateY: -1 }] },
   pressed: { transform: [{ scale: 0.97 }] },
   row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  chip: { width: 32, height: 32, borderRadius: 16, alignItems: 'center' as const, justifyContent: 'center' as const },
+  chip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   text: { fontFamily: fonts.sansBold, fontSize: 15, letterSpacing: 0.1 },
   textSm: { fontSize: 13 },
   textLg: { fontSize: 17, flexShrink: 1 },

@@ -20,7 +20,9 @@ export interface Refund {
 export async function fetchRefunds(): Promise<Refund[]> {
   const { data, error } = await supabase
     .from('refunds')
-    .select('id, amount, reason, status, payment_id, last_error, note, created_at, refunded_at, orders(code, buyers(organization_name))')
+    .select(
+      'id, amount, reason, status, payment_id, last_error, note, created_at, refunded_at, orders(code, buyers(organization_name))',
+    )
     .order('created_at', { ascending: false })
     .limit(100);
   if (error) throw new Error('Could not load refunds.');
@@ -51,12 +53,14 @@ export async function approveRefund(id: string): Promise<void> {
 /** For a refund paid back outside Paystack. The note says how. */
 export async function markRefundDone(id: string, note: string): Promise<void> {
   const { error } = await supabase.rpc('mark_refund_done', { p_id: id, p_note: note });
-  if (error?.message.includes('say how')) throw new Error('Say how the refund was paid (up to 280 characters).');
+  if (error?.message.includes('say how'))
+    throw new Error('Say how the refund was paid (up to 280 characters).');
   if (error) throw new Error('Could not mark that refund as paid.');
 }
 
 export async function rejectRefund(id: string, note: string): Promise<void> {
   const { error } = await supabase.rpc('reject_refund', { p_id: id, p_note: note });
-  if (error?.message.includes('say why')) throw new Error('Say why it is rejected (up to 280 characters).');
+  if (error?.message.includes('say why'))
+    throw new Error('Say why it is rejected (up to 280 characters).');
   if (error) throw new Error('Could not reject that refund.');
 }

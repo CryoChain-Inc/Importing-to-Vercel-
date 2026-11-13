@@ -27,21 +27,40 @@ export interface QueuedListing {
 
 const KEY = 'outbox:listings';
 const BUCKET = 'produce';
-const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+const EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
 
 let items: QueuedListing[] = [];
 let loaded: Promise<void> | null = null;
 let flushing = false;
 const listeners = new Set<() => void>();
 
-const load = () => (loaded ??= AsyncStorage.getItem(KEY).then((raw) => { if (raw) items = (JSON.parse(raw) as QueuedListing[]).filter((i) => i.unit); /* drops listings queued before units replaced grades */ }, () => undefined));
+const load = () =>
+  (loaded ??= AsyncStorage.getItem(KEY).then(
+    (raw) => {
+      if (raw)
+        items = (JSON.parse(raw) as QueuedListing[]).filter(
+          (i) => i.unit,
+        ); /* drops listings queued before units replaced grades */
+    },
+    () => undefined,
+  ));
 async function commit(next: QueuedListing[]) {
   items = next;
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
   listeners.forEach((l) => l());
 }
 
-const subscribe = (l: () => void) => { load().then(l); listeners.add(l); return () => { listeners.delete(l); }; };
+const subscribe = (l: () => void) => {
+  load().then(l);
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+};
 export const useOutbox = () => useSyncExternalStore(subscribe, () => items);
 
 function uuid() {
@@ -56,21 +75,37 @@ function uuid() {
 const folder = (id: string) => new Directory(Paths.document, 'outbox', id);
 // expo-file-system has no web implementation, and the offline queue is for the phone app only.
 const native = Platform.OS !== 'web';
-const dropFolder = (id: string) => { if (native && folder(id).exists) folder(id).delete(); };
+const dropFolder = (id: string) => {
+  if (native && folder(id).exists) folder(id).delete();
+};
 
 /** Validates, then on the phone copies the photos into app storage and queues the listing (works with no signal); on web uploads straight away. */
-export async function enqueueListing(product: string, weightKg: number, unit: string, images: PickedImage[]): Promise<void> {
+export async function enqueueListing(
+  product: string,
+  weightKg: number,
+  unit: string,
+  images: PickedImage[],
+): Promise<void> {
   if (images.length < MIN_PHOTOS) throw new Error(`Add at least ${MIN_PHOTOS} photos.`);
   if (images.some((img, i) => images.slice(0, i).some((earlier) => samePhoto(earlier, img)))) {
     throw new Error('Each photo has to be a different picture.');
   }
-  if (images.some((img) => !EXT[img.mimeType ?? 'image/jpeg'])) throw new Error('Use JPEG, PNG or WebP photos.');
+  if (images.some((img) => !EXT[img.mimeType ?? 'image/jpeg']))
+    throw new Error('Use JPEG, PNG or WebP photos.');
   const farmerId = await requireUserId();
   await load();
   const id = uuid();
   if (!native) {
     // Web has no safe place to keep photos across a reload, so it never queues: upload now or tell the farmer.
-    const item = { id, farmerId, product: product.trim(), weightKg, unit, photos: images.map((img) => ({ uri: img.uri, mimeType: img.mimeType ?? 'image/jpeg' })), createdAt: new Date().toISOString() };
+    const item = {
+      id,
+      farmerId,
+      product: product.trim(),
+      weightKg,
+      unit,
+      photos: images.map((img) => ({ uri: img.uri, mimeType: img.mimeType ?? 'image/jpeg' })),
+      createdAt: new Date().toISOString(),
+    };
     let refused: string | null;
     try {
       refused = await send(item);
@@ -83,16 +118,31 @@ export async function enqueueListing(product: string, weightKg: number, unit: st
   const dir = folder(id);
   try {
     dir.create({ intermediates: true, idempotent: true });
-    const photos = await Promise.all(images.map(async (img, i) => {
-      const mimeType = img.mimeType ?? 'image/jpeg';
-      const copy = new File(dir, `${i}.${EXT[mimeType]}`);
-      await new File(img.uri).copy(copy, { overwrite: true });
-      return { uri: copy.uri, mimeType };
-    }));
-    await commit([...items, { id, farmerId, product: product.trim(), weightKg, unit, photos, createdAt: new Date().toISOString() }]);
+    const photos = await Promise.all(
+      images.map(async (img, i) => {
+        const mimeType = img.mimeType ?? 'image/jpeg';
+        const copy = new File(dir, `${i}.${EXT[mimeType]}`);
+        await new File(img.uri).copy(copy, { overwrite: true });
+        return { uri: copy.uri, mimeType };
+      }),
+    );
+    await commit([
+      ...items,
+      {
+        id,
+        farmerId,
+        product: product.trim(),
+        weightKg,
+        unit,
+        photos,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
   } catch {
     if (dir.exists) dir.delete();
-    throw new Error('Could not save the listing on this phone. Check there is free space and try again.');
+    throw new Error(
+      'Could not save the listing on this phone. Check there is free space and try again.',
+    );
   }
 }
 
@@ -102,7 +152,9 @@ async function upload(item: QueuedListing): Promise<string[]> {
     const path = `${item.farmerId}/${item.id}-${i}.${EXT[p.mimeType]}`;
     const body = await readBytes(p.uri);
     if (body.byteLength === 0) throw new Error('A photo could not be read. Pick it again.');
-    const { error } = await supabase.storage.from(BUCKET).upload(path, body, { contentType: p.mimeType });
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, body, { contentType: p.mimeType });
     // Already there from an earlier attempt that lost its reply.
     if (error && !/already exists|duplicate/i.test(error.message)) throw error;
     paths.push(path);
@@ -110,7 +162,8 @@ async function upload(item: QueuedListing): Promise<string[]> {
   return paths;
 }
 
-const REFUSED = 'Could not add the listing. Check your farm address and MoMo wallet, and that the product has a published price.';
+const REFUSED =
+  'Could not add the listing. Check your farm address and MoMo wallet, and that the product has a published price.';
 
 /** Uploads one listing. Resolves when it is on the server, throws a network error to stop the run, or returns the refusal text. */
 async function send(item: QueuedListing): Promise<string | null> {
@@ -123,9 +176,17 @@ async function send(item: QueuedListing): Promise<string | null> {
   }
   const { error, status } = await supabase
     .from('produce_listings')
-    .insert({ id: item.id, farmer_id: item.farmerId, product: item.product, weight_kg: item.weightKg, unit: item.unit, image_paths: paths });
+    .insert({
+      id: item.id,
+      farmer_id: item.farmerId,
+      product: item.product,
+      weight_kg: item.weightKg,
+      unit: item.unit,
+      image_paths: paths,
+    });
   if (!error || error.code === '23505') return null;
-  if (status === 0 || status >= 500 || status === 408 || status === 429 || isNetworkError(error)) throw error;
+  if (status === 0 || status >= 500 || status === 408 || status === 429 || isNetworkError(error))
+    throw error;
   return REFUSED;
 }
 
@@ -167,7 +228,11 @@ export async function discardQueued(id: string) {
   await commit(items.filter((i) => i.id !== id));
   dropFolder(id);
   // A refused listing may already have photos on the server.
-  if (item?.error) supabase.storage.from(BUCKET).remove(item.photos.map((p, i) => `${item.farmerId}/${id}-${i}.${EXT[p.mimeType]}`)).catch(() => undefined);
+  if (item?.error)
+    supabase.storage
+      .from(BUCKET)
+      .remove(item.photos.map((p, i) => `${item.farmerId}/${id}-${i}.${EXT[p.mimeType]}`))
+      .catch(() => undefined);
 }
 
 export const queuedCount = () => items.filter((i) => !i.error).length;

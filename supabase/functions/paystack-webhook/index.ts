@@ -1,16 +1,28 @@
 // Paystack -> us. Deployed with verify_jwt = false (see config.toml); authenticity comes from the HMAC signature.
-import { applyRefundEvent, applyTransaction, applyTransferEvent, validSignature } from '../_shared/paystack.ts';
+import {
+  applyRefundEvent,
+  applyTransaction,
+  applyTransferEvent,
+  validSignature,
+} from '../_shared/paystack.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   const raw = await req.text();
-  if (!(await validSignature(raw, req.headers.get('x-paystack-signature'), Deno.env.get('PAYSTACK_SECRET_KEY') ?? ''))) {
+  if (
+    !(await validSignature(
+      raw,
+      req.headers.get('x-paystack-signature'),
+      Deno.env.get('PAYSTACK_SECRET_KEY') ?? '',
+    ))
+  ) {
     return new Response('Invalid signature', { status: 401 });
   }
   try {
     const event = JSON.parse(raw) as { event: string; data: any };
     if (event.event === 'charge.success') await applyTransaction(event.data);
-    else if (['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) await applyTransferEvent(event.event, event.data);
+    else if (['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event))
+      await applyTransferEvent(event.event, event.data);
     else if (event.event.startsWith('refund.')) await applyRefundEvent(event.event, event.data);
   } catch (e) {
     console.error('paystack-webhook', e);

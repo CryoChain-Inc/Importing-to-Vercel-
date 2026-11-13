@@ -2,26 +2,51 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
-import { cancelOrder, orderStage, orderStatus, stillCollecting, type Order, type OrderStage } from '../../../services/buyer.service';
+import {
+  cancelOrder,
+  orderStage,
+  orderStatus,
+  stillCollecting,
+  type Order,
+  type OrderStage,
+} from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 import { warmMap } from '../../../components/location/LiveMap';
 import { OrderLiveMap } from './OrderLiveMap';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
-const stamp = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const day = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
+const stamp = (iso: string) =>
+  new Date(iso).toLocaleString('en-GH', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 /** How many of the five tracking steps are finished at each stage; the next one is "current". */
-const DONE: Record<Exclude<OrderStage, 'cancelled'>, number> = { placed: 1, preparing: 2, on_the_way: 3, delivered: 5 };
+const DONE: Record<Exclude<OrderStage, 'cancelled'>, number> = {
+  placed: 1,
+  preparing: 2,
+  on_the_way: 3,
+  delivered: 5,
+};
 
 const summary = (o: Order) => {
   const names = [...new Set(o.items.map((i) => i.name))];
-  return names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more` : names.join(', ');
+  return names.length > 2
+    ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more`
+    : names.join(', ');
 };
 
 /** The buyer's orders as a list with live status; tap one for the full tracking timeline and receipt. */
-export function Orders({ orders, onPay, onRefresh }: {
+export function Orders({
+  orders,
+  onPay,
+  onRefresh,
+}: {
   orders: Order[];
   onPay: (orderId: string) => void;
   onRefresh: () => Promise<void>;
@@ -34,7 +59,17 @@ export function Orders({ orders, onPay, onRefresh }: {
   const { busy, error, run } = useAction(onRefresh);
 
   const opened = orders.find((o) => o.id === openId);
-  if (opened) return <OrderDetail order={opened} busy={busy} error={error} onBack={() => setOpenId(null)} onPay={onPay} onCancel={() => run(() => cancelOrder(opened.id))} />;
+  if (opened)
+    return (
+      <OrderDetail
+        order={opened}
+        busy={busy}
+        error={error}
+        onBack={() => setOpenId(null)}
+        onPay={onPay}
+        onCancel={() => run(() => cancelOrder(opened.id))}
+      />
+    );
 
   const isPast = (o: Order) => ['cancelled', 'delivered'].includes(orderStage(o));
   const shown = orders.filter((o) => (tab === 'past') === isPast(o));
@@ -44,8 +79,16 @@ export function Orders({ orders, onPay, onRefresh }: {
       <Text style={s.heading}>My orders</Text>
       <View style={s.seg} accessibilityRole="tablist">
         {(['active', 'past'] as const).map((k) => (
-          <Pressable key={k} accessibilityRole="tab" accessibilityState={{ selected: tab === k }} onPress={() => setTab(k)} style={[s.segBtn, tab === k && s.segOn]}>
-            <Text style={[s.segText, tab === k && s.segTextOn]}>{k === 'active' ? 'In progress' : 'Delivered & cancelled'}</Text>
+          <Pressable
+            key={k}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === k }}
+            onPress={() => setTab(k)}
+            style={[s.segBtn, tab === k && s.segOn]}
+          >
+            <Text style={[s.segText, tab === k && s.segTextOn]}>
+              {k === 'active' ? 'In progress' : 'Delivered & cancelled'}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -53,9 +96,23 @@ export function Orders({ orders, onPay, onRefresh }: {
 
       {shown.length === 0 ? (
         <Card style={s.empty}>
-          <View style={s.emptyIcon}><Icon name="package" size={26} color={colors.brandInk} /></View>
-          <Text style={s.title}>{orders.length === 0 ? 'No orders yet' : tab === 'active' ? 'Nothing in progress' : 'No past orders'}</Text>
-          <Text style={s.emptyText}>{orders.length === 0 ? 'Add produce to your cart from the shop and your orders will be tracked here.' : tab === 'active' ? 'Orders you place show up here until they are delivered.' : 'Delivered and cancelled orders are kept here.'}</Text>
+          <View style={s.emptyIcon}>
+            <Icon name="package" size={26} color={colors.brandInk} />
+          </View>
+          <Text style={s.title}>
+            {orders.length === 0
+              ? 'No orders yet'
+              : tab === 'active'
+                ? 'Nothing in progress'
+                : 'No past orders'}
+          </Text>
+          <Text style={s.emptyText}>
+            {orders.length === 0
+              ? 'Add produce to your cart from the shop and your orders will be tracked here.'
+              : tab === 'active'
+                ? 'Orders you place show up here until they are delivered.'
+                : 'Delivered and cancelled orders are kept here.'}
+          </Text>
         </Card>
       ) : null}
 
@@ -64,23 +121,37 @@ export function Orders({ orders, onPay, onRefresh }: {
         const stage = orderStage(o);
         const unpaid = o.state === 'awaiting_payment';
         return (
-          <Pressable key={o.id} accessibilityRole="button" accessibilityLabel={`Order ${o.code}, ${st.label}, view details`} onPress={() => setOpenId(o.id)}>
+          <Pressable
+            key={o.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Order ${o.code}, ${st.label}, view details`}
+            onPress={() => setOpenId(o.id)}
+          >
             {({ pressed }) => (
               <Card style={[s.item, pressed && s.pressed]}>
                 <View style={s.top}>
                   <View style={s.grow}>
                     <Text style={s.name}>{o.code}</Text>
-                    <Text style={s.meta}>{day(o.createdAt)} · {o.items.length} item{o.items.length === 1 ? '' : 's'}</Text>
+                    <Text style={s.meta}>
+                      {day(o.createdAt)} · {o.items.length} item{o.items.length === 1 ? '' : 's'}
+                    </Text>
                   </View>
                   <Badge label={st.label} tone={st.tone} />
                 </View>
-                <Text style={s.summary} numberOfLines={1}>{summary(o)}</Text>
+                <Text style={s.summary} numberOfLines={1}>
+                  {summary(o)}
+                </Text>
                 {o.refunds.length > 0 ? <ShortageNote o={o} compact /> : null}
                 {stage !== 'cancelled' ? <MiniTrack stage={stage} s={s} /> : null}
                 <View style={s.top}>
                   <Text style={s.total}>{ghs(o.amount)}</Text>
-                  {unpaid ? <Button size="sm" label="Pay now" onPress={() => onPay(o.id)} /> : (
-                    <View style={s.more}><Text style={s.moreText}>Track order</Text><Icon name="chevronRight" size={16} color={colors.brandInk} /></View>
+                  {unpaid ? (
+                    <Button size="sm" label="Pay now" onPress={() => onPay(o.id)} />
+                  ) : (
+                    <View style={s.more}>
+                      <Text style={s.moreText}>Track order</Text>
+                      <Icon name="chevronRight" size={16} color={colors.brandInk} />
+                    </View>
                   )}
                 </View>
               </Card>
@@ -100,27 +171,64 @@ function ShortageNote({ o, compact }: { o: Order; compact?: boolean }) {
   const paid = o.refunds.every((r) => r.refunded);
   const text = `${ghs(total)} ${paid ? 'refunded' : 'refund on its way'}`;
   return (
-    <View style={s.alert} accessibilityRole="alert" accessibilityLabel={`Some produce was short. ${text}`}>
+    <View
+      style={s.alert}
+      accessibilityRole="alert"
+      accessibilityLabel={`Some produce was short. ${text}`}
+    >
       <Icon name="alert" size={compact ? 16 : 20} color={colors.warningInk} />
       <View style={s.grow}>
-        <Text style={s.alertTitle}>{compact ? `Short supply · ${text}` : 'Some of your produce was short'}</Text>
-        {compact ? null : <Text style={s.meta}>We could not supply everything you ordered. {paid ? 'The money for it has been returned to you' : 'The money for it is being returned to you'}: {text}.</Text>}
+        <Text style={s.alertTitle}>
+          {compact ? `Short supply · ${text}` : 'Some of your produce was short'}
+        </Text>
+        {compact ? null : (
+          <Text style={s.meta}>
+            We could not supply everything you ordered.{' '}
+            {paid
+              ? 'The money for it has been returned to you'
+              : 'The money for it is being returned to you'}
+            : {text}.
+          </Text>
+        )}
       </View>
     </View>
   );
 }
 
 /** Five segments, one per tracking step, so a card shows progress at a glance. */
-function MiniTrack({ stage, s }: { stage: Exclude<OrderStage, 'cancelled'>; s: ReturnType<typeof styles> }) {
+function MiniTrack({
+  stage,
+  s,
+}: {
+  stage: Exclude<OrderStage, 'cancelled'>;
+  s: ReturnType<typeof styles>;
+}) {
   return (
     <View style={s.mini} accessibilityLabel={`${DONE[stage]} of 5 steps done`}>
-      {[0, 1, 2, 3, 4].map((i) => <View key={i} style={[s.seg5, i < DONE[stage] && s.seg5Done, i === DONE[stage] && s.seg5Now]} />)}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <View
+          key={i}
+          style={[s.seg5, i < DONE[stage] && s.seg5Done, i === DONE[stage] && s.seg5Now]}
+        />
+      ))}
     </View>
   );
 }
 
-function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
-  order: Order; busy: boolean; error: string | null; onBack: () => void; onPay: (id: string) => void; onCancel: () => void;
+function OrderDetail({
+  order: o,
+  busy,
+  error,
+  onBack,
+  onPay,
+  onCancel,
+}: {
+  order: Order;
+  busy: boolean;
+  error: string | null;
+  onBack: () => void;
+  onPay: (id: string) => void;
+  onCancel: () => void;
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
@@ -132,16 +240,44 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
 
   const steps: { title: string; note: string }[] = [
     { title: 'Order placed', note: stamp(o.createdAt) },
-    { title: 'Payment', note: o.paidAt ? `Received ${stamp(o.paidAt)}` : 'Waiting for your payment' },
-    { title: 'Preparing your produce', note: stage === 'preparing' ? 'We are lining up farms near you' : pickupsTotal > 0 ? 'Matched with farms near you' : 'Farms are matched once you have paid' },
-    { title: 'On the way', note: stage === 'on_the_way' ? (stillCollecting(o) ? 'Your produce is on a truck' : 'Heading to you') : 'A driver collects it and brings it to you' },
-    { title: 'Delivered', note: deliveredAt ? stamp(deliveredAt) : 'Arrives at your delivery address' },
+    {
+      title: 'Payment',
+      note: o.paidAt ? `Received ${stamp(o.paidAt)}` : 'Waiting for your payment',
+    },
+    {
+      title: 'Preparing your produce',
+      note:
+        stage === 'preparing'
+          ? 'We are lining up farms near you'
+          : pickupsTotal > 0
+            ? 'Matched with farms near you'
+            : 'Farms are matched once you have paid',
+    },
+    {
+      title: 'On the way',
+      note:
+        stage === 'on_the_way'
+          ? stillCollecting(o)
+            ? 'Your produce is on a truck'
+            : 'Heading to you'
+          : 'A driver collects it and brings it to you',
+    },
+    {
+      title: 'Delivered',
+      note: deliveredAt ? stamp(deliveredAt) : 'Arrives at your delivery address',
+    },
   ];
   const done = stage === 'cancelled' ? 0 : DONE[stage];
 
   return (
     <View style={s.list}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back to orders" onPress={onBack} hitSlop={8} style={s.back}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back to orders"
+        onPress={onBack}
+        hitSlop={8}
+        style={s.back}
+      >
         <Icon name="arrowLeft" size={20} color={colors.ink} />
         <Text style={s.backText}>My orders</Text>
       </Pressable>
@@ -157,26 +293,41 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
 
       {unpaid ? (
         <Card tone="tint" style={s.box}>
-          <Text style={s.title}>{retry ? 'Payment did not go through' : 'Waiting for payment'}</Text>
+          <Text style={s.title}>
+            {retry ? 'Payment did not go through' : 'Waiting for payment'}
+          </Text>
           <Text style={s.meta}>
-            {o.payment === 'failed' ? 'Your last payment attempt failed. No money was taken; try again.'
-              : o.payment === 'abandoned' ? 'Your last payment was not completed. Try again when you are ready.'
-              : o.payment === 'pending' ? 'A payment is in progress. If you already paid, it will show here shortly.'
-              : 'Your produce is held for you while you pay. Unpaid orders are released after 30 minutes.'}
+            {o.payment === 'failed'
+              ? 'Your last payment attempt failed. No money was taken; try again.'
+              : o.payment === 'abandoned'
+                ? 'Your last payment was not completed. Try again when you are ready.'
+                : o.payment === 'pending'
+                  ? 'A payment is in progress. If you already paid, it will show here shortly.'
+                  : 'Your produce is held for you while you pay. Unpaid orders are released after 30 minutes.'}
           </Text>
           <Button label={retry ? 'Try payment again' : 'Pay now'} onPress={() => onPay(o.id)} />
-          <Button size="sm" variant="outline" label="Cancel order" loading={busy} onPress={onCancel} />
+          <Button
+            size="sm"
+            variant="outline"
+            label="Cancel order"
+            loading={busy}
+            onPress={onCancel}
+          />
         </Card>
       ) : null}
 
       {o.refunds.length > 0 ? <ShortageNote o={o} /> : null}
 
-      {o.state === 'paid' && !deliveredAt ? <OrderLiveMap orderId={o.id} preparing={stage === 'preparing'} /> : null}
+      {o.state === 'paid' && !deliveredAt ? (
+        <OrderLiveMap orderId={o.id} preparing={stage === 'preparing'} />
+      ) : null}
 
       {stage === 'cancelled' ? (
         <Card style={s.box}>
           <Text style={s.title}>This order was cancelled</Text>
-          <Text style={s.meta}>Nothing was charged for it. Browse the shop to place a new one.</Text>
+          <Text style={s.meta}>
+            Nothing was charged for it. Browse the shop to place a new one.
+          </Text>
         </Card>
       ) : (
         <Card style={s.box}>
@@ -188,7 +339,13 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
               return (
                 <View key={step.title} style={s.stepRow}>
                   <View style={s.rail}>
-                    <View style={[s.dot, isDone && s.dotDone, now && s.dotNow]}>{isDone ? <Icon name="check" size={13} color="#ffffff" strokeWidth={3} /> : now ? <View style={s.dotPulse} /> : null}</View>
+                    <View style={[s.dot, isDone && s.dotDone, now && s.dotNow]}>
+                      {isDone ? (
+                        <Icon name="check" size={13} color="#ffffff" strokeWidth={3} />
+                      ) : now ? (
+                        <View style={s.dotPulse} />
+                      ) : null}
+                    </View>
                     {i < steps.length - 1 ? <View style={[s.line, isDone && s.lineDone]} /> : null}
                   </View>
                   <View style={s.stepBody}>
@@ -208,21 +365,36 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
           <View key={`${i.name}-${i.unit}`} style={s.row}>
             <View style={s.grow}>
               <Text style={s.k}>{i.name}</Text>
-              <Text style={s.meta}>{fmtQty(i.kg, i.unit)} × {ghs(i.lineTotal / (i.kg || 1))}</Text>
+              <Text style={s.meta}>
+                {fmtQty(i.kg, i.unit)} × {ghs(i.lineTotal / (i.kg || 1))}
+              </Text>
             </View>
             <Text style={s.v}>{ghs(i.lineTotal)}</Text>
           </View>
         ))}
         <View style={s.divider} />
-        <View style={s.row}><Text style={s.label}>Total</Text><Text style={s.total}>{ghs(o.amount)}</Text></View>
+        <View style={s.row}>
+          <Text style={s.label}>Total</Text>
+          <Text style={s.total}>{ghs(o.amount)}</Text>
+        </View>
         <View style={s.row}>
           <Text style={s.meta}>Payment</Text>
-          <Text style={s.v}>{o.state === 'paid' ? (o.paidAt ? `Paid ${day(o.paidAt)}` : 'Paid') : o.state === 'cancelled' ? 'Not charged' : 'Not paid yet'}</Text>
+          <Text style={s.v}>
+            {o.state === 'paid'
+              ? o.paidAt
+                ? `Paid ${day(o.paidAt)}`
+                : 'Paid'
+              : o.state === 'cancelled'
+                ? 'Not charged'
+                : 'Not paid yet'}
+          </Text>
         </View>
         {o.refunds.map((r, i) => (
           <View key={i} style={s.row}>
             <Text style={s.meta}>Refund for what we could not supply</Text>
-            <Text style={s.v}>{ghs(r.amount)} · {r.refunded ? 'Refunded' : 'Being processed'}</Text>
+            <Text style={s.v}>
+              {ghs(r.amount)} · {r.refunded ? 'Refunded' : 'Being processed'}
+            </Text>
           </View>
         ))}
       </Card>
@@ -243,36 +415,94 @@ function OrderDetail({ order: o, busy, error, onBack, onPay, onCancel }: {
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 12 },
   heading: { fontFamily: fonts.heading, fontSize: 26, letterSpacing: -0.4, color: c.ink },
-  seg: { flexDirection: 'row' as const, padding: 4, borderRadius: 14, backgroundColor: c.surfaceSunken },
-  segBtn: { flex: 1, minHeight: 40, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 11 },
+  seg: {
+    flexDirection: 'row' as const,
+    padding: 4,
+    borderRadius: 14,
+    backgroundColor: c.surfaceSunken,
+  },
+  segBtn: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderRadius: 11,
+  },
   segOn: { backgroundColor: c.surfaceCard },
   segText: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
   segTextOn: { fontFamily: fonts.sansBold, color: c.ink },
   empty: { alignItems: 'center' as const, gap: 8, paddingVertical: 32 },
-  emptyIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
-  emptyText: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted, textAlign: 'center' as const, maxWidth: 300 },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
+  emptyText: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+    maxWidth: 300,
+  },
   item: { gap: 12, padding: 16 },
   pressed: { opacity: 0.8 },
   box: { gap: 12, padding: 16 },
-  top: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8 },
+  top: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
   grow: { flex: 1, gap: 2 },
   title: { fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
   name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   summary: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink },
-  meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted, flexShrink: 1 },
+  meta: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 13,
+    lineHeight: 18,
+    color: c.inkMuted,
+    flexShrink: 1,
+  },
   more: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2 },
   moreText: { fontFamily: fonts.sansBold, fontSize: 13, color: c.brandInk },
-  alert: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, padding: 12, borderRadius: 12, backgroundColor: c.harvestTint },
+  alert: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: c.harvestTint,
+  },
   alertTitle: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
   mini: { flexDirection: 'row' as const, gap: 4 },
   seg5: { flex: 1, height: 5, borderRadius: 3, backgroundColor: c.borderSubtle },
   seg5Done: { backgroundColor: c.brand600 },
   seg5Now: { backgroundColor: c.harvestFill },
-  back: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, minHeight: 44, alignSelf: 'flex-start' as const },
+  back: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    minHeight: 44,
+    alignSelf: 'flex-start' as const,
+  },
   backText: { fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
   stepRow: { flexDirection: 'row' as const, gap: 14 },
   rail: { alignItems: 'center' as const, width: 24 },
-  dot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: c.borderStrong, backgroundColor: c.surfaceCard },
+  dot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surfaceCard,
+  },
   dotDone: { backgroundColor: c.brand600, borderColor: c.brand600 },
   dotNow: { borderColor: c.harvestFill },
   dotPulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: c.harvestFill },
@@ -281,11 +511,26 @@ const styles = (c: Record<ColorToken, string>) => ({
   stepBody: { flex: 1, gap: 2, paddingBottom: 18 },
   stepTitle: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
   stepIdle: { color: c.inkMuted, opacity: 0.8 },
-  row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 12 },
+  row: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+  },
   k: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink, flexShrink: 1 },
-  v: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  v: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
   label: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
-  total: { fontFamily: fonts.heading, fontSize: 22, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  total: {
+    fontFamily: fonts.heading,
+    fontSize: 22,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
   divider: { height: 1, backgroundColor: c.borderSubtle },
   addr: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8 },
   addrText: { flex: 1, fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.ink },

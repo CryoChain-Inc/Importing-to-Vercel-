@@ -47,18 +47,30 @@ const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20">
 </svg>`;
 export const TRUCK_URL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(TRUCK_SVG)}`;
 
-function googleDrivingPath(google: any, from: Place, to: Place): Promise<{ lat: number; lng: number }[]> {
+function googleDrivingPath(
+  google: any,
+  from: Place,
+  to: Place,
+): Promise<{ lat: number; lng: number }[]> {
   return new Promise((resolve) => {
     try {
-      new google.maps.DirectionsService().route({
-        origin: { lat: from.lat, lng: from.lng },
-        destination: { lat: to.lat, lng: to.lng },
-        travelMode: google.maps.TravelMode.DRIVING,
-      }, (result: any, status: string) => {
-        const path = result?.routes?.[0]?.overview_path;
-        if (status !== 'OK' || !path?.length) return resolve([]);
-        resolve(path.map((p: { lat: () => number; lng: () => number }) => ({ lat: p.lat(), lng: p.lng() })));
-      });
+      new google.maps.DirectionsService().route(
+        {
+          origin: { lat: from.lat, lng: from.lng },
+          destination: { lat: to.lat, lng: to.lng },
+          travelMode: google.maps.TravelMode.DRIVING,
+        },
+        (result: any, status: string) => {
+          const path = result?.routes?.[0]?.overview_path;
+          if (status !== 'OK' || !path?.length) return resolve([]);
+          resolve(
+            path.map((p: { lat: () => number; lng: () => number }) => ({
+              lat: p.lat(),
+              lng: p.lng(),
+            })),
+          );
+        },
+      );
     } catch {
       resolve([]);
     }
@@ -66,7 +78,14 @@ function googleDrivingPath(google: any, from: Place, to: Place): Promise<{ lat: 
 }
 
 /** Pickup and drop-off map. A tap sets whichever stop is selected, unless this map is only showing a trip. */
-export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }: {
+export function TripMap({
+  pickup,
+  dropoff,
+  onPick,
+  driver,
+  height = 280,
+  hint,
+}: {
   pickup: Place | null;
   dropoff: Place | null;
   onPick?: (place: Place) => void;
@@ -79,7 +98,10 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
   const mapRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const layers = useRef<any[]>([]);
-  const routeCache = useRef<{ key: string; path: { lat: number; lng: number }[] }>({ key: '', path: [] });
+  const routeCache = useRef<{ key: string; path: { lat: number; lng: number }[] }>({
+    key: '',
+    path: [],
+  });
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
 
@@ -101,7 +123,8 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
       if (!document.getElementById('leaflet-fix')) {
         const style = document.createElement('style');
         style.id = 'leaflet-fix';
-        style.textContent = '.leaflet-container{height:100%;width:100%;font:inherit;}.leaflet-container img{max-width:none!important;max-height:none!important;}';
+        style.textContent =
+          '.leaflet-container{height:100%;width:100%;font:inherit;}.leaflet-container img{max-width:none!important;max-height:none!important;}';
         document.head.appendChild(style);
       }
       await loadScript('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
@@ -113,7 +136,10 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       });
       const map = L.map(el).setView([ACCRA.lat, ACCRA.lng], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+      }).addTo(map);
       map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
         if (!onPickRef.current) return;
         const { lat, lng } = e.latlng;
@@ -130,12 +156,20 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
           mapRef.current = null;
           startLeaflet().catch(() => undefined);
         };
-        await loadScript('google-maps-js', `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}`);
+        await loadScript(
+          'google-maps-js',
+          `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}`,
+        );
         if (dead) return;
         const google = (window as unknown as { google: any }).google;
         const map = new google.maps.Map(el, {
-          center: ACCRA, zoom: 12, disableDefaultUI: true, zoomControl: true,
-          mapTypeControl: false, streetViewControl: false, clickableIcons: false,
+          center: ACCRA,
+          zoom: 12,
+          disableDefaultUI: true,
+          zoomControl: true,
+          mapTypeControl: false,
+          streetViewControl: false,
+          clickableIcons: false,
         });
         map.addListener('click', (e: { latLng: { lat: () => number; lng: () => number } }) => {
           if (!onPickRef.current) return;
@@ -151,53 +185,76 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
       await startLeaflet();
     };
     start().catch(() => undefined);
-    return () => { dead = true; };
+    return () => {
+      dead = true;
+    };
   }, []);
 
   useEffect(() => {
     const engine = mapRef.current;
     if (!engine || Platform.OS !== 'web') return;
     let live = true;
-    const routeKey = pickup && dropoff ? `${pickup.lat.toFixed(5)},${pickup.lng.toFixed(5)}>${dropoff.lat.toFixed(5)},${dropoff.lng.toFixed(5)}` : '';
+    const routeKey =
+      pickup && dropoff
+        ? `${pickup.lat.toFixed(5)},${pickup.lng.toFixed(5)}>${dropoff.lat.toFixed(5)},${dropoff.lng.toFixed(5)}`
+        : '';
     const draw = async () => {
       const fresh = routeCache.current.key !== routeKey;
       let path = routeCache.current.path;
       if (fresh) {
         path = [];
         if (pickup && dropoff) {
-          path = engine.kind === 'google' ? await googleDrivingPath(engine.google, pickup, dropoff) : [];
+          path =
+            engine.kind === 'google' ? await googleDrivingPath(engine.google, pickup, dropoff) : [];
           if (!live) return;
           if (!path.length) path = await roadRoute(pickup, dropoff);
         }
         if (!live) return;
         routeCache.current = { key: routeKey, path };
       }
-      layers.current.forEach((layer) => (engine.kind === 'google' ? layer.setMap(null) : engine.map.removeLayer(layer)));
+      layers.current.forEach((layer) =>
+        engine.kind === 'google' ? layer.setMap(null) : engine.map.removeLayer(layer),
+      );
       layers.current = [];
       const points = [pickup, dropoff].filter((p): p is Place => !!p);
       if (engine.kind === 'google') {
         const { google, map } = engine;
         const bounds = new google.maps.LatLngBounds();
         points.forEach((p, i) => {
-          const marker = new google.maps.Marker({ position: p, map, label: i === 0 && pickup ? 'A' : 'B' });
+          const marker = new google.maps.Marker({
+            position: p,
+            map,
+            label: i === 0 && pickup ? 'A' : 'B',
+          });
           layers.current.push(marker);
           bounds.extend(p);
         });
         if (path.length > 1) {
-          layers.current.push(new google.maps.Polyline({
-            path, map, strokeColor: ROUTE, strokeWeight: 6, strokeOpacity: 1,
-          }));
+          layers.current.push(
+            new google.maps.Polyline({
+              path,
+              map,
+              strokeColor: ROUTE,
+              strokeWeight: 6,
+              strokeOpacity: 1,
+            }),
+          );
           path.forEach((p) => bounds.extend(p));
         }
         if (driver) {
-          layers.current.push(new google.maps.Marker({
-            position: driver, map, title: 'Cold truck', zIndex: 5,
-            icon: {
-              url: TRUCK_URL,
-              scaledSize: new google.maps.Size(TRUCK_W, TRUCK_H),
-              anchor: new google.maps.Point(TRUCK_W / 2, TRUCK_H / 2),
-            },
-          }));
+          layers.current.push(
+            new google.maps.Marker({
+              position: driver,
+              map,
+              title: 'Cold truck',
+              zIndex: 5,
+              icon: {
+                url: TRUCK_URL,
+                scaledSize: new google.maps.Size(TRUCK_W, TRUCK_H),
+                anchor: new google.maps.Point(TRUCK_W / 2, TRUCK_H / 2),
+              },
+            }),
+          );
           bounds.extend(driver);
         }
         if (fresh && (path.length > 1 || points.length > 1)) map.fitBounds(bounds, 48);
@@ -206,7 +263,15 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
         const { L, map } = engine;
         const spots: [number, number][] = [];
         points.forEach((p, i) => {
-          layers.current.push(L.marker([p.lat, p.lng]).addTo(map).bindTooltip(i === 0 && pickup ? 'A' : 'B', { permanent: true, direction: 'top', opacity: 0.85 }));
+          layers.current.push(
+            L.marker([p.lat, p.lng])
+              .addTo(map)
+              .bindTooltip(i === 0 && pickup ? 'A' : 'B', {
+                permanent: true,
+                direction: 'top',
+                opacity: 0.85,
+              }),
+          );
           spots.push([p.lat, p.lng]);
         });
         if (path.length > 1) {
@@ -215,8 +280,18 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
           spots.push(...line);
         }
         if (driver) {
-          const truck = L.icon({ iconUrl: TRUCK_URL, iconSize: [TRUCK_W, TRUCK_H], iconAnchor: [TRUCK_W / 2, TRUCK_H / 2] });
-          layers.current.push(L.marker([driver.lat, driver.lng], { icon: truck, zIndexOffset: 500, title: 'Cold truck' }).addTo(map));
+          const truck = L.icon({
+            iconUrl: TRUCK_URL,
+            iconSize: [TRUCK_W, TRUCK_H],
+            iconAnchor: [TRUCK_W / 2, TRUCK_H / 2],
+          });
+          layers.current.push(
+            L.marker([driver.lat, driver.lng], {
+              icon: truck,
+              zIndexOffset: 500,
+              title: 'Cold truck',
+            }).addTo(map),
+          );
           spots.push([driver.lat, driver.lng]);
         }
         if (fresh && spots.length > 1) map.fitBounds(L.latLngBounds(spots), { padding: [32, 32] });
@@ -224,14 +299,22 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
       }
     };
     draw();
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [pickup, dropoff, ready, driver]);
 
   if (Platform.OS !== 'web') {
     return pickup && dropoff ? (
-      <Button label="Open route in Google Maps" variant="outline" onPress={() => Linking.openURL(
-        `https://www.google.com/maps/dir/?api=1&origin=${pickup.lat},${pickup.lng}&destination=${dropoff.lat},${dropoff.lng}&travelmode=driving`,
-      )} />
+      <Button
+        label="Open route in Google Maps"
+        variant="outline"
+        onPress={() =>
+          Linking.openURL(
+            `https://www.google.com/maps/dir/?api=1&origin=${pickup.lat},${pickup.lng}&destination=${dropoff.lat},${dropoff.lng}&travelmode=driving`,
+          )
+        }
+      />
     ) : null;
   }
 
@@ -239,9 +322,18 @@ export function TripMap({ pickup, dropoff, onPick, driver, height = 280, hint }:
     <View style={s.wrap}>
       {React.createElement('div', {
         ref: host,
-        style: { height, width: '100%', borderRadius: 16, overflow: 'hidden', background: '#e7efe9' },
+        style: {
+          height,
+          width: '100%',
+          borderRadius: 16,
+          overflow: 'hidden',
+          background: '#e7efe9',
+        },
       })}
-      <Text style={s.hint}>{hint ?? (onPick ? 'Tap the map to set this stop.' : 'Driving route on roads a truck can use.')}</Text>
+      <Text style={s.hint}>
+        {hint ??
+          (onPick ? 'Tap the map to set this stop.' : 'Driving route on roads a truck can use.')}
+      </Text>
     </View>
   );
 }

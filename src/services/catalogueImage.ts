@@ -3,7 +3,11 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const BUCKET = 'catalogue';
-export const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+export const EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
 
 export interface PickedImage {
   uri: string;
@@ -57,7 +61,12 @@ export const imageUrl = (path: string | null | undefined) =>
  * Uploads to a fresh path (so cached copies of the old image never show) and removes the old file.
  * Returns the new path to store on the row.
  */
-export async function replaceImage(kind: 'categories' | 'products', id: string, img: PickedImage, oldPath?: string | null) {
+export async function replaceImage(
+  kind: 'categories' | 'products',
+  id: string,
+  img: PickedImage,
+  oldPath?: string | null,
+) {
   const type = img.mimeType ?? 'image/jpeg';
   const ext = EXT[type];
   if (!ext) throw new Error('Use a JPEG, PNG or WebP image.');

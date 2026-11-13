@@ -36,11 +36,36 @@ export function OpsLoginScreen() {
   };
 
   return (
-    <AuthLayout title="Operations sign in" subtitle="For CryoChain staff. Farmers and buyers sign in from the home page.">
+    <AuthLayout
+      title="Operations sign in"
+      subtitle="For CryoChain staff. Farmers and buyers sign in from the home page."
+    >
       {error ? <Banner text={error} /> : null}
-      <Input label="Work email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@cryochain.com" />
-      <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" onSubmitEditing={() => ready && submit()} />
-      <Button label="Sign in" size="lg" icon="arrowRight" onPress={submit} loading={busy} disabled={!ready} />
+      <Input
+        label="Work email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        placeholder="you@cryochain.com"
+      />
+      <Input
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        autoComplete="current-password"
+        onSubmitEditing={() => ready && submit()}
+      />
+      <Button
+        label="Sign in"
+        size="lg"
+        icon="arrowRight"
+        onPress={submit}
+        loading={busy}
+        disabled={!ready}
+      />
     </AuthLayout>
   );
 }

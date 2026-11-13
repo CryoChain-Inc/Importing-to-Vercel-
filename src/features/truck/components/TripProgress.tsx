@@ -5,20 +5,36 @@ import { Button, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { TripMap } from '../../buyer/components/TripMap';
 import {
-  completeTruckTrip, fetchStartCode, fetchTripLive, reportTruckLocation, startTruckTrip, type TruckBooking,
+  completeTruckTrip,
+  fetchStartCode,
+  fetchTripLive,
+  reportTruckLocation,
+  startTruckTrip,
+  type TruckBooking,
 } from '../../../services/truck.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { elapsedLabel, hoursLabel } from '../../../utils/duration';
 
-const placed = (lat: number, lng: number) => Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+const placed = (lat: number, lng: number) =>
+  Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 
 /** Driving route for a booked trip, the buyer's start code, and the driver's live position after that code is entered. */
-export function TripProgress({ booking, role }: { booking: TruckBooking; role: 'buyer' | 'driver' }) {
+export function TripProgress({
+  booking,
+  role,
+}: {
+  booking: TruckBooking;
+  role: 'buyer' | 'driver';
+}) {
   const s = useThemedStyles(styles);
   const [startedAt, setStartedAt] = useState(booking.startedAt);
   const [completedAt, setCompletedAt] = useState(booking.completedAt);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const [driver, setDriver] = useState(booking.driverLat != null && booking.driverLng != null ? { lat: booking.driverLat, lng: booking.driverLng } : null);
+  const [driver, setDriver] = useState(
+    booking.driverLat != null && booking.driverLng != null
+      ? { lat: booking.driverLat, lng: booking.driverLng }
+      : null,
+  );
   const [seenAt, setSeenAt] = useState(booking.driverSeenAt);
   const [code, setCode] = useState<string | null>(null);
   const [entry, setEntry] = useState('');
@@ -30,11 +46,17 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
   const started = paid && !!startedAt;
   const ended = !!completedAt;
   const from = useMemo(
-    () => (placed(booking.pickupLat, booking.pickupLng) ? { label: booking.pickupLabel, lat: booking.pickupLat, lng: booking.pickupLng } : null),
+    () =>
+      placed(booking.pickupLat, booking.pickupLng)
+        ? { label: booking.pickupLabel, lat: booking.pickupLat, lng: booking.pickupLng }
+        : null,
     [booking.pickupLabel, booking.pickupLat, booking.pickupLng],
   );
   const to = useMemo(
-    () => (placed(booking.dropoffLat, booking.dropoffLng) ? { label: booking.dropoffLabel, lat: booking.dropoffLat, lng: booking.dropoffLng } : null),
+    () =>
+      placed(booking.dropoffLat, booking.dropoffLng)
+        ? { label: booking.dropoffLabel, lat: booking.dropoffLat, lng: booking.dropoffLng }
+        : null,
     [booking.dropoffLabel, booking.dropoffLat, booking.dropoffLng],
   );
 
@@ -52,19 +74,29 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
     if (role !== 'buyer' || !paid || ended) return;
     let live = true;
     const tick = () => {
-      fetchTripLive(booking.id).then((row) => {
-        if (!live || !row) return;
-        setStartedAt(row.startedAt);
-        setCompletedAt(row.completedAt);
-        setSeenAt(row.driverSeenAt);
-        if (row.driverLat != null && row.driverLng != null) {
-          setDriver((prev) => (prev && prev.lat === row.driverLat && prev.lng === row.driverLng ? prev : { lat: row.driverLat as number, lng: row.driverLng as number }));
-        }
-      }, () => undefined);
+      fetchTripLive(booking.id).then(
+        (row) => {
+          if (!live || !row) return;
+          setStartedAt(row.startedAt);
+          setCompletedAt(row.completedAt);
+          setSeenAt(row.driverSeenAt);
+          if (row.driverLat != null && row.driverLng != null) {
+            setDriver((prev) =>
+              prev && prev.lat === row.driverLat && prev.lng === row.driverLng
+                ? prev
+                : { lat: row.driverLat as number, lng: row.driverLng as number },
+            );
+          }
+        },
+        () => undefined,
+      );
     };
     tick();
     const timer = setInterval(tick, 5000);
-    return () => { live = false; clearInterval(timer); };
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, [booking.id, ended, paid, role]);
 
   useEffect(() => {
@@ -86,7 +118,9 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
       }
       setSharing('on');
       const send = async () => {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
         if (!live) return;
         const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setDriver(next);
@@ -94,10 +128,15 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
       };
       await send().catch(() => undefined);
       if (!live) return;
-      handle.timer = setInterval(() => { send().catch(() => undefined); }, 8000);
+      handle.timer = setInterval(() => {
+        send().catch(() => undefined);
+      }, 8000);
     };
     watch();
-    return () => { live = false; if (handle.timer) clearInterval(handle.timer); };
+    return () => {
+      live = false;
+      if (handle.timer) clearInterval(handle.timer);
+    };
   }, [booking.id, ended, role, started]);
 
   const begin = async () => {
@@ -129,42 +168,103 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
 
   return (
     <View style={s.wrap}>
-      {from && to ? <TripMap pickup={from} dropoff={to} driver={started ? driver : null} height={220} /> : null}
+      {from && to ? (
+        <TripMap pickup={from} dropoff={to} driver={started ? driver : null} height={220} />
+      ) : null}
       {paid && !started && role === 'buyer' ? (
         <View style={s.codeBox}>
           <Text style={s.k}>Give this code to the driver at pickup</Text>
           <Text style={s.code}>{code ?? '————'}</Text>
-          <Text style={s.meta}>{code ? 'Time on the truck starts only after the driver enters this code at the pickup.' : 'The start code appears after the latest database update is applied.'}</Text>
+          <Text style={s.meta}>
+            {code
+              ? 'Time on the truck starts only after the driver enters this code at the pickup.'
+              : 'The start code appears after the latest database update is applied.'}
+          </Text>
         </View>
       ) : null}
       {paid && !started && role === 'driver' ? (
         <View style={s.form}>
-          <Text style={s.meta}>When you reach the pickup, ask the buyer for this code. Entering it starts the billed time.</Text>
-          <Input label="Start code from the buyer" value={entry} onChangeText={setEntry} keyboardType="number-pad" maxLength={4} />
+          <Text style={s.meta}>
+            When you reach the pickup, ask the buyer for this code. Entering it starts the billed
+            time.
+          </Text>
+          <Input
+            label="Start code from the buyer"
+            value={entry}
+            onChangeText={setEntry}
+            keyboardType="number-pad"
+            maxLength={4}
+          />
           {error ? <Banner text={error} /> : null}
-          <Button label="Start trip" size="sm" loading={busy} disabled={entry.trim().length !== 4} onPress={begin} />
+          <Button
+            label="Start trip"
+            size="sm"
+            loading={busy}
+            disabled={entry.trim().length !== 4}
+            onPress={begin}
+          />
         </View>
       ) : null}
       {started && startedAt ? (
         <Text style={s.clock}>
-          {ended ? 'Time on this trip' : 'Time running'} · {elapsedLabel(startedAt, completedAt, now)}
+          {ended ? 'Time on this trip' : 'Time running'} ·{' '}
+          {elapsedLabel(startedAt, completedAt, now)}
           {booking.bookedHours ? ` of ${hoursLabel(booking.bookedHours)} booked` : ''}
         </Text>
       ) : null}
-      {started && !ended && role === 'buyer' ? <Text style={s.meta}>{driver && seenAt ? `Driver location updated ${new Date(seenAt).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}.` : 'Waiting for the driver’s location.'}</Text> : null}
-      {started && !ended && role === 'driver' ? <Text style={s.meta}>{sharing === 'off' ? 'Allow location so the buyer can follow the truck.' : 'Trip started. Your location is shared with the buyer. End the trip when you reach the drop-off — that stops the clock.'}</Text> : null}
+      {started && !ended && role === 'buyer' ? (
+        <Text style={s.meta}>
+          {driver && seenAt
+            ? `Driver location updated ${new Date(seenAt).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}.`
+            : 'Waiting for the driver’s location.'}
+        </Text>
+      ) : null}
+      {started && !ended && role === 'driver' ? (
+        <Text style={s.meta}>
+          {sharing === 'off'
+            ? 'Allow location so the buyer can follow the truck.'
+            : 'Trip started. Your location is shared with the buyer. End the trip when you reach the drop-off — that stops the clock.'}
+        </Text>
+      ) : null}
       {started && !ended && role === 'driver' ? (
         confirmEnd ? (
           <View style={s.form}>
-            <Text style={s.meta}>End this trip at the drop-off? Billed time stops, the buyer will see it as finished, and live location stops.</Text>
+            <Text style={s.meta}>
+              End this trip at the drop-off? Billed time stops, the buyer will see it as finished,
+              and live location stops.
+            </Text>
             {error ? <Banner text={error} /> : null}
             <Button label="End trip" size="sm" loading={busy} onPress={finish} />
-            <Button label="Keep going" size="sm" variant="outline" disabled={busy} onPress={() => { setConfirmEnd(false); setError(null); }} />
+            <Button
+              label="Keep going"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onPress={() => {
+                setConfirmEnd(false);
+                setError(null);
+              }}
+            />
           </View>
-        ) : <Button label="End trip" size="sm" variant="outline" onPress={() => setConfirmEnd(true)} />
+        ) : (
+          <Button
+            label="End trip"
+            size="sm"
+            variant="outline"
+            onPress={() => setConfirmEnd(true)}
+          />
+        )
       ) : null}
-      {ended ? <Text style={s.meta}>{role === 'driver' ? 'Trip ended. The clock has stopped.' : 'The driver ended this trip. The clock has stopped.'}</Text> : null}
-      {!paid && role === 'driver' ? <Text style={s.meta}>The start code is available after the buyer pays.</Text> : null}
+      {ended ? (
+        <Text style={s.meta}>
+          {role === 'driver'
+            ? 'Trip ended. The clock has stopped.'
+            : 'The driver ended this trip. The clock has stopped.'}
+        </Text>
+      ) : null}
+      {!paid && role === 'driver' ? (
+        <Text style={s.meta}>The start code is available after the buyer pays.</Text>
+      ) : null}
     </View>
   );
 }
@@ -172,7 +272,13 @@ export function TripProgress({ booking, role }: { booking: TruckBooking; role: '
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 8, alignSelf: 'stretch' as const },
   form: { gap: 8, alignSelf: 'stretch' as const },
-  codeBox: { gap: 4, padding: 12, borderRadius: 14, backgroundColor: c.surfaceSunken, alignSelf: 'stretch' as const },
+  codeBox: {
+    gap: 4,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: c.surfaceSunken,
+    alignSelf: 'stretch' as const,
+  },
   k: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted },
   code: { fontFamily: fonts.heading, fontSize: 32, letterSpacing: 6, color: c.ink },
   clock: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },

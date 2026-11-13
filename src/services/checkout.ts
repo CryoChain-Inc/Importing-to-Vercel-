@@ -9,7 +9,9 @@ const listeners = new Set<(reference: string) => void>();
 /** Called when the buyer comes back from Paystack inside the app; returns an unsubscribe. */
 export const onPaymentReturn = (fn: (reference: string) => void) => {
   listeners.add(fn);
-  return () => { listeners.delete(fn); };
+  return () => {
+    listeners.delete(fn);
+  };
 };
 
 /**

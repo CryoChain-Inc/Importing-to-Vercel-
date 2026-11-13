@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 export type Params = Record<string, string>;
-interface DriverLocation { tab: string; params: Params }
+interface DriverLocation {
+  tab: string;
+  params: Params;
+}
 
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 
@@ -18,7 +21,10 @@ const read = (tabs: string[]): DriverLocation => {
   if (!isWeb) return { tab: tabs[0], params: {} };
   const raw = window.location.pathname.split('/')[2];
   const tab = ALIAS[raw] ?? raw;
-  return { tab: tabs.includes(tab) ? tab : tabs[0], params: Object.fromEntries(new URLSearchParams(window.location.search)) };
+  return {
+    tab: tabs.includes(tab) ? tab : tabs[0],
+    params: Object.fromEntries(new URLSearchParams(window.location.search)),
+  };
 };
 
 const url = ({ tab, params }: DriverLocation) => {
@@ -42,7 +48,8 @@ export function useDriverLocation(tabs: string[]) {
   const go = useCallback((tab: string, params: Params = {}, replace = false) => {
     const next = { tab, params };
     setLoc(next);
-    if (isWeb) window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', url(next));
+    if (isWeb)
+      window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', url(next));
   }, []);
 
   return { ...loc, go };

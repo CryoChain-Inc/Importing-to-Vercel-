@@ -17,11 +17,16 @@ export async function fetchPrices(): Promise<PriceBoardData> {
     crop: r.product_name,
     unit: r.unit,
     price: Number(r.price),
-    changePct: r.prev_price ? ((Number(r.price) - Number(r.prev_price)) / Number(r.prev_price)) * 100 : 0,
+    changePct: r.prev_price
+      ? ((Number(r.price) - Number(r.prev_price)) / Number(r.prev_price)) * 100
+      : 0,
     category: r.category_name ?? '',
     imageUrl: imageUrl(r.image_path),
   }));
   prices.sort((a, b) => a.crop.localeCompare(b.crop));
-  const updatedAt = rows.reduce((m: string | null, r: any) => (!m || r.updated_at > m ? r.updated_at : m), null);
+  const updatedAt = rows.reduce(
+    (m: string | null, r: any) => (!m || r.updated_at > m ? r.updated_at : m),
+    null,
+  );
   return { prices, updatedAt };
 }

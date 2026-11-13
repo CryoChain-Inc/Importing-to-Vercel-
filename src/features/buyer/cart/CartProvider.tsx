@@ -28,15 +28,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       try {
         const saved = JSON.parse((await AsyncStorage.getItem(KEY)) ?? '[]');
         if (Array.isArray(saved)) local = saved.filter((l) => l?.productId && l.kg > 0);
-      } catch { /* unreadable local copy: start from the server's */ }
+      } catch {
+        /* unreadable local copy: start from the server's */
+      }
       if (live && local.length) dispatch({ type: 'load', lines: local });
       try {
         const remote = await fetchCart();
         if (live) dispatch({ type: 'load', lines: remote });
-      } catch { /* offline: keep the local cart */ }
+      } catch {
+        /* offline: keep the local cart */
+      }
       if (live) setReady(true);
     })();
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, []);
 
   // Skip until the saved cart is read, or an empty first render would wipe it. Server writes are debounced.

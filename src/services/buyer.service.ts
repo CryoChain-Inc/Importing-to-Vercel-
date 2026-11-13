@@ -58,7 +58,11 @@ const fail = (msg: string) => (error: unknown) => {
   if (error) throw new Error(msg);
 };
 
-const rpcError = (error: { message: string } | null, known: Record<string, string>, fallback: string) => {
+const rpcError = (
+  error: { message: string } | null,
+  known: Record<string, string>,
+  fallback: string,
+) => {
   if (!error) return;
   const hit = Object.keys(known).find((k) => error.message.includes(k));
   throw new Error(hit ? known[hit] : fallback);
@@ -132,23 +136,43 @@ export type CheckoutResult = { ok: true; orderId: string } | { ok: false; shortf
 /** Checks every line against live supply and holds the stock for 30 minutes. Nothing is held unless the whole cart fits. */
 export async function checkoutCart(lines: CartLine[], addressId: string): Promise<CheckoutResult> {
   const items = lines.map((l) => ({ product_id: l.productId, unit: l.unit, kg: l.kg }));
-  const { data, error } = await supabase.rpc('checkout_cart', { p_items: items, p_address_id: addressId });
-  rpcError(error, {
-    'choose a delivery address': 'Choose a delivery address.',
-    'pin your delivery address': 'Pin your delivery address on the map first (Account tab).',
-    'not for sale': 'An item in your cart is no longer for sale. Remove it and try again.',
-  }, 'Could not check out. Please try again.');
+  const { data, error } = await supabase.rpc('checkout_cart', {
+    p_items: items,
+    p_address_id: addressId,
+  });
+  rpcError(
+    error,
+    {
+      'choose a delivery address': 'Choose a delivery address.',
+      'pin your delivery address': 'Pin your delivery address on the map first (Account tab).',
+      'not for sale': 'An item in your cart is no longer for sale. Remove it and try again.',
+    },
+    'Could not check out. Please try again.',
+  );
   if (!data.ok) {
-    return { ok: false, shortfalls: data.shortfalls.map((r: any) => ({ productId: r.product_id, unit: r.unit, requestedKg: Number(r.requested_kg), availableKg: Number(r.available_kg) })) };
+    return {
+      ok: false,
+      shortfalls: data.shortfalls.map((r: any) => ({
+        productId: r.product_id,
+        unit: r.unit,
+        requestedKg: Number(r.requested_kg),
+        availableKg: Number(r.available_kg),
+      })),
+    };
   }
   return { ok: true, orderId: data.order_id };
 }
 
 export async function fetchOrders(): Promise<Order[]> {
-  const [{ data, error }, tracking] = await Promise.all([supabase
-    .from('orders')
-    .select('id, code, amount, state, created_at, paid_at, delivery_address, order_items(unit, kg, line_total, products(name)), payments(status, created_at), refunds(amount, status)')
-    .order('created_at', { ascending: false }), supabase.rpc('buyer_order_progress')]);
+  const [{ data, error }, tracking] = await Promise.all([
+    supabase
+      .from('orders')
+      .select(
+        'id, code, amount, state, created_at, paid_at, delivery_address, order_items(unit, kg, line_total, products(name)), payments(status, created_at), refunds(amount, status)',
+      )
+      .order('created_at', { ascending: false }),
+    supabase.rpc('buyer_order_progress'),
+  ]);
   fail('Could not load your orders.')(error);
   // Tracking is a nicety: if it cannot load, orders still show with their paid/unpaid state.
   const stops = new Map<string, any>((tracking.data ?? []).map((r: any) => [r.order_id, r]));
@@ -164,10 +188,19 @@ export async function fetchOrders(): Promise<Order[]> {
       pickupsDone: stops.get(r.id)?.pickups_done ?? 0,
       deliveredAt: stops.get(r.id)?.delivered_at ?? null,
     },
-    items: (r.order_items ?? []).map((i: any) => ({ name: i.products?.name ?? '', unit: i.unit, kg: Number(i.kg), lineTotal: Number(i.line_total) })),
+    items: (r.order_items ?? []).map((i: any) => ({
+      name: i.products?.name ?? '',
+      unit: i.unit,
+      kg: Number(i.kg),
+      lineTotal: Number(i.line_total),
+    })),
     deliveryAddress: r.delivery_address ?? '',
-    refunds: (r.refunds ?? []).filter((x: any) => x.status !== 'rejected').map((x: any) => ({ amount: Number(x.amount), refunded: x.status === 'refunded' })),
-    payment: [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]?.status ?? null,
+    refunds: (r.refunds ?? [])
+      .filter((x: any) => x.status !== 'rejected')
+      .map((x: any) => ({ amount: Number(x.amount), refunded: x.status === 'refunded' })),
+    payment:
+      [...(r.payments ?? [])].sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0]
+        ?.status ?? null,
   }));
 }
 
@@ -175,19 +208,28 @@ export async function fetchOrders(): Promise<Order[]> {
 export async function cancelOrder(id: string): Promise<void> {
   await requireUserId();
   const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
-  rpcError(error, {
-    'not signed in': 'Sign in again to continue.',
-    'order cannot be cancelled': 'This order can no longer be cancelled.',
-    'Could not find the function': 'Cancelling orders is not available yet. Apply the latest database update, then try again.',
-  }, 'Could not cancel that order.');
+  rpcError(
+    error,
+    {
+      'not signed in': 'Sign in again to continue.',
+      'order cannot be cancelled': 'This order can no longer be cancelled.',
+      'Could not find the function':
+        'Cancelling orders is not available yet. Apply the latest database update, then try again.',
+    },
+    'Could not cancel that order.',
+  );
 }
 
 /** Asks Paystack for a checkout URL for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
 export async function startPayment(orderId: string): Promise<{ url: string; reference: string }> {
-  const { data, error } = await supabase.functions.invoke('paystack-init', { body: { order_id: orderId, native: Platform.OS !== 'web' } });
+  const { data, error } = await supabase.functions.invoke('paystack-init', {
+    body: { order_id: orderId, native: Platform.OS !== 'web' },
+  });
   if (error || !data?.url) {
     // Non-2xx responses hide the body inside error.context; surface our message when there is one.
-    const body = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
+    const body = await (error as { context?: Response } | null)?.context
+      ?.json?.()
+      .catch(() => null);
     throw new Error(body?.error ?? data?.error ?? 'Could not start the payment. Please try again.');
   }
   return { url: data.url, reference: data.reference };
@@ -210,22 +252,39 @@ export async function fetchTransferDetails(): Promise<TransferDetails | null> {
   fail('Could not load the payment details.')(error);
   const r = data?.[0];
   if (!r?.account_number) return null;
-  return { bankName: r.bank_name ?? '', accountName: r.account_name ?? '', accountNumber: r.account_number, supportPhone: r.support_phone ?? '' };
+  return {
+    bankName: r.bank_name ?? '',
+    accountName: r.account_name ?? '',
+    accountNumber: r.account_number,
+    supportPhone: r.support_phone ?? '',
+  };
 }
 
 export async function fetchBuyerDetails(): Promise<BuyerDetails> {
   const buyerId = await requireUserId();
   const { data, error } = await supabase
     .from('buyers')
-    .select('organization_name, delivery_location, profiles(display_name, phone, email), buyer_addresses(id, label, address, line1, landmark, city, postcode, latitude, longitude, is_default, created_at)')
+    .select(
+      'organization_name, delivery_location, profiles(display_name, phone, email), buyer_addresses(id, label, address, line1, landmark, city, postcode, latitude, longitude, is_default, created_at)',
+    )
     .eq('id', buyerId)
     .single();
   fail('Could not load your account.')(error);
-  const p = (data as { profiles?: { display_name?: string | null; phone?: string | null; email?: string | null } | { display_name?: string | null; phone?: string | null; email?: string | null }[] | null }).profiles;
+  const p = (
+    data as {
+      profiles?:
+        | { display_name?: string | null; phone?: string | null; email?: string | null }
+        | { display_name?: string | null; phone?: string | null; email?: string | null }[]
+        | null;
+    }
+  ).profiles;
   const profile = Array.isArray(p) ? p[0] : p;
   const rows: any[] = (data as any).buyer_addresses ?? [];
   const addresses = rows
-    .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.created_at.localeCompare(b.created_at))
+    .sort(
+      (a, b) =>
+        Number(b.is_default) - Number(a.is_default) || a.created_at.localeCompare(b.created_at),
+    )
     .map((a): BuyerAddress => ({
       id: a.id,
       label: a.label,
@@ -248,15 +307,24 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
   };
 }
 
-export async function saveBuyerDetails(b: Pick<BuyerDetails, 'organization' | 'name'>): Promise<void> {
-  const { error } = await supabase.rpc('update_buyer_details', { p_organization: b.organization, p_name: b.name });
+export async function saveBuyerDetails(
+  b: Pick<BuyerDetails, 'organization' | 'name'>,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_buyer_details', {
+    p_organization: b.organization,
+    p_name: b.name,
+  });
   fail('Could not save your details.')(error);
 }
 
 export const ADDRESS_MAX = 5;
 
 /** id null adds a new address (the first one becomes the default). */
-export async function saveAddress(id: string | null, label: string, a: AddressValue): Promise<void> {
+export async function saveAddress(
+  id: string | null,
+  label: string,
+  a: AddressValue,
+): Promise<void> {
   const { error } = await supabase.rpc('save_buyer_address', {
     p_id: id,
     p_label: label,
@@ -268,7 +336,11 @@ export async function saveAddress(id: string | null, label: string, a: AddressVa
     p_latitude: a.latitude,
     p_longitude: a.longitude,
   });
-  rpcError(error, { 'address limit': `You can keep up to ${ADDRESS_MAX} addresses.` }, 'Could not save that address.');
+  rpcError(
+    error,
+    { 'address limit': `You can keep up to ${ADDRESS_MAX} addresses.` },
+    'Could not save that address.',
+  );
 }
 
 export async function setDefaultAddress(id: string): Promise<void> {
@@ -296,13 +368,21 @@ export const stillCollecting = (o: Pick<Order, 'state' | 'progress'>) =>
   orderStage(o) === 'on_the_way' && o.progress.pickupsDone < o.progress.pickupsTotal;
 
 /** What the buyer sees: just the order, not who farmed or hauled it. */
-export function orderStatus(o: Pick<Order, 'state' | 'progress'>): { label: string; tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' } {
+export function orderStatus(o: Pick<Order, 'state' | 'progress'>): {
+  label: string;
+  tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+} {
   switch (orderStage(o)) {
-    case 'cancelled': return { label: 'Cancelled', tone: 'neutral' };
-    case 'placed': return { label: 'Awaiting payment', tone: 'warning' };
-    case 'preparing': return { label: 'Preparing', tone: 'info' };
-    case 'on_the_way': return { label: stillCollecting(o) ? 'On a truck' : 'On the way', tone: 'info' };
-    case 'delivered': return { label: 'Delivered', tone: 'success' };
+    case 'cancelled':
+      return { label: 'Cancelled', tone: 'neutral' };
+    case 'placed':
+      return { label: 'Awaiting payment', tone: 'warning' };
+    case 'preparing':
+      return { label: 'Preparing', tone: 'info' };
+    case 'on_the_way':
+      return { label: stillCollecting(o) ? 'On a truck' : 'On the way', tone: 'info' };
+    case 'delivered':
+      return { label: 'Delivered', tone: 'success' };
   }
 }
 
@@ -326,7 +406,9 @@ export async function fetchOrderTracking(orderId: string): Promise<OrderTracking
     state: r.state ?? 'waiting',
     eta: r.eta ?? null,
     truck: r.truck ? { lat: Number(r.truck.lat), lng: Number(r.truck.lng), at: r.truck.at } : null,
-    destination: r.destination ? { lat: Number(r.destination.lat), lng: Number(r.destination.lng) } : null,
+    destination: r.destination
+      ? { lat: Number(r.destination.lat), lng: Number(r.destination.lng) }
+      : null,
     polyline: r.polyline ?? null,
     deliveredAt: r.deliveredAt ?? null,
   };

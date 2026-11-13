@@ -13,12 +13,12 @@ Every role sees current data without leaving and reopening a screen.
 3. **Foreground reload**: returning to the app reloads the screen.
 4. **Safety net**: one reload a minute while the app is open, for changes the user's database permissions hide from live events and for events missed while offline.
 
-| Role | Tables watched |
-|---|---|
-| Farmer | `produce_listings`, `order_allocations`, `notifications` |
-| Buyer | `orders`, `payments`, `truck_bookings` |
-| Driver | `delivery_stops`, `truck_bookings` |
-| Ops | `orders`, `payments`, `order_allocations`, `delivery_stops`, `ops_decisions`, `produce_listings`, `truck_bookings` |
+| Role   | Tables watched                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------ |
+| Farmer | `produce_listings`, `order_allocations`, `notifications`                                                           |
+| Buyer  | `orders`, `payments`, `truck_bookings`                                                                             |
+| Driver | `delivery_stops`, `truck_bookings`                                                                                 |
+| Ops    | `orders`, `payments`, `order_allocations`, `delivery_stops`, `ops_decisions`, `produce_listings`, `truck_bookings` |
 
 The screen reloads its data on an event; it does not patch local state from the event payload.
 

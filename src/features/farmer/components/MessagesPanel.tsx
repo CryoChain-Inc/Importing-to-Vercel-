@@ -5,7 +5,13 @@ import { SkeletonCard, useToast } from '../../../components/feedback';
 import { fetchNotices, type Notice, type ProduceListing } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-GH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) =>
+  new Date(iso).toLocaleString('en-GH', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 /** Messages tab: system updates about the farmer's produce (bought, scheduled, weighed, delivered). */
 export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
@@ -17,10 +23,16 @@ export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
 
   // Listings change when a lot is bought, a pickup is scheduled or produce is weighed, so refetch with them.
   useEffect(() => {
-    fetchNotices().then((n) => { setNotices(n); setFailed(false); }, () => {
-      setFailed(true);
-      show("We couldn't load your messages. Reopen the tab to try again.");
-    });
+    fetchNotices().then(
+      (n) => {
+        setNotices(n);
+        setFailed(false);
+      },
+      () => {
+        setFailed(true);
+        show("We couldn't load your messages. Reopen the tab to try again.");
+      },
+    );
   }, [listings, show]);
 
   if (failed && !notices) {
@@ -31,13 +43,25 @@ export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
       </Card>
     );
   }
-  if (!notices) return <View style={s.skel}>{[0, 1, 2].map((i) => <SkeletonCard key={i} lines={3} />)}</View>;
+  if (!notices)
+    return (
+      <View style={s.skel}>
+        {[0, 1, 2].map((i) => (
+          <SkeletonCard key={i} lines={3} />
+        ))}
+      </View>
+    );
   if (notices.length === 0) {
     return (
       <Card style={s.emptyCard}>
-        <View style={s.emptyIcon}><Icon name="message" size={26} color={colors.brandInk} /></View>
+        <View style={s.emptyIcon}>
+          <Icon name="message" size={26} color={colors.brandInk} />
+        </View>
         <Text style={s.emptyTitle}>No messages yet</Text>
-        <Text style={s.note}>When a buyer orders your produce, a pickup is booked, or your lot is weighed, it shows up here.</Text>
+        <Text style={s.note}>
+          When a buyer orders your produce, a pickup is booked, or your lot is weighed, it shows up
+          here.
+        </Text>
       </Card>
     );
   }
@@ -45,7 +69,9 @@ export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
     <View style={s.list}>
       {notices.map((n, i) => (
         <Card key={n.id} style={s.item} tone={i === 0 ? 'tint' : 'default'}>
-          <View style={s.dotCol}><View style={[s.dot, i === 0 && s.dotNew]} /></View>
+          <View style={s.dotCol}>
+            <View style={[s.dot, i === 0 && s.dotNew]} />
+          </View>
           <View style={s.body}>
             <View style={s.row}>
               <Text style={s.title}>{n.title}</Text>
@@ -68,11 +94,30 @@ const styles = (c: Record<ColorToken, string>) => ({
   body: { flex: 1, gap: 4 },
   row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 12 },
   title: { flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
-  time: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted, fontVariant: ['tabular-nums' as const] },
+  time: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
+    color: c.inkMuted,
+    fontVariant: ['tabular-nums' as const],
+  },
   text: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 21, color: c.inkMuted },
-  note: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 21, color: c.inkMuted, textAlign: 'center' as const, maxWidth: 360 },
+  note: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 14,
+    lineHeight: 21,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+    maxWidth: 360,
+  },
   emptyCard: { alignItems: 'center' as const, gap: 10, paddingVertical: 40 },
-  emptyIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
   emptyTitle: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   skel: { gap: 10 },
 });

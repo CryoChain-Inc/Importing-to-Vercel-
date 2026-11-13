@@ -17,7 +17,10 @@ export async function takePhoto(): Promise<Photo | null> {
   } catch {
     // No camera here. The photo library covers it.
   }
-  const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.4 });
+  const picked = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.4,
+  });
   if (picked.canceled || !picked.assets[0]) return null;
   return { uri: picked.assets[0].uri, mime: picked.assets[0].mimeType ?? 'image/jpeg' };
 }

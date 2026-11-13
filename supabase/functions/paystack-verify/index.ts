@@ -10,15 +10,24 @@ Deno.serve(async (req) => {
   if (!who.user) return json({ error: 'Sign in again to continue.' }, 401);
 
   const { reference } = await req.json().catch(() => ({}));
-  if (typeof reference !== 'string' || !reference) return json({ error: 'Missing reference.' }, 400);
+  if (typeof reference !== 'string' || !reference)
+    return json({ error: 'Missing reference.' }, 400);
 
   // Only the buyer who owns the order may trigger verification of its payment.
-  const { data: pay } = await asCaller(req).from('payments').select('reference').eq('reference', reference).maybeSingle();
+  const { data: pay } = await asCaller(req)
+    .from('payments')
+    .select('reference')
+    .eq('reference', reference)
+    .maybeSingle();
   if (!pay) return json({ error: 'Payment not found.' }, 404);
 
   const res = await paystack(`/transaction/verify/${encodeURIComponent(reference)}`);
   if (!res.status || !res.data) return json({ error: 'Could not verify the payment yet.' }, 502);
   await applyTransaction(res.data);
-  const { data: after } = await admin().from('payments').select('status').eq('reference', reference).single();
+  const { data: after } = await admin()
+    .from('payments')
+    .select('status')
+    .eq('reference', reference)
+    .single();
   return json({ status: after?.status });
 });

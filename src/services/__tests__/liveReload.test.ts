@@ -11,7 +11,10 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   handlers.length = 0;
-  channel.on.mockImplementation((_e: string, _f: unknown, cb: () => void) => { handlers.push(cb); return channel; });
+  channel.on.mockImplementation((_e: string, _f: unknown, cb: () => void) => {
+    handlers.push(cb);
+    return channel;
+  });
   (supabase.channel as jest.Mock).mockReturnValue(channel);
   Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true });
 });
@@ -20,7 +23,10 @@ afterEach(() => jest.useRealTimers());
 test('a burst of changes across tables causes one reload', () => {
   const onChange = jest.fn();
   const stop = watchChanges(['orders', 'delivery_stops'], onChange);
-  expect(channel.on.mock.calls.map((c: unknown[]) => (c[1] as { table: string }).table)).toEqual(['orders', 'delivery_stops']);
+  expect(channel.on.mock.calls.map((c: unknown[]) => (c[1] as { table: string }).table)).toEqual([
+    'orders',
+    'delivery_stops',
+  ]);
   handlers[0]();
   handlers[1]();
   handlers[0]();

@@ -3,15 +3,25 @@ import { Platform } from 'react-native';
 
 export type Params = Record<string, string>;
 /** What a server-paged panel needs from the URL: its query, a setter, and a counter that bumps after data changes. */
-export interface PageProps { params: Params; setParams: (p: Params, replace?: boolean) => void; rev: number }
-export interface OpsLocation { tab: string; params: Params }
+export interface PageProps {
+  params: Params;
+  setParams: (p: Params, replace?: boolean) => void;
+  rev: number;
+}
+export interface OpsLocation {
+  tab: string;
+  params: Params;
+}
 
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 
 const read = (tabs: string[]): OpsLocation => {
   if (!isWeb) return { tab: tabs[0], params: {} };
   const tab = window.location.pathname.split('/')[2];
-  return { tab: tabs.includes(tab) ? tab : tabs[0], params: Object.fromEntries(new URLSearchParams(window.location.search)) };
+  return {
+    tab: tabs.includes(tab) ? tab : tabs[0],
+    params: Object.fromEntries(new URLSearchParams(window.location.search)),
+  };
 };
 
 const url = ({ tab, params }: OpsLocation) => {
@@ -39,7 +49,8 @@ export function useOpsLocation(tabs: string[]) {
   const go = useCallback((tab: string, params: Params = {}, replace = false) => {
     const next = { tab, params };
     setLoc(next);
-    if (isWeb) window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', url(next));
+    if (isWeb)
+      window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', url(next));
   }, []);
 
   return { ...loc, go };

@@ -24,9 +24,11 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
     for (const l of g.listings) m.set(l.unit, (m.get(l.unit) ?? 0) + f(l));
     return [...m].map(([u, n]) => `${fmt(n)} ${u}`).join(' + ');
   };
-  const sold = g.listings.reduce((a, l) => a + (l.weightKg > 0 ? l.soldKg / l.weightKg : 0), 0) / g.listings.length;
+  const sold =
+    g.listings.reduce((a, l) => a + (l.weightKg > 0 ? l.soldKg / l.weightKg : 0), 0) /
+    g.listings.length;
   // Money already earned on sold quantity, plus the estimate for what is still unsold on listings with no sales yet.
-  const money = sum((l) => (l.earned > 0 ? l.earned : l.estNet ?? 0));
+  const money = sum((l) => (l.earned > 0 ? l.earned : (l.estNet ?? 0)));
   const photo = g.listings.find((l) => l.imagePaths[0])?.imagePaths[0];
   const units = [...new Set(g.listings.map((l) => l.unit))].sort();
   const label = `${g.product}, ${qty((l) => l.remainingKg)} available of ${qty((l) => l.weightKg)}, ${g.listings.length} ${g.listings.length === 1 ? 'listing' : 'listings'}`;
@@ -35,32 +37,68 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
       <Card style={s.card}>
         <View style={s.top}>
           <View style={s.thumb}>
-            {photo ? <Image source={{ uri: produceImageUrl(photo) }} style={s.img} accessibilityIgnoresInvertColors /> : <Icon name="leaf" size={24} color={colors.brandInk} />}
+            {photo ? (
+              <Image
+                source={{ uri: produceImageUrl(photo) }}
+                style={s.img}
+                accessibilityIgnoresInvertColors
+              />
+            ) : (
+              <Icon name="leaf" size={24} color={colors.brandInk} />
+            )}
           </View>
           <View style={s.main}>
-            <Text style={s.product} numberOfLines={1}>{g.product}</Text>
-            <Text style={s.meta} numberOfLines={1}>{g.category ? `${g.category} · ` : ''}{g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'} · {qty((l) => l.weightKg)} listed</Text>
-            <View style={s.grades}>{units.map((x) => <Badge key={x} label={x} tone="success" />)}</View>
+            <Text style={s.product} numberOfLines={1}>
+              {g.product}
+            </Text>
+            <Text style={s.meta} numberOfLines={1}>
+              {g.category ? `${g.category} · ` : ''}
+              {g.listings.length} {g.listings.length === 1 ? 'listing' : 'listings'} ·{' '}
+              {qty((l) => l.weightKg)} listed
+            </Text>
+            <View style={s.grades}>
+              {units.map((x) => (
+                <Badge key={x} label={x} tone="success" />
+              ))}
+            </View>
           </View>
           <Icon name="chevronRight" size={22} color={colors.inkMuted} />
         </View>
-        <View style={s.bar}><View style={[s.fill, { width: `${Math.min(100, sold * 100)}%` }]} /></View>
+        <View style={s.bar}>
+          <View style={[s.fill, { width: `${Math.min(100, sold * 100)}%` }]} />
+        </View>
         <View style={s.legend}>
           <Stat label="Available" value={qty((l) => l.remainingKg)} s={s} strong />
           <Stat label="Reserved" value={qty((l) => l.reservedKg)} s={s} />
           <Stat label="Collected" value={qty((l) => l.collectedKg)} s={s} />
-          <Stat label={sold > 0 ? 'Earned' : 'Expected'} value={money > 0 ? `${sold > 0 ? '' : '~'}${ghs(money)}` : '—'} s={s} />
+          <Stat
+            label={sold > 0 ? 'Earned' : 'Expected'}
+            value={money > 0 ? `${sold > 0 ? '' : '~'}${ghs(money)}` : '—'}
+            s={s}
+          />
         </View>
       </Card>
     </Pressable>
   );
 }
 
-function Stat({ label, value, s, strong }: { label: string; value: string; s: ReturnType<typeof styles>; strong?: boolean }) {
+function Stat({
+  label,
+  value,
+  s,
+  strong,
+}: {
+  label: string;
+  value: string;
+  s: ReturnType<typeof styles>;
+  strong?: boolean;
+}) {
   return (
     <View style={s.stat}>
       <Text style={s.meta}>{label}</Text>
-      <Text style={[s.statVal, strong && s.statStrong]} numberOfLines={1}>{value}</Text>
+      <Text style={[s.statVal, strong && s.statStrong]} numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -68,16 +106,34 @@ function Stat({ label, value, s, strong }: { label: string; value: string; s: Re
 const styles = (c: Record<ColorToken, string>) => ({
   card: { gap: 14, minHeight: TOUCH },
   top: { flexDirection: 'row' as const, gap: 14, alignItems: 'center' as const },
-  thumb: { width: 64, height: 64, borderRadius: 14, overflow: 'hidden' as const, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint },
+  thumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: 'hidden' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
   img: { width: 64, height: 64 },
   main: { flex: 1, gap: 3 },
   product: { fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   grades: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginTop: 2 },
-  bar: { height: 8, borderRadius: 4, overflow: 'hidden' as const, backgroundColor: c.surfaceSunken },
+  bar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden' as const,
+    backgroundColor: c.surfaceSunken,
+  },
   fill: { position: 'absolute' as const, top: 0, bottom: 0, left: 0, backgroundColor: c.brand500 },
   legend: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 8 },
   stat: { gap: 2, flexShrink: 1 },
-  statVal: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  statVal: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
   statStrong: { fontFamily: fonts.sansBold },
 });

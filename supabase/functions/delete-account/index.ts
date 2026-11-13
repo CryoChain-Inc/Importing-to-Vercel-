@@ -3,8 +3,14 @@
 import { admin, asCaller, cors, json } from '../_shared/paystack.ts';
 
 const REASONS: Record<string, [string, number]> = {
-  in_flight: ['You have a payment, order or payout still in progress. Delete your account once it has settled.', 409],
-  staff_account: ['Team accounts are managed by CryoChain operations. Contact your manager to remove yours.', 403],
+  in_flight: [
+    'You have a payment, order or payout still in progress. Delete your account once it has settled.',
+    409,
+  ],
+  staff_account: [
+    'Team accounts are managed by CryoChain operations. Contact your manager to remove yours.',
+    403,
+  ],
   no_account: ['Account not found.', 404],
 };
 
@@ -18,10 +24,14 @@ Deno.serve(async (req) => {
   const db = admin();
   const { error } = await db.rpc('erase_account', { p_id: who.user.id });
   if (error) {
-    const [message, status] = REASONS[error.message] ?? ['Could not delete the account. Please try again.', 500];
+    const [message, status] = REASONS[error.message] ?? [
+      'Could not delete the account. Please try again.',
+      500,
+    ];
     return json({ error: message }, status);
   }
   const { error: authError } = await db.auth.admin.deleteUser(who.user.id, true);
-  if (authError) return json({ error: 'Your data was removed but sign-out failed. Contact support.' }, 500);
+  if (authError)
+    return json({ error: 'Your data was removed but sign-out failed. Contact support.' }, 500);
   return json({ ok: true });
 });

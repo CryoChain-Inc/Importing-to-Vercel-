@@ -10,7 +10,16 @@ export function ThemeToggle() {
       onPress={toggle}
       accessibilityRole="button"
       accessibilityLabel={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-      style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceCard, borderWidth: 1, borderColor: colors.borderSubtle }}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surfaceCard,
+        borderWidth: 1,
+        borderColor: colors.borderSubtle,
+      }}
     >
       <Icon name={isDark ? 'sun' : 'moon'} size={20} color={colors.ink} />
     </Pressable>

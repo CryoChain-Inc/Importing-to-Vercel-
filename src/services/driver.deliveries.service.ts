@@ -61,7 +61,8 @@ export interface DeliveryBook {
 }
 
 const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
-const kindOf = (v: unknown): HandoverMediaKind | null => (v === 'video' || v === 'photo' ? v : null);
+const kindOf = (v: unknown): HandoverMediaKind | null =>
+  v === 'video' || v === 'photo' ? v : null;
 
 async function signedDelivery(path: string | null): Promise<string | null> {
   if (!path) return null;
@@ -121,10 +122,16 @@ const mapOrder = async (r: any): Promise<DeliveryOrder> => ({
 /** This driver's produce orders, with the farmer and buyer details for each stop. */
 export async function fetchDeliveries(): Promise<DeliveryBook> {
   const { data, error } = await supabase.rpc('driver_deliveries');
-  if (error?.message.includes('Could not find the function') || error?.message.includes('driver_deliveries')) {
-    throw new Error('Produce deliveries need the latest database update. Run it in the Supabase SQL editor, then try again.');
+  if (
+    error?.message.includes('Could not find the function') ||
+    error?.message.includes('driver_deliveries')
+  ) {
+    throw new Error(
+      'Produce deliveries need the latest database update. Run it in the Supabase SQL editor, then try again.',
+    );
   }
-  if (error?.message.includes('driver only')) throw new Error('Sign in as a driver to see deliveries.');
+  if (error?.message.includes('driver only'))
+    throw new Error('Sign in as a driver to see deliveries.');
   if (error) throw new Error('Could not load your deliveries.');
   const row = (data ?? {}) as any;
   return {
@@ -144,28 +151,38 @@ const MEDIA_EXT: Record<string, string> = {
 };
 
 /** Stores the photo or short video the driver takes at a stop, under their own folder. */
-export async function uploadHandoverMedia(stopId: string, file: PickedImage): Promise<{ path: string; kind: HandoverMediaKind }> {
+export async function uploadHandoverMedia(
+  stopId: string,
+  file: PickedImage,
+): Promise<{ path: string; kind: HandoverMediaKind }> {
   const type = file.mimeType || 'image/jpeg';
   const ext = MEDIA_EXT[type];
   if (!ext) throw new Error('Use a JPEG, PNG, WebP photo or an MP4 video.');
   const kind: HandoverMediaKind = type.startsWith('video/') ? 'video' : 'photo';
   const body = await readBytes(file.uri);
-  if (body.byteLength === 0) throw new Error('That file could not be read. Try another photo or video.');
-  if (body.byteLength > 25 * 1024 * 1024) throw new Error('That file is too large. Keep photos and videos under 25 MB.');
+  if (body.byteLength === 0)
+    throw new Error('That file could not be read. Try another photo or video.');
+  if (body.byteLength > 25 * 1024 * 1024)
+    throw new Error('That file is too large. Keep photos and videos under 25 MB.');
   const uid = await requireUserId();
   const path = `${uid}/${stopId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('deliveries').upload(path, body, { contentType: type, upsert: true });
+  const { error } = await supabase.storage
+    .from('deliveries')
+    .upload(path, body, { contentType: type, upsert: true });
   if (error) throw new Error('Could not upload that photo or video. Try again.');
   return { path, kind };
 }
 
-export async function recordHandover(stopId: string, reading: {
-  kg: number | null;
-  temp: number;
-  note: string | null;
-  mediaPath: string;
-  mediaKind: HandoverMediaKind;
-}): Promise<void> {
+export async function recordHandover(
+  stopId: string,
+  reading: {
+    kg: number | null;
+    temp: number;
+    note: string | null;
+    mediaPath: string;
+    mediaKind: HandoverMediaKind;
+  },
+): Promise<void> {
   const { error } = await supabase.rpc('record_delivery_handover', {
     p_stop: stopId,
     p_kg: reading.kg,
@@ -174,13 +191,23 @@ export async function recordHandover(stopId: string, reading: {
     p_media_path: reading.mediaPath,
     p_media_kind: reading.mediaKind,
   });
-  if (error?.message.includes('temperature out of range')) throw new Error('That temperature is outside the allowed range.');
-  if (error?.message.includes('more than reserved')) throw new Error('That is more than was reserved here. Enter the reserved quantity or less.');
-  if (error?.message.includes('enter the kilos')) throw new Error('Enter the quantity you collected.');
-  if (error?.message.includes('add a photo or video')) throw new Error('Add a photo or a short video of this stop.');
-  if (error?.message.includes('note is too long')) throw new Error('Notes can be at most 280 characters.');
-  if (error?.message.includes('no longer be changed')) throw new Error('This stop is already done, so the reading can no longer be changed.');
-  if (error?.message.includes('stop not on your route')) throw new Error('That stop is not on your route.');
-  if (error?.message.includes('Could not find the function')) throw new Error('Produce deliveries need the latest database update. Run it in the Supabase SQL editor, then try again.');
+  if (error?.message.includes('temperature out of range'))
+    throw new Error('That temperature is outside the allowed range.');
+  if (error?.message.includes('more than reserved'))
+    throw new Error('That is more than was reserved here. Enter the reserved quantity or less.');
+  if (error?.message.includes('enter the kilos'))
+    throw new Error('Enter the quantity you collected.');
+  if (error?.message.includes('add a photo or video'))
+    throw new Error('Add a photo or a short video of this stop.');
+  if (error?.message.includes('note is too long'))
+    throw new Error('Notes can be at most 280 characters.');
+  if (error?.message.includes('no longer be changed'))
+    throw new Error('This stop is already done, so the reading can no longer be changed.');
+  if (error?.message.includes('stop not on your route'))
+    throw new Error('That stop is not on your route.');
+  if (error?.message.includes('Could not find the function'))
+    throw new Error(
+      'Produce deliveries need the latest database update. Run it in the Supabase SQL editor, then try again.',
+    );
   if (error) throw new Error('Could not save that reading.');
 }

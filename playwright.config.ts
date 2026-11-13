@@ -8,10 +8,23 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { baseURL: 'http://localhost:4173', trace: 'retain-on-failure', screenshot: 'only-on-failure', channel: 'chrome' },
+  use: {
+    baseURL: 'http://localhost:4173',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    channel: 'chrome',
+  },
   projects: [
     { name: 'mobile', testIgnore: /ops\.spec/, use: { ...devices['Pixel 7'], channel: 'chrome' } },
-    { name: 'desktop', testMatch: /(ops|public)\.spec\.ts/, use: { viewport: { width: 1360, height: 860 } } },
+    {
+      name: 'desktop',
+      testMatch: /(ops|public)\.spec\.ts/,
+      use: { viewport: { width: 1360, height: 860 } },
+    },
   ],
-  webServer: { command: 'npx serve -s dist -l 4173', url: 'http://localhost:4173', reuseExistingServer: true },
+  webServer: {
+    command: 'npx serve -s dist -l 4173',
+    url: 'http://localhost:4173',
+    reuseExistingServer: true,
+  },
 });
