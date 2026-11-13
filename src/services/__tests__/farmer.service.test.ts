@@ -127,6 +127,7 @@ test('pickups map the server lines and keep the numbers numeric', async () => {
         eta: null,
         collectedAt: 'x',
         reservedAt: 'y',
+        driver: { name: 'Kojo', phone: '+233201112223', plate: 'GR 1234-22', vehicle: null },
       },
     ],
     error: null,
@@ -139,5 +140,6 @@ test('pickups map the server lines and keep the numbers numeric', async () => {
     short: 20,
     earning: 640,
     state: 'collected',
+    driver: { name: 'Kojo', plate: 'GR 1234-22', vehicle: '' },
   });
 });

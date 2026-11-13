@@ -488,6 +488,8 @@ export interface Pickup {
   eta: string | null;
   collectedAt: string | null;
   reservedAt: string;
+  /** Who is collecting; null until a truck is assigned. */
+  driver: { name: string; phone: string; plate: string; vehicle: string } | null;
 }
 
 /** This farmer's pickups: upcoming first, then the history. */
@@ -508,6 +510,14 @@ async function loadPickups(): Promise<Pickup[]> {
     eta: r.eta ?? null,
     collectedAt: r.collectedAt ?? null,
     reservedAt: r.reservedAt,
+    driver: r.driver
+      ? {
+          name: r.driver.name ?? '',
+          phone: r.driver.phone ?? '',
+          plate: r.driver.plate ?? '',
+          vehicle: r.driver.vehicle ?? '',
+        }
+      : null,
   }));
 }
 

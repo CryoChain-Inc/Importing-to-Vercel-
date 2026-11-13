@@ -1,7 +1,7 @@
 -- farmer-pickups: a farmer sees each pickup line with expected, collected and short quantities, and only their own.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(8);
 
 update public.ops_config set dispatch_start = '00:00', dispatch_end = '23:59:59', dispatch_wait_minutes = 0, detour_km = 25, pickup_tolerance_pct = 2;
 insert into auth.users (id, email) values
@@ -33,6 +33,8 @@ select private.allocate_order('00000000-0000-0000-0000-0000009f0e01');
 
 select results_eq($$select x ->> 'state', (x ->> 'expected')::numeric, x ->> 'eta' is not null from jsonb_array_elements(public.farmer_pickups()) x$$,
   $$values ('on_the_way', 100::numeric, true)$$, 'a reserved line shows as on the way, with the quantity and arrival time');
+
+select is((select x -> 'driver' ->> 'plate' from jsonb_array_elements(public.farmer_pickups()) x), 'PICKUPS-1', 'the farmer sees the assigned driver''s truck');
 
 -- The driver collects 80; no other pepper farm exists, so 20 is short.
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000009f0d01"}', true);
