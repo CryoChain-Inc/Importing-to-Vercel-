@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Badge, Icon, type IconName } from '../../../components/common';
+import { Badge, Button, Icon, type IconName } from '../../../components/common';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { boardFilter, orderTrack } from '../orderTrack';
@@ -9,7 +9,7 @@ import { Empty, Hero, SectionTitle, Stat, StatGrid, when } from './OpsBits';
 import { ProductSupply } from './SupplyPanel';
 
 /** Overview: supply listed, money in, and what needs doing next. */
-export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: string) => void }) {
+export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: string, params?: Record<string, string>) => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const received = data.orders.filter((o) => o.state === 'paid').reduce((n, o) => n + o.amount, 0);
@@ -53,7 +53,7 @@ export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: stri
           {moving.slice(0, 4).map((o) => {
             const t = orderTrack(o);
             return (
-              <Pressable key={o.id} accessibilityRole="button" onPress={() => onGo('orders')} style={s.live}>
+              <Pressable key={o.id} accessibilityRole="button" onPress={() => onGo('orders', { order: o.id })} style={s.live}>
                 <View style={s.liveText}>
                   <Text style={s.liveName}>{o.code} · {o.buyer}</Text>
                   <Text style={s.liveMeta}>
@@ -67,6 +67,7 @@ export function DashboardPanel({ data, onGo }: { data: OpsCore; onGo: (tab: stri
               </Pressable>
             );
           })}
+          <Button variant="outline" label={moving.length > 4 ? `View all ${moving.length} orders on the road` : 'View all orders'} onPress={() => onGo('orders')} />
         </>
       ) : null}
 

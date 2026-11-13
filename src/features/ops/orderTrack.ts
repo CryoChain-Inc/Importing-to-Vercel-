@@ -20,6 +20,7 @@ export interface OrderTrack {
   index: number;
   cancelled: boolean;
   orderedKg: number;
+  unit: string;
   allocatedKg: number;
   collectedKg: number;
   next: BoardStop | null;
@@ -49,6 +50,7 @@ export function orderTrack(o: BoardOrder): OrderTrack {
     index: TRACK_STEPS.findIndex((s) => s.key === key),
     cancelled,
     orderedKg: o.itemKg,
+    unit: o.itemUnit,
     allocatedKg,
     collectedKg,
     next,

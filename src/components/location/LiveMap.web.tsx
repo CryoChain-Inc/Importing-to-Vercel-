@@ -9,6 +9,11 @@ const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY;
 const ACCRA = { lat: 5.6037, lng: -0.187 };
 const PIN = { pickup: '#d98b1f', dropoff: '#2E7D4F', done: '#9aa5a0' } as const;
 
+/** Start downloading the map library early (e.g. when the orders list opens) so the map is ready when a card needs it. */
+export function warmMap() {
+  if (KEY) loadScript('google-maps-js', `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}`).catch(() => undefined);
+}
+
 /** Web version: Google Maps when a key is set, OpenStreetMap otherwise. */
 export function LiveMap({ truck, places = [], route = [], trail = [], height = 280 }: LiveMapProps) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -16,6 +21,8 @@ export function LiveMap({ truck, places = [], route = [], trail = [], height = 2
   const layers = useRef<any[]>([]);
   const framed = useRef('');
   const [ready, setReady] = useState(false);
+  // Open already centred on the truck (or first place) so the map doesn't load on Accra and then jump.
+  const first = useRef(truck ?? places[0] ?? ACCRA);
 
   useEffect(() => {
     const el = host.current;
@@ -33,7 +40,7 @@ export function LiveMap({ truck, places = [], route = [], trail = [], height = 2
       if (dead) return;
       const L = (window as unknown as { L: any }).L;
       el.replaceChildren();
-      const map = L.map(el).setView([ACCRA.lat, ACCRA.lng], 11);
+      const map = L.map(el).setView([first.current.lat, first.current.lng], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
       engine.current = { kind: 'leaflet', map, L };
       setReady(true);
@@ -44,7 +51,7 @@ export function LiveMap({ truck, places = [], route = [], trail = [], height = 2
       await loadScript('google-maps-js', `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}`);
       if (dead) return;
       const g = (window as unknown as { google: any }).google;
-      const map = new g.maps.Map(el, { center: ACCRA, zoom: 11, disableDefaultUI: true, zoomControl: true, clickableIcons: false });
+      const map = new g.maps.Map(el, { center: first.current, zoom: 13, disableDefaultUI: true, zoomControl: true, clickableIcons: false });
       engine.current = { kind: 'google', map, g };
       setReady(true);
     };
