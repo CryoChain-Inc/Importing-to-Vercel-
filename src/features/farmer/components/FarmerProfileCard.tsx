@@ -21,6 +21,7 @@ import { SignInCard } from '../../auth/components/SignInCard';
 import { detailsReady, walletReady } from '../validation';
 import { imageFingerprint, type PickedImage } from '../../../services/catalogueImage';
 import { CropModal } from '../../ops/components/CropModal';
+import { PhotoDialog } from './PhotoDialog';
 import { EditSheet } from './EditSheet';
 import { DetailsForm } from './DetailsForm';
 import { WalletForm } from './WalletForm';
@@ -67,6 +68,7 @@ export function FarmerProfileCard({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
   const [crop, setCrop] = useState<PickedImage | null>(null);
 
   useEffect(() => {
@@ -123,55 +125,64 @@ export function FarmerProfileCard({
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
       <HeroCard style={s.hero}>
-        <View>
-          <Pressable
-            onPress={pick}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={farmer.photoPath ? 'Change profile photo' : 'Add profile photo'}
-            style={s.avatar}
-          >
-            {farmer.photoPath ? (
-              <Image source={{ uri: produceImageUrl(farmer.photoPath) }} style={s.photo} />
-            ) : (
-              <Text style={s.initials}>{initials(name)}</Text>
-            )}
-          </Pressable>
-          {farmer.photoPath ? (
+        <View style={s.heroRow}>
+          <View>
             <Pressable
-              onPress={() => setPhoto(null)}
+              onPress={() => setViewing(true)}
               disabled={busy}
               accessibilityRole="button"
-              accessibilityLabel="Remove profile photo"
-              hitSlop={10}
-              style={s.cam}
+              accessibilityLabel="Profile photo options"
+              style={s.avatar}
             >
-              <Icon name="close" size={12} color="#ffffff" />
+              {farmer.photoPath ? (
+                <Image source={{ uri: produceImageUrl(farmer.photoPath) }} style={s.photo} />
+              ) : (
+                <Text style={s.initials}>{initials(name)}</Text>
+              )}
             </Pressable>
-          ) : (
             <View style={s.cam} pointerEvents="none">
               <Icon name="edit" size={12} color="#ffffff" />
             </View>
-          )}
+          </View>
+          <View style={s.heroText}>
+            <Text style={s.heroName} numberOfLines={1} adjustsFontSizeToFit>
+              {name || 'Farmer'}
+            </Text>
+            <Text style={s.heroMeta} numberOfLines={1}>
+              {phone ? formatPhone(phone) : 'Add your farm details'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onSignOut}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            hitSlop={8}
+            style={s.out}
+          >
+            <Icon name="logOut" size={20} color="#ffffff" />
+          </Pressable>
         </View>
-        <View style={s.heroText}>
-          <Text style={s.heroName} numberOfLines={1} adjustsFontSizeToFit>
-            {name || 'Farmer'}
-          </Text>
-          <Text style={s.heroMeta} numberOfLines={1}>
-            {phone ? formatPhone(phone) : 'Add your farm details'}
-          </Text>
+        <View style={s.progress}>
+          <View style={s.progressHead}>
+            <Text style={s.progressText}>
+              {left === 0 ? 'Profile complete' : `${2 - left} of 2 steps done`}
+            </Text>
+            {left === 0 ? <Icon name="check" size={14} color="#ffffff" /> : null}
+          </View>
+          <View style={s.track}>
+            <View style={[s.fill, { width: `${((2 - left) / 2) * 100}%` }]} />
+          </View>
         </View>
-        <Pressable
-          onPress={onSignOut}
-          accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          hitSlop={8}
-          style={s.out}
-        >
-          <Icon name="logOut" size={20} color="#ffffff" />
-        </Pressable>
       </HeroCard>
+      <PhotoDialog
+        visible={viewing}
+        uri={farmer.photoPath ? produceImageUrl(farmer.photoPath) : null}
+        initials={initials(name)}
+        busy={busy}
+        onClose={() => setViewing(false)}
+        onPick={pick}
+        onRemove={() => setPhoto(null)}
+      />
       {crop ? (
         <CropModal
           uri={crop.uri}
@@ -216,7 +227,7 @@ export function FarmerProfileCard({
         </View>
         <Button
           label={hasDetails ? 'Edit details' : 'Add details'}
-          variant={hasDetails ? 'outline' : 'primary'}
+          variant={hasDetails ? 'tonal' : 'primary'}
           icon="edit"
           onPress={() => onEdit('details')}
         />
@@ -245,7 +256,7 @@ export function FarmerProfileCard({
         )}
         <Button
           label={saved ? 'Change wallet' : 'Add wallet'}
-          variant={saved ? 'outline' : 'primary'}
+          variant={saved ? 'tonal' : 'primary'}
           icon="wallet"
           onPress={() => onEdit('wallet')}
         />
@@ -298,16 +309,27 @@ function Row({ label, value }: { label: string; value: string | null }) {
 
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 12 },
-  hero: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 16 },
+  hero: { gap: 18 },
+  heroRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 16 },
+  progress: { gap: 8 },
+  progressHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  progressText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: 'rgba(255,255,255,0.85)' },
+  track: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    overflow: 'hidden' as const,
+  },
+  fill: { height: 6, borderRadius: 3, backgroundColor: '#ffffff' },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 72,
+    height: 72,
+    borderRadius: 24,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  photo: { width: 64, height: 64, borderRadius: 20 },
+  photo: { width: 72, height: 72, borderRadius: 24 },
   cam: {
     position: 'absolute' as const,
     right: -4,

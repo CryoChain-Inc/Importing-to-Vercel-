@@ -40,7 +40,12 @@ function printHtmlOnWeb(html: string, fileName: string): Promise<void> {
       document.title = name;
       frame.contentWindow!.focus();
       frame.contentWindow!.print();
-      document.title = old;
+      // Some browsers return from print() while the dialog is still open and read the title later, so restore it after printing.
+      const restore = () => {
+        document.title = old;
+      };
+      frame.contentWindow!.addEventListener('afterprint', restore);
+      setTimeout(restore, 120_000);
       // print() returns once the dialog is open or closed, depending on the browser: the button is done either way.
       resolve();
       setTimeout(() => frame.remove(), 120_000);

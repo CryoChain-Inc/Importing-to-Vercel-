@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useNearEnd } from '../../../components/layout';
 import { Badge, Button, Card, HeroCard, Icon } from '../../../components/common';
 import type { Farmer, Sale } from '../../../services/farmer.service';
@@ -35,7 +35,18 @@ export function EarningsPanel({
   const matching = filter === 'all' ? sales : sales.filter((x) => x.status === filter);
   const shown = matching.slice(0, limit);
   // Totals above need every sale, so all are loaded; the list only draws more as the farmer scrolls.
-  useNearEnd(() => setLimit((n) => (n < matching.length ? n + PAGE : n)));
+  const [loadingMore, setLoadingMore] = useState(false);
+  const hasMore = limit < matching.length;
+  useNearEnd(() => hasMore && setLoadingMore(true));
+  // Sales are already in memory; the short wait shows the spinner so a new page never pops in unannounced.
+  useEffect(() => {
+    if (!loadingMore) return;
+    const t = setTimeout(() => {
+      setLimit((n) => n + PAGE);
+      setLoadingMore(false);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [loadingMore]);
   const parts = [
     ['paid', sum('paid'), 1],
     ['payable', sum('payable'), 0.55],
@@ -182,6 +193,9 @@ export function EarningsPanel({
           );
         })
       )}
+      {loadingMore ? (
+        <ActivityIndicator color={colors.brand600} accessibilityLabel="Loading more sales" />
+      ) : null}
     </View>
   );
 }
