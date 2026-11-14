@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AppState, Text, View } from 'react-native';
+import { AppState, Platform, Text, View } from 'react-native';
 import { Badge, Button, type IconName } from '../../../components/common';
 import { Banner, Skeleton, SkeletonCard } from '../../../components/feedback';
 import { TabShell } from '../../../components/layout';
@@ -119,6 +119,12 @@ export function FarmerHome({ account, tab: initialTab }: { account: Account; tab
     setEditing(section);
     setTab('profile');
   };
+
+  // Keep the address bar in step with the tab (/farmer/<tab>) without adding history entries.
+  useEffect(() => {
+    if (Platform.OS === 'web')
+      window.history.replaceState(window.history.state, '', `/farmer/${tab}`);
+  }, [tab]);
 
   const select = (t: Tab) => {
     setTab(t);

@@ -54,7 +54,11 @@ const PATH: Record<Route['name'], string> = {
 const pathFor = (r: Route) =>
   r.name === 'home' && r.role === 'ops'
     ? window.location.pathname + window.location.search
-    : PATH[r.name];
+    : r.name === 'home' && r.role === 'farmer'
+      ? `/farmer/${r.tab ?? 'listings'}`
+      : r.name === 'produce'
+        ? `/farmer/listings/${encodeURIComponent(r.product)}`
+        : PATH[r.name];
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)
