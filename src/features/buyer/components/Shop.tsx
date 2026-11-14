@@ -2,12 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { SkeletonCard } from '../../../components/feedback';
-import { fetchCatalogue, type CatalogueItem } from '../../../services/buyer.service';
+import {
+  fetchCatalogue,
+  setDefaultAddress,
+  type BuyerAddress,
+  type CatalogueItem,
+} from '../../../services/buyer.service';
 import { useDebounced } from '../../../hooks/useDebounced';
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
 import { useCart } from '../cart/CartProvider';
+import { AddressSheet } from './AddressSheet';
 import { AddToCartSheet } from './AddToCartSheet';
 import { QtyStepper } from './QtyStepper';
 import { ProductDetail } from './ProductDetail';
@@ -19,16 +25,29 @@ const GAP = 12;
 export function Shop({
   name,
   items,
-  address,
+  addresses,
   onOpenCart,
-  onPickAddress,
+  onRefresh,
 }: {
   name: string;
   items: CatalogueItem[];
-  address: string;
+  addresses: BuyerAddress[];
   onOpenCart: () => void;
-  onPickAddress: () => void;
+  onRefresh: () => Promise<void>;
 }) {
+  const [picking, setPicking] = useState(false);
+  // Shown straight away while the new default saves and the account reloads.
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const address =
+    (addresses.find((a) => a.id === pickedId) ?? addresses.find((a) => a.isDefault))?.label ?? '';
+  const pick = (id: string) => {
+    setPickedId(id);
+    setPicking(false);
+    setDefaultAddress(id)
+      .then(onRefresh)
+      .catch(onRefresh)
+      .finally(() => setPickedId(null));
+  };
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const { lines, dispatch } = useCart();
@@ -94,7 +113,7 @@ export function Shop({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Change delivery address"
-        onPress={onPickAddress}
+        onPress={() => setPicking(true)}
         style={s.address}
       >
         <View style={s.addressIcon}>
@@ -108,6 +127,14 @@ export function Shop({
         </View>
         <Icon name="chevronRight" size={16} color={colors.inkMuted} />
       </Pressable>
+      {picking ? (
+        <AddressSheet
+          addresses={addresses}
+          onRefresh={onRefresh}
+          onPick={pick}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
 
       <View style={s.search}>
         <Icon name="search" size={18} color={colors.inkMuted} />

@@ -175,9 +175,9 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
             <Shop
               name={data.details.name || account.name || ''}
               items={data.catalogue}
-              address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''}
+              addresses={data.details.addresses}
               onOpenCart={() => setTab('cart')}
-              onPickAddress={() => setTab('account')}
+              onRefresh={load}
             />
           ) : null}
           {tab === 'cart' ? (
