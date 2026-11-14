@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   Pressable,
@@ -22,6 +22,21 @@ import { ThemeToggle } from '../common/ThemeToggle';
 import { useIsWide } from './Screen';
 
 const ScrollToContext = createContext<(node: View | null) => void>(() => undefined);
+
+const NearEndContext = createContext<React.MutableRefObject<(() => void) | null>>({
+  current: null,
+});
+
+/** Calls `onNearEnd` whenever the user scrolls close to the bottom of the tab content (infinite lists). */
+export function useNearEnd(onNearEnd: () => void) {
+  const ref = useContext(NearEndContext);
+  useEffect(() => {
+    ref.current = onNearEnd;
+    return () => {
+      ref.current = null;
+    };
+  });
+}
 
 /** Returns a function that scrolls the tab content so the given view sits at the top. */
 export const useScrollTo = () => useContext(ScrollToContext);
@@ -54,6 +69,7 @@ export function TabShell<K extends string>({
   const s = useThemedStyles(styles);
   const scrollRef = useRef<ScrollView>(null);
   const contentRef = useRef<View>(null);
+  const nearEnd = useRef<(() => void) | null>(null);
   const scrollTo = (node: View | null) => {
     if (!node || !contentRef.current) return;
     // Wait a frame so a section that just expanded has its final position.
@@ -111,6 +127,11 @@ export function TabShell<K extends string>({
         style={s.main}
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={120}
+        onScroll={({ nativeEvent: e }) => {
+          if (e.contentOffset.y + e.layoutMeasurement.height > e.contentSize.height - 480)
+            nearEnd.current?.();
+        }}
         refreshControl={
           refresh ? (
             <RefreshControl refreshing={refresh.refreshing} onRefresh={refresh.onRefresh} />
@@ -124,7 +145,9 @@ export function TabShell<K extends string>({
           </View>
         )}
         <View ref={contentRef} style={s.content}>
-          <ScrollToContext.Provider value={scrollTo}>{children}</ScrollToContext.Provider>
+          <NearEndContext.Provider value={nearEnd}>
+            <ScrollToContext.Provider value={scrollTo}>{children}</ScrollToContext.Provider>
+          </NearEndContext.Provider>
         </View>
       </ScrollView>
       {wide ? null : (

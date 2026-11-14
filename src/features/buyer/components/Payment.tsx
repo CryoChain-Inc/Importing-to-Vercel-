@@ -38,6 +38,7 @@ export function Payment({
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const ref = useRef<{ url: string; reference: string } | null>(null);
   const started = useRef(false);
   const paymentCompleted = useRef(false);
@@ -104,41 +105,60 @@ export function Payment({
     }
   };
 
+  const at = phase === 'paid' ? 3 : 1;
+  const ok = phase === 'paid';
+  const bad = phase === 'error';
+
   return (
     <View style={s.wrap}>
       <Card style={s.hero}>
-        {phase === 'paid' ? (
-          <View style={s.badge}>
-            <Icon name="check" size={28} color="#ffffff" />
-          </View>
-        ) : phase === 'error' ? null : (
-          <ActivityIndicator size="large" color={colors.brand600} />
-        )}
+        <View style={[s.icon, ok && s.iconOk, bad && s.iconBad]}>
+          <Icon
+            name={ok ? 'check' : bad ? 'alert' : 'lock'}
+            size={26}
+            color={ok ? '#ffffff' : bad ? colors.dangerInk : colors.brandInk}
+          />
+        </View>
         <Text style={s.title}>
           {phase === 'starting'
             ? 'Preparing your secure payment'
-            : phase === 'paid'
+            : ok
               ? 'Payment confirmed'
-              : phase === 'error'
+              : bad
                 ? 'Payment did not start'
                 : 'Complete your payment'}
         </Text>
+        {order ? (
+          <Text style={s.total} accessibilityLabel={`Amount to pay ${ghs(order.amount)}`}>
+            {ghs(order.amount)}
+          </Text>
+        ) : null}
         <Text style={s.meta}>
           {phase === 'starting'
             ? 'This takes a few seconds. Please keep this page open.'
-            : phase === 'paid'
+            : ok
               ? 'Thank you. Taking you to your orders.'
-              : phase === 'error'
+              : bad
                 ? 'No money was taken.'
                 : 'Finish paying in the Paystack window. This page updates as soon as we hear back, so you do not need to refresh.'}
         </Text>
-        {order ? <Text style={s.total}>{ghs(order.amount)}</Text> : null}
+        {!ok && !bad ? (
+          <View style={s.live} accessibilityLiveRegion="polite">
+            <ActivityIndicator size="small" color={colors.brand600} />
+            <Text style={s.liveText}>
+              {phase === 'starting' ? 'Connecting to Paystack' : 'Waiting for your payment'}
+            </Text>
+          </View>
+        ) : null}
       </Card>
+
+      {!bad ? <Steps at={at} s={s} /> : null}
 
       {error ? <Banner text={error} /> : null}
 
       {order && order.items.length > 0 ? (
         <Card style={s.lines}>
+          <Text style={s.head}>Your order</Text>
           {order.items.map((i) => (
             <View key={`${i.name}-${i.unit}`} style={s.row}>
               <Text style={s.k}>
@@ -147,39 +167,93 @@ export function Payment({
               <Text style={s.v}>{ghs(i.lineTotal)}</Text>
             </View>
           ))}
+          <View style={[s.row, s.sum]}>
+            <Text style={s.sumK}>Total</Text>
+            <Text style={s.sumV}>{ghs(order.amount)}</Text>
+          </View>
         </Card>
+      ) : null}
+
+      {!ok ? (
+        <View style={s.secure}>
+          <Icon name="shield" size={16} color={colors.brandInk} />
+          <Text style={s.secureText}>
+            Paid securely through Paystack. We never see your card or MoMo PIN.
+          </Text>
+        </View>
       ) : null}
 
       {phase === 'waiting' && checkoutUrl ? (
         <Button
-          variant="outline"
-          label="Open payment window again"
+          icon="lock"
+          size="lg"
+          label="Open payment window"
           onPress={() => openPayment(checkoutUrl)}
         />
       ) : null}
-      {phase === 'error' ? <Button label="Try again" onPress={begin} /> : null}
-      {phase !== 'paid' ? (
-        <>
-          <Button variant="ghost" label="Cancel order" onPress={cancel} />
-          <Button variant="ghost" label="Pay later from Orders" onPress={onLeave} />
-        </>
+      {bad ? <Button size="lg" label="Try again" onPress={begin} /> : null}
+      {!ok ? (
+        confirmCancel ? (
+          <Card style={s.confirm}>
+            <Text style={s.head}>Cancel this order?</Text>
+            <Text style={s.meta}>Your items go back on sale and no money is taken.</Text>
+            <Button variant="danger" label="Yes, cancel order" onPress={cancel} />
+            <Button
+              variant="outline"
+              label="Keep my order"
+              onPress={() => setConfirmCancel(false)}
+            />
+          </Card>
+        ) : (
+          <>
+            <Button variant="outline" label="Pay later from Orders" onPress={onLeave} />
+            <Button variant="ghost" label="Cancel order" onPress={() => setConfirmCancel(true)} />
+          </>
+        )
       ) : null}
     </View>
   );
 }
 
+const STEPS = ['Order placed', 'Pay', 'Confirmed'];
+
+function Steps({ at, s }: { at: number; s: ReturnType<typeof styles> }) {
+  return (
+    <View
+      style={s.steps}
+      accessible
+      accessibilityLabel={`Step ${Math.min(at, STEPS.length)} of ${STEPS.length}: ${STEPS[Math.min(at, STEPS.length) - 1]}`}
+    >
+      {STEPS.map((label, i) => (
+        <View key={label} style={s.step}>
+          <View style={s.stepLine}>
+            <View style={[s.seam, i > 0 && i < at && s.seamOn, i === 0 && s.seamNone]} />
+            <View style={[s.dot, i < at && s.dotOn, i === at - 1 && at < 3 && s.dotNow]} />
+            <View style={[s.seam, i < at - 1 && s.seamOn, i === STEPS.length - 1 && s.seamNone]} />
+          </View>
+          <Text style={[s.stepText, i === at - 1 && s.stepNow]} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = (c: Record<ColorToken, string>) => ({
-  wrap: { gap: 12 },
-  hero: { gap: 12, alignItems: 'center' as const, paddingVertical: 28 },
-  badge: {
+  wrap: { gap: 14 },
+  hero: { gap: 10, alignItems: 'center' as const, paddingVertical: 28, paddingHorizontal: 20 },
+  icon: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 18,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    backgroundColor: c.brand600,
+    backgroundColor: c.brandTint,
   },
-  title: { fontFamily: fonts.heading, fontSize: 24, color: c.ink, textAlign: 'center' as const },
+  iconOk: { backgroundColor: c.brand600 },
+  iconBad: { backgroundColor: c.dangerTint },
+  title: { fontFamily: fonts.heading, fontSize: 22, color: c.ink, textAlign: 'center' as const },
   meta: {
     fontFamily: fonts.sansRegular,
     fontSize: 14,
@@ -190,12 +264,63 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   total: {
     fontFamily: fonts.heading,
-    fontSize: 32,
+    fontSize: 40,
+    letterSpacing: -0.8,
     color: c.ink,
     fontVariant: ['tabular-nums' as const],
   },
-  lines: { gap: 8 },
+  live: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    marginTop: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: c.brandTint,
+  },
+  liveText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.brandInk },
+  steps: { flexDirection: 'row' as const, paddingHorizontal: 4 },
+  step: { flex: 1, alignItems: 'center' as const, gap: 6 },
+  stepLine: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    alignSelf: 'stretch' as const,
+    height: 18,
+  },
+  seam: { flex: 1, height: 2, backgroundColor: c.borderSubtle },
+  seamOn: { backgroundColor: c.brand500 },
+  seamNone: { backgroundColor: 'transparent' },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: c.borderSubtle },
+  dotOn: { backgroundColor: c.brand500 },
+  dotNow: { borderWidth: 3, borderColor: c.brandTint, width: 18, height: 18, borderRadius: 9 },
+  stepText: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted },
+  stepNow: { fontFamily: fonts.sansBold, color: c.ink },
+  lines: { gap: 10 },
+  head: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, gap: 12 },
-  k: { fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted, flexShrink: 1 },
-  v: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
+  k: { fontFamily: fonts.sansRegular, fontSize: 14, color: c.inkMuted, flexShrink: 1 },
+  v: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
+  sum: { borderTopWidth: 1, borderTopColor: c.borderSubtle, paddingTop: 12, marginTop: 2 },
+  sumK: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
+  sumV: {
+    fontFamily: fonts.heading,
+    fontSize: 18,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
+  secure: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    paddingHorizontal: 8,
+  },
+  secureText: { flexShrink: 1, fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted },
+  confirm: { gap: 12 },
 });

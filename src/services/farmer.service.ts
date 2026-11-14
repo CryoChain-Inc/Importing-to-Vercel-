@@ -450,13 +450,17 @@ export interface Notice {
   createdAt: string;
 }
 
-/** Updates the system sent this farmer: bought, pickup scheduled, weighed, delivered. */
-export async function fetchNotices(): Promise<Notice[]> {
-  const { data, error } = await supabase
+export const NOTICE_PAGE = 20;
+
+/** Updates the system sent this farmer, newest first. Pass the oldest `createdAt` you hold to get the page after it. */
+export async function fetchNotices(before?: string): Promise<Notice[]> {
+  let q = supabase
     .from('notifications')
     .select('id, title, body, created_at')
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(NOTICE_PAGE);
+  if (before) q = q.lt('created_at', before);
+  const { data, error } = await q;
   if (error) throw new Error('Could not load your updates.');
   return (data ?? []).map((r) => ({
     id: r.id,

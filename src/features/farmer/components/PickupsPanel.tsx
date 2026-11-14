@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { Badge, Card, Icon } from '../../../components/common';
+import { Badge, Button, Card, Icon } from '../../../components/common';
+import { useToast } from '../../../components/feedback';
+import { downloadInvoice } from '../../../services/invoice.service';
+import { canInvoice, type InvoiceParty } from '../../../utils/pickupInvoice';
 import type { Pickup, PickupState } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
@@ -41,7 +44,7 @@ const STEP: Record<PickupState, number> = {
 type Styles = ReturnType<typeof styles>;
 
 /** The farmer's pickups: one tracker card per pickup (stage, truck arrival, driver) and a history of what was collected. */
-export function PickupsPanel({ pickups }: { pickups: Pickup[] }) {
+export function PickupsPanel({ pickups, farmer }: { pickups: Pickup[]; farmer: InvoiceParty }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [view, setView] = useState<'ahead' | 'past'>('ahead');
@@ -111,7 +114,7 @@ export function PickupsPanel({ pickups }: { pickups: Pickup[] }) {
         </Text>
       ) : null}
       {shown.map((p) => (
-        <PickupCard key={p.id} p={p} s={s} />
+        <PickupCard key={p.id} p={p} s={s} farmer={farmer} />
       ))}
     </View>
   );
@@ -139,8 +142,20 @@ function Stat({
   );
 }
 
-function PickupCard({ p, s }: { p: Pickup; s: Styles }) {
+function PickupCard({ p, s, farmer }: { p: Pickup; s: Styles; farmer: InvoiceParty }) {
   const { colors } = useTheme();
+  const { show } = useToast();
+  const [busy, setBusy] = useState(false);
+  const invoice = async () => {
+    setBusy(true);
+    try {
+      await downloadInvoice(p, farmer);
+    } catch {
+      show("We couldn't create the invoice. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
   const isAhead = p.state === 'waiting' || p.state === 'on_the_way';
   const pct = p.expected > 0 ? Math.min(1, p.collected / p.expected) : 0;
   const full = p.state !== 'not_supplied' && p.short <= 0;
@@ -237,6 +252,16 @@ function PickupCard({ p, s }: { p: Pickup; s: Styles }) {
           {ghs(p.earning)}
         </Text>
       </View>
+      {canInvoice(p) ? (
+        <Button
+          variant="tonal"
+          size="sm"
+          icon="download"
+          label="Download invoice"
+          loading={busy}
+          onPress={invoice}
+        />
+      ) : null}
     </Card>
   );
 }

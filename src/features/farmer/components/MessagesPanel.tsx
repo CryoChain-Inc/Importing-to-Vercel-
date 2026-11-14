@@ -1,12 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Card, Icon, type IconName } from '../../../components/common';
 import { SkeletonCard, useToast } from '../../../components/feedback';
-import { fetchNotices, type Notice, type ProduceListing } from '../../../services/farmer.service';
+import {
+  NOTICE_PAGE,
+  fetchNotices,
+  type Notice,
+  type ProduceListing,
+} from '../../../services/farmer.service';
+import { useNearEnd } from '../../../components/layout';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' });
+/** Newest first, no duplicates (a refetch of page one overlaps what is already loaded). */
+const merge = (a: Notice[], b: Notice[]) => {
+  const seen = new Set<string>();
+  return [...a, ...b]
+    .filter((n) => !seen.has(n.id) && seen.add(n.id))
+    .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+};
 const dayKey = (iso: string) => new Date(iso).toDateString();
 const dayLabel = (iso: string) => {
   const d = new Date(iso);
@@ -33,12 +46,18 @@ export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
   const { show } = useToast();
   const [notices, setNotices] = useState<Notice[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // null until the first page says whether older messages exist.
+  const [more, setMore] = useState<boolean | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
 
-  // Listings change when a lot is bought, a pickup is scheduled or produce is weighed, so refetch with them.
+  // Listings change when a lot is bought, a pickup is scheduled or produce is weighed, so refetch the
+  // newest page with them and keep any older pages already loaded.
   useEffect(() => {
     fetchNotices().then(
       (n) => {
-        setNotices(n);
+        setNotices((prev) => merge(n, prev ?? []));
+        setMore((m) => m ?? n.length === NOTICE_PAGE);
         setFailed(false);
       },
       () => {
@@ -47,6 +66,24 @@ export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
       },
     );
   }, [listings, show]);
+
+  const loadMore = useCallback(() => {
+    if (!notices?.length || !more || loadingMore || moreFailed) return;
+    setLoadingMore(true);
+    // shortcut: pages by created_at, so rows sharing the exact same timestamp across a page edge could be skipped; switch to an (created_at, id) cursor if that shows up.
+    fetchNotices(notices[notices.length - 1].createdAt).then(
+      (n) => {
+        setNotices((prev) => merge(prev ?? [], n));
+        setMore(n.length === NOTICE_PAGE);
+        setLoadingMore(false);
+      },
+      () => {
+        setMoreFailed(true);
+        setLoadingMore(false);
+      },
+    );
+  }, [notices, more, loadingMore, moreFailed]);
+  useNearEnd(loadMore);
 
   if (failed && !notices) {
     return (
@@ -111,6 +148,15 @@ export function MessagesPanel({ listings }: { listings: ProduceListing[] }) {
           </Card>
         </View>
       ))}
+      {loadingMore ? (
+        <ActivityIndicator color={colors.brand600} accessibilityLabel="Loading older messages" />
+      ) : moreFailed ? (
+        <Pressable accessibilityRole="button" onPress={() => setMoreFailed(false)} style={s.retry}>
+          <Text style={s.retryText}>Couldn’t load older messages. Tap to retry</Text>
+        </Pressable>
+      ) : more === false && notices.length > NOTICE_PAGE ? (
+        <Text style={s.end}>You’re all caught up</Text>
+      ) : null}
     </View>
   );
 }
@@ -162,4 +208,12 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   emptyTitle: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   skel: { gap: 10 },
+  retry: { minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
+  retryText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: c.brandInk },
+  end: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 13,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+  },
 });

@@ -163,7 +163,12 @@ export function FarmerHome({ account, tab: initialTab }: { account: Account; tab
               />
             </>
           ) : null}
-          {tab === 'pickups' ? <PickupsPanel pickups={pickups} /> : null}
+          {tab === 'pickups' ? (
+            <PickupsPanel
+              pickups={pickups}
+              farmer={{ name: farmer?.name ?? '', phone: farmer?.phone ?? '' }}
+            />
+          ) : null}
           {tab === 'messages' ? <MessagesPanel listings={listings} /> : null}
           {tab === 'payments' ? (
             <EarningsPanel sales={sales} farmer={farmer} onWallet={() => setup('wallet')} />
