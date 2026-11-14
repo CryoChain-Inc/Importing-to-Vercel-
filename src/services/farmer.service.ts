@@ -163,13 +163,17 @@ export async function saveWallet(w: Wallet): Promise<void> {
   if (error) throw new Error('Could not save your wallet.');
 }
 
+const LISTING_COLS = 'id, product, weight_kg, created_at, unit, image_paths, est_net, est_fee';
 export const fetchListings = () => cached('fetchListings', loadListings);
-async function loadListings(): Promise<ProduceListing[]> {
+/** Server-side search by crop name; not cached, since a partial result must never stand in for the full list offline. */
+export const searchListings = (q: string) => loadListings(q);
+async function loadListings(search = ''): Promise<ProduceListing[]> {
+  const word = search.trim().replace(/[\\%_]/g, '\\$&');
   const [listed, stock] = await Promise.all([
-    supabase
-      .from('produce_listings')
-      .select('id, product, weight_kg, created_at, unit, image_paths, est_net, est_fee')
-      .order('created_at', { ascending: false }),
+    (word
+      ? supabase.from('produce_listings').select(LISTING_COLS).ilike('product', `%${word}%`)
+      : supabase.from('produce_listings').select(LISTING_COLS)
+    ).order('created_at', { ascending: false }),
     supabase
       .from('listing_stock')
       .select(

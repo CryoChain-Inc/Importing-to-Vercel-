@@ -4,12 +4,14 @@ import { Badge, Button, Card, Icon, Input, ProfileChecklist } from '../../../com
 import { discardQueued, retryQueued, useOutbox } from '../../../services/listingOutbox';
 import {
   fetchProductCategories,
+  searchListings,
   type ProduceListing,
   type Sale,
 } from '../../../services/farmer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ProductGroup, type Group } from './ProductGroup';
 import { inStock } from './qty';
+import { useDebounced } from '../../../hooks/useDebounced';
 import { NewListing } from './NewListing';
 
 const PAGE = 6;
@@ -40,6 +42,19 @@ export function ProduceListings({
   const queued = useOutbox();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
+  const dq = useDebounced(q.trim());
+  // Search runs on the server; `listings` stays the full list.
+  const [found, setFound] = useState<ProduceListing[] | null>(null);
+  useEffect(() => {
+    if (!dq) return;
+    let stale = false;
+    searchListings(dq)
+      .then((r) => stale || setFound(r))
+      .catch(() => stale || setFound(null));
+    return () => {
+      stale = true;
+    };
+  }, [dq, listings]);
   const [cats, setCats] = useState<Record<string, string>>({});
   useEffect(() => {
     fetchProductCategories()
@@ -49,7 +64,7 @@ export function ProduceListings({
   // One card per crop; crops with stock come first, sold-out ones sink below.
   const groups = useMemo<Group[]>(() => {
     const m = new Map<string, ProduceListing[]>();
-    for (const l of listings) m.set(l.product, [...(m.get(l.product) ?? []), l]);
+    for (const l of dq && found ? found : listings) m.set(l.product, [...(m.get(l.product) ?? []), l]);
     const g = [...m].map(([product, ls]) => ({
       product,
       category: cats[product],
@@ -60,14 +75,11 @@ export function ProduceListings({
         Number(b.listings.some(inStock)) - Number(a.listings.some(inStock)) ||
         a.product.localeCompare(b.product),
     );
-  }, [listings, cats]);
+  }, [listings, found, dq, cats]);
   const catNames = [
     ...new Set(groups.map((g) => g.category).filter((x): x is string => !!x)),
   ].sort();
-  const needle = q.trim().toLowerCase();
-  const rows = groups.filter(
-    (g) => (!cat || g.category === cat) && (!needle || g.product.toLowerCase().includes(needle)),
-  );
+  const rows = groups.filter((g) => !cat || g.category === cat);
   const inStockCount = groups.filter((g) => g.listings.some(inStock)).length;
 
   return (
@@ -130,7 +142,7 @@ export function ProduceListings({
           {groups.length > 0 ? ` · ${inStockCount} in stock` : ''}
         </Text>
       </View>
-      {groups.length > 0 ? (
+      {listings.length > 0 ? (
         <>
           <Input
             label="Search produce"

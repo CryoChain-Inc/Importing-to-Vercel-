@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { SkeletonCard } from '../../../components/feedback';
-import type { CatalogueItem } from '../../../services/buyer.service';
+import { fetchCatalogue, type CatalogueItem } from '../../../services/buyer.service';
+import { useDebounced } from '../../../hooks/useDebounced';
 import { imageUrl } from '../../../services/catalogueImage';
 import { fonts, TOUCH, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
-import { matchesSearch } from '../../../utils/search';
 import { useCart } from '../cart/CartProvider';
 import { AddToCartSheet } from './AddToCartSheet';
 import { QtyStepper } from './QtyStepper';
@@ -34,6 +34,19 @@ export function Shop({
   const { lines, dispatch } = useCart();
   const [category, setCategory] = useState(ALL);
   const [q, setQ] = useState('');
+  const dq = useDebounced(q.trim());
+  // Search runs on the server; `items` stays the full catalogue for the cart and product pages.
+  const [found, setFound] = useState<CatalogueItem[] | null>(null);
+  useEffect(() => {
+    if (!dq) return;
+    let stale = false;
+    fetchCatalogue(dq)
+      .then((r) => stale || setFound(r))
+      .catch(() => stale || setFound(null));
+    return () => {
+      stale = true;
+    };
+  }, [dq, items]);
   const [open, setOpen] = useState<string | null>(null);
   const [choosing, setChoosing] = useState<string | null>(null);
   // Measured, not guessed: the shop sits beside a rail on wide screens and full width on phones.
@@ -51,17 +64,14 @@ export function Shop({
 
   const products = useMemo(() => {
     const byProduct = new Map<string, CatalogueItem[]>();
-    items
-      .filter(
-        (i) =>
-          (category === ALL || i.categoryId === category) && matchesSearch(q, i.name, i.aliases),
-      )
+    (dq && found ? found : items)
+      .filter((i) => category === ALL || i.categoryId === category)
       .forEach((i) => byProduct.set(i.productId, [...(byProduct.get(i.productId) ?? []), i]));
     // The catalogue arrives newest product first; in-stock first is a stable sort so that order holds in each group.
     return [...byProduct.values()].sort(
       (a, b) => Number(b.some((i) => i.availableKg > 0)) - Number(a.some((i) => i.availableKg > 0)),
     );
-  }, [items, category, q]);
+  }, [items, found, dq, category]);
   const opened = items.filter((i) => i.productId === open);
   const cartTotal = lines.reduce(
     (sum, l) =>

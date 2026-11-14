@@ -86,8 +86,8 @@ export interface CatalogueItem {
   availableKg: number;
 }
 
-export async function fetchCatalogue(): Promise<CatalogueItem[]> {
-  const { data, error } = await supabase.rpc('buyer_catalogue');
+export async function fetchCatalogue(search = ''): Promise<CatalogueItem[]> {
+  const { data, error } = await supabase.rpc('buyer_catalogue', { p_search: search.trim() || null });
   fail('Could not load the shop.')(error);
   return (data ?? []).map((r: any) => ({
     productId: r.product_id,
