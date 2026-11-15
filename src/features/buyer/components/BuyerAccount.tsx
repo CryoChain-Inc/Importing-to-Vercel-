@@ -23,6 +23,7 @@ import { CropModal } from '../../ops/components/CropModal';
 import { PhotoDialog } from '../../farmer/components/PhotoDialog';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { BUYER_NAME_MAX, NAME_MAX, formatPhone } from '../../../utils/format';
+import { SignOutDialog } from '../../auth/components/SignOutDialog';
 import { SignInCard } from '../../auth/components/SignInCard';
 import { useAction } from '../../ops/components/useAction';
 import { BuyerAddresses } from './BuyerAddresses';
@@ -55,6 +56,7 @@ export function BuyerAccount({
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
   const [crop, setCrop] = useState<PickedImage | null>(null);
   const scrollTo = useScrollTo();
   const addressRef = useRef<View>(null);
@@ -129,7 +131,7 @@ export function BuyerAccount({
           </Text>
         </View>
         <Pressable
-          onPress={onSignOut}
+          onPress={() => setConfirmOut(true)}
           accessibilityRole="button"
           accessibilityLabel="Sign out"
           hitSlop={8}
@@ -138,6 +140,9 @@ export function BuyerAccount({
           <Icon name="logOut" size={20} color="#ffffff" />
         </Pressable>
       </HeroCard>
+      {confirmOut ? (
+        <SignOutDialog onClose={() => setConfirmOut(false)} onConfirm={onSignOut} />
+      ) : null}
       <PhotoDialog
         visible={viewing}
         uri={photo}

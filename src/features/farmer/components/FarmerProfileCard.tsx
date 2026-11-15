@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, HeroCard, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
+import { SignOutDialog } from '../../auth/components/SignOutDialog';
 import {
   detailsDone,
   hasWallet,
@@ -67,6 +68,7 @@ export function FarmerProfileCard({
     name: farmer.momoName ?? '',
   });
   const [busy, setBusy] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
   const [crop, setCrop] = useState<PickedImage | null>(null);
@@ -124,6 +126,9 @@ export function FarmerProfileCard({
   return (
     <View style={s.wrap}>
       {error ? <Banner text={error} /> : null}
+      {confirmOut ? (
+        <SignOutDialog onClose={() => setConfirmOut(false)} onConfirm={onSignOut} />
+      ) : null}
       <HeroCard style={s.hero}>
         <View style={s.heroRow}>
           <View>
@@ -153,7 +158,7 @@ export function FarmerProfileCard({
             </Text>
           </View>
           <Pressable
-            onPress={onSignOut}
+            onPress={() => setConfirmOut(true)}
             accessibilityRole="button"
             accessibilityLabel="Sign out"
             hitSlop={8}
