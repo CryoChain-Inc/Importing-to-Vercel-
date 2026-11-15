@@ -13,7 +13,7 @@ export type Route =
   | { name: 'role'; identifier: string }
   | { name: 'workspace'; account: Account }
   | { name: 'produce'; account: Account; product: string }
-  | { name: 'home'; account: Account; role: Role; tab?: string };
+  | { name: 'home'; account: Account; role: Role; tab?: string; order?: string };
 
 interface Nav {
   route: Route;

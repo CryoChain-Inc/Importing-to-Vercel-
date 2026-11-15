@@ -54,7 +54,9 @@ function Routes() {
         </Suspense>
       );
     case 'home':
-      return <HomeScreen account={route.account} role={route.role} tab={route.tab} />;
+      return (
+        <HomeScreen account={route.account} role={route.role} tab={route.tab} order={route.order} />
+      );
   }
 }
 

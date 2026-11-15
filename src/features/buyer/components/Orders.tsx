@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
-import { Banner, SkeletonCard } from '../../../components/feedback';
+import { Banner, Dialog, SkeletonCard } from '../../../components/feedback';
 import { useNearEnd } from '../../../components/layout';
 import {
   cancelOrder,
@@ -413,6 +413,7 @@ function OrderDetail({
   const live = o.state === 'paid' && !deliveredAt;
   const track = useOrderTracking(live ? o.id : null);
   const [support, setSupport] = useState<SupportContact | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   useEffect(() => {
@@ -495,9 +496,37 @@ function OrderDetail({
             variant="outline"
             label="Cancel order"
             loading={busy}
-            onPress={onCancel}
+            onPress={() => setConfirmCancel(true)}
           />
         </Card>
+      ) : null}
+      {confirmCancel ? (
+        <Dialog
+          title="Cancel this order?"
+          subtitle={`Order ${o.code} will be cancelled and the produce held for you goes back on sale. This can't be undone.`}
+          onClose={() => setConfirmCancel(false)}
+          footer={
+            <View style={s.confirmRow}>
+              <Button
+                label="Keep order"
+                variant="outline"
+                style={s.confirmBtn}
+                onPress={() => setConfirmCancel(false)}
+              />
+              <Button
+                label="Yes, cancel order"
+                variant="danger"
+                style={s.confirmBtn}
+                onPress={() => {
+                  setConfirmCancel(false);
+                  onCancel();
+                }}
+              />
+            </View>
+          }
+        >
+          <View />
+        </Dialog>
       ) : null}
 
       {o.refunds.length > 0 ? <ShortageNote o={o} /> : null}
@@ -711,6 +740,8 @@ function OrderDetail({
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
+  confirmRow: { flexDirection: 'row' as const, gap: 10 },
+  confirmBtn: { flex: 1 },
   list: { gap: 14 },
   headRow: {
     flexDirection: 'row' as const,

@@ -1,8 +1,8 @@
 import type { Order } from '../services/buyer.service';
 import { fmtQty, ghs } from './format';
 
-/** Only orders that were paid have a receipt; cancelled and unpaid ones never took money. */
-export const canReceipt = (o: Order) => o.state === 'paid';
+/** A receipt exists only once a paid order has been delivered; cancelled, unpaid and in-transit orders have none. */
+export const canReceipt = (o: Order) => o.state === 'paid' && !!o.progress.deliveredAt;
 
 export const receiptFileName = (o: Order) =>
   `CryoChain-Receipt-${o.code}-${(o.paidAt ?? o.createdAt).slice(0, 10)}.pdf`;

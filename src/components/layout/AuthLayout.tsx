@@ -19,10 +19,13 @@ const POINTS: { icon: IconName; text: string }[] = [
 export function AuthLayout({
   title,
   subtitle,
+  lead,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** Status graphic shown above the title; also centres the heading (result screens). */
+  lead?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const wide = useWindowDimensions().width >= WIDE;
@@ -49,9 +52,12 @@ export function AuthLayout({
           <ThemeToggle />
         </View>
         {wide ? null : <Brand />}
-        <View style={s.head}>
-          <Text style={s.title}>{title}</Text>
-          {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
+        {lead ? <View style={s.lead}>{lead}</View> : null}
+        <View style={[s.head, lead ? s.headCentered : null]}>
+          <Text style={[s.title, lead ? s.centerText : null]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[s.subtitle, lead ? s.centerText : null]}>{subtitle}</Text>
+          ) : null}
         </View>
         {children}
       </View>
@@ -132,6 +138,9 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   back: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
   head: { gap: 6 },
+  headCentered: { alignItems: 'center' as const },
+  centerText: { textAlign: 'center' as const },
+  lead: { alignItems: 'center' as const, paddingVertical: 28 },
   title: {
     fontFamily: fonts.sansBold,
     fontSize: 28,

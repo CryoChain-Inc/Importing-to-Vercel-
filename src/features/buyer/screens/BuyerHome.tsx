@@ -67,22 +67,42 @@ interface Data {
 
 const LIVE_TABLES = ['orders', 'payments', 'truck_bookings', 'refunds'] as const;
 
-export function BuyerHome({ account, tab }: { account: Account; tab?: string }) {
+export function BuyerHome({
+  account,
+  tab,
+  order,
+}: {
+  account: Account;
+  tab?: string;
+  order?: string;
+}) {
   return (
     <CartProvider>
-      <BuyerShell account={account} firstTab={TABS.find((t) => t.key === tab)?.key} />
+      <BuyerShell
+        account={account}
+        firstTab={TABS.find((t) => t.key === tab)?.key}
+        firstOrder={order}
+      />
     </CartProvider>
   );
 }
 
-function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab }) {
+function BuyerShell({
+  account,
+  firstTab,
+  firstOrder,
+}: {
+  account: Account;
+  firstTab?: Tab;
+  firstOrder?: string;
+}) {
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
   const [tab, setTab] = useTabRoute(firstTab ?? 'shop');
   // The order being paid. While set, the payment page replaces the tabs' content.
   const [paying, setPaying] = useState<string | null>(null);
-  const [openOrder, setOpenOrder] = useState<string | null>(null);
+  const [openOrder, setOpenOrder] = useState<string | null>(firstOrder ?? null);
   const [data, setData] = useState<Data | null>(null);
   // Orders loaded so far; reloads refetch that many so live updates don't drop later pages.
   const loaded = useRef(0);

@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Platform, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Platform,
+  Text,
+  View,
+} from 'react-native';
 import { posthog } from '../../../config/posthog';
 import { posthogLog } from '../../../config/posthogLogs';
 import { Button, Card, Icon } from '../../../components/common';
@@ -51,6 +59,66 @@ const COPY: Record<Phase, { title: string; subtitle: string }> = {
     subtitle: 'Your session ended while you were paying.',
   },
   error: { title: "We couldn't confirm it", subtitle: 'This is on our side. Your money is safe.' },
+};
+
+const native = Platform.OS !== 'web';
+
+/** Fades and lifts its children in after `delay` ms; the receipt uses it to cascade line by line. */
+function Rise({ delay, children }: { delay: number; children: React.ReactNode }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.timing(v, {
+      toValue: 1,
+      duration: 420,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: native,
+    }).start();
+  }, [v, delay]);
+  return (
+    <Animated.View
+      style={{
+        opacity: v,
+        transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/** One soft ring that swells out of the badge and fades; two of them, staggered, make the "confirmed" pulse. */
+function Ring({ delay, color }: { delay: number; color: string }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.timing(v, {
+      toValue: 1,
+      duration: 1100,
+      delay,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: native,
+    }).start();
+  }, [v, delay]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        ringStyle,
+        {
+          borderColor: color,
+          opacity: v.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.5, 0] }),
+          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }) }],
+        },
+      ]}
+    />
+  );
+}
+const ringStyle = {
+  position: 'absolute' as const,
+  width: 80,
+  height: 80,
+  borderRadius: 26,
+  borderWidth: 2,
 };
 
 /** Where Paystack sends the buyer after paying (/payment/verify?reference=...). Verifies the reference, then tells the buyer what happened. */
@@ -119,26 +187,42 @@ export function PaymentResultScreen({ reference }: { reference: string }) {
     }
   }, [phase, isTruck]);
 
+  // Every settled phase lands with a spring; a failure also gives one short sideways shake.
+  const [shake] = useState(() => new Animated.Value(0));
+  const [calm, setCalm] = useState(false);
   useEffect(() => {
-    if (phase !== 'paid') return;
+    AccessibilityInfo.isReduceMotionEnabled().then(setCalm, () => undefined);
+  }, []);
+  useEffect(() => {
+    pop.setValue(0);
+    if (phase === 'checking' || phase === 'pending') return;
+    if (calm) return pop.setValue(1);
     Animated.spring(pop, {
       toValue: 1,
       friction: 5,
       tension: 120,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: native,
     }).start();
-  }, [phase, pop]);
+    if (phase === 'paid') return;
+    Animated.sequence(
+      [8, -8, 5, -5, 0].map((toValue) =>
+        Animated.timing(shake, { toValue, duration: 70, useNativeDriver: native }),
+      ),
+    ).start();
+  }, [phase, pop, shake, calm]);
 
   const retry = () => {
     setPhase('checking');
     run();
   };
-  const toApp = async (tab: string) => {
+  const toApp = async (tab: string, openOrder?: string) => {
     setBusy(true);
     const p = await authService.getProfile().catch(() => null);
     if (!p || p.role === 'pending') return reset({ name: 'landing' });
     const next = afterSignIn(toAccount(p));
-    reset(next.name === 'home' && next.role === 'buyer' ? { ...next, tab } : next);
+    reset(
+      next.name === 'home' && next.role === 'buyer' ? { ...next, tab, order: openOrder } : next,
+    );
   };
   const tab = isTruck ? 'truck' : 'orders';
 
@@ -162,44 +246,63 @@ export function PaymentResultScreen({ reference }: { reference: string }) {
           : colors.surfaceSunken;
 
   return (
-    <AuthLayout title={COPY[phase].title} subtitle={COPY[phase].subtitle}>
-      <View accessibilityLiveRegion="polite" style={s.center}>
-        <Animated.View
-          style={[
-            s.badge,
-            { backgroundColor: badgeBg },
-            phase === 'paid'
-              ? {
-                  transform: [
-                    { scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
-                  ],
-                }
-              : null,
-          ]}
-        >
-          {badge}
-        </Animated.View>
-      </View>
-
+    <AuthLayout
+      title={COPY[phase].title}
+      subtitle={COPY[phase].subtitle}
+      lead={
+        <View accessibilityLiveRegion="polite" style={s.center}>
+          {phase === 'paid' && !calm ? (
+            <>
+              <Ring delay={0} color={colors.brand600} />
+              <Ring delay={260} color={colors.brand600} />
+            </>
+          ) : null}
+          <Animated.View
+            style={[
+              s.badge,
+              { backgroundColor: badgeBg },
+              phase === 'checking' || phase === 'pending'
+                ? null
+                : {
+                    transform: [
+                      { translateX: shake },
+                      { scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
+                    ],
+                  },
+            ]}
+          >
+            {badge}
+          </Animated.View>
+        </View>
+      }
+    >
       {phase === 'paid' ? (
         <>
           <Card style={s.receipt}>
-            {order ? (
-              <Text style={s.amount}>{ghs(order.amount)}</Text>
-            ) : (
-              <Text style={s.amount}>Cold truck booking</Text>
-            )}
-            {order?.items.map((i) => (
-              <View key={`${i.name}-${i.unit}`} style={s.row}>
-                <Text style={s.k}>
-                  {i.name} · {fmtQty(i.kg, i.unit)}
-                </Text>
-                <Text style={s.v}>{ghs(i.lineTotal)}</Text>
-              </View>
+            <Rise delay={250}>
+              {order ? (
+                <Text style={s.amount}>{ghs(order.amount)}</Text>
+              ) : (
+                <Text style={s.amount}>Cold truck booking</Text>
+              )}
+            </Rise>
+            {order?.items.map((i, n) => (
+              <Rise key={`${i.name}-${i.unit}`} delay={400 + n * 90}>
+                <View style={s.row}>
+                  <Text style={s.k}>
+                    {i.name} · {fmtQty(i.kg, i.unit)}
+                  </Text>
+                  <Text style={s.v}>{ghs(i.lineTotal)}</Text>
+                </View>
+              </Rise>
             ))}
-            {order ? <Line k="Order" v={order.code} /> : null}
-            {order?.paidAt ? <Line k="Paid" v={when(order.paidAt)} /> : null}
-            <Line k="Reference" v={reference} />
+            <Rise delay={450 + (order?.items.length ?? 0) * 90}>
+              <View style={s.receipt}>
+                {order ? <Line k="Order" v={order.code} /> : null}
+                {order?.paidAt ? <Line k="Paid" v={when(order.paidAt)} /> : null}
+                <Line k="Reference" v={reference} />
+              </View>
+            </Rise>
           </Card>
           <Text style={s.copy}>
             {isTruck
@@ -209,7 +312,7 @@ export function PaymentResultScreen({ reference }: { reference: string }) {
           <Button
             label={isTruck ? 'View my booking' : 'View my order'}
             size="lg"
-            onPress={() => toApp(tab)}
+            onPress={() => toApp(tab, order?.id)}
             loading={busy}
           />
         </>
@@ -283,7 +386,12 @@ function Line({ k, v }: { k: string; v: string }) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  center: { alignItems: 'flex-start' as const },
+  center: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    width: 80,
+    height: 80,
+  },
   badge: {
     width: 80,
     height: 80,
@@ -308,5 +416,11 @@ const styles = (c: Record<ColorToken, string>) => ({
     textAlign: 'right' as const,
   },
   mono: { fontVariant: ['tabular-nums' as const], fontSize: 12 },
-  copy: { fontFamily: fonts.sansRegular, fontSize: 15, lineHeight: 22, color: c.inkMuted },
+  copy: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 15,
+    lineHeight: 22,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+  },
 });

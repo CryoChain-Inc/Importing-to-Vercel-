@@ -15,13 +15,23 @@ const FarmerHome = lazy(() =>
 );
 
 /** Role workspace after sign-in. */
-export function HomeScreen({ account, role, tab }: { account: Account; role: Role; tab?: string }) {
+export function HomeScreen({
+  account,
+  role,
+  tab,
+  order,
+}: {
+  account: Account;
+  role: Role;
+  tab?: string;
+  order?: string;
+}) {
   return (
     <Suspense fallback={<LoadingScreen message="Loading..." />}>
       {role === 'farmer' ? (
         <FarmerHome account={account} tab={tab} />
       ) : role === 'buyer' ? (
-        <BuyerHome account={account} tab={tab} />
+        <BuyerHome account={account} tab={tab} order={order} />
       ) : role === 'ops' ? (
         <OpsHome account={account} />
       ) : (
