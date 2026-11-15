@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Button, Card, Icon } from '../../../components/common';
+import { Button, Card, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
   cancelOrder,
+  fetchBuyerDetails,
   fetchOrders,
   openPayment,
   startPayment,
+  submitPaymentOtp,
   verifyPayment,
   type Order,
+  type PayMethod,
 } from '../../../services/buyer.service';
+import { PaymentMethod } from './PaymentMethod';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
 import { posthog } from '../../../config/posthog';
@@ -17,10 +21,14 @@ import { posthogLog } from '../../../config/posthogLogs';
 
 const POLL_MS = 3000;
 
-type Phase = 'starting' | 'waiting' | 'paid' | 'error';
+/** A MoMo prompt that Paystack expires after a few minutes; Resend unlocks after this wait. */
+const RESEND_AFTER_S = 60;
+
+type Phase = 'choose' | 'starting' | 'waiting' | 'paid' | 'error';
+type Momo = { phone: string; method: PayMethod; status: string; hint: string | null; at: number };
 
 /**
- * The payment step: opens Paystack right away, then watches the order until the payment is confirmed.
+ * The payment step: the buyer picks Mobile Money or Card, then we watch the order until the payment is confirmed.
  * The buyer only moves on to Orders once it is paid (or leaves on purpose).
  */
 export function Payment({
@@ -34,43 +42,95 @@ export function Payment({
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const [phase, setPhase] = useState<Phase>('starting');
+  const [phase, setPhase] = useState<Phase>('choose');
+  const [momo, setMomo] = useState<Momo | null>(null);
+  const [otp, setOtp] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+  const [profilePhone, setProfilePhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const ref = useRef<{ url: string; reference: string } | null>(null);
-  const started = useRef(false);
+  const ref = useRef<{ url?: string; reference: string } | null>(null);
   const paymentCompleted = useRef(false);
 
-  const begin = useCallback(async () => {
-    setPhase('starting');
-    setError(null);
-    try {
-      ref.current = await startPayment(orderId);
-      posthog?.capture('payment_started');
-      setCheckoutUrl(ref.current.url);
-      setPhase('waiting');
-      await openPayment(ref.current.url);
-    } catch (e) {
-      posthogLog.warn('payment start failed', { event: 'payment_start_failed' });
-      setError(e instanceof Error ? e.message : 'Could not start the payment. Please try again.');
-      setPhase('error');
-    }
+  const begin = useCallback(
+    async (method: PayMethod) => {
+      setPhase('starting');
+      setError(null);
+      setOtp('');
+      try {
+        const r = await startPayment(orderId, method);
+        ref.current = r;
+        posthog?.capture('payment_started', { channel: method.channel });
+        if (method.channel === 'card' && r.url) {
+          setCheckoutUrl(r.url);
+          setMomo(null);
+          setPhase('waiting');
+          await openPayment(r.url);
+        } else if (method.channel === 'mobile_money') {
+          setNow(Date.now());
+          setMomo({
+            phone: method.phone,
+            method,
+            status: r.status ?? 'pay_offline',
+            hint: r.hint ?? null,
+            at: Date.now(),
+          });
+          setPhase('waiting');
+        }
+      } catch (e) {
+        posthogLog.warn('payment start failed', { event: 'payment_start_failed' });
+        setError(e instanceof Error ? e.message : 'Could not start the payment. Please try again.');
+        setPhase('error');
+      }
+    },
+    [orderId],
+  );
+
+  // Load the amount and the buyer's number for the method picker.
+  useEffect(() => {
+    let live = true;
+    fetchOrders()
+      .then((all) => live && setOrder(all.find((o) => o.id === orderId) ?? null))
+      .catch(() => undefined);
+    fetchBuyerDetails()
+      .then((d) => live && setProfilePhone(d.phone))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
   }, [orderId]);
 
+  // Ticks the Resend countdown while a MoMo prompt is out.
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    begin();
-  }, [begin]);
+    if (!momo || phase !== 'waiting') return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [momo, phase]);
+
+  const sendOtp = async () => {
+    if (!ref.current || !otp.trim()) return;
+    try {
+      const r = await submitPaymentOtp(orderId, ref.current.reference, otp);
+      setOtp('');
+      setMomo((m) => (m ? { ...m, status: r.status ?? 'pending', hint: null } : m));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That code was not accepted.');
+    }
+  };
 
   // While waiting, ask Paystack (via verify) and the database whether the payment went through.
   useEffect(() => {
     if (phase !== 'waiting' && phase !== 'starting') return;
     let live = true;
     const tick = async () => {
-      if (ref.current) await verifyPayment(ref.current.reference).catch(() => undefined);
+      const st = ref.current ? await verifyPayment(ref.current.reference).catch(() => null) : null;
+      if (live && (st === 'failed' || st === 'abandoned') && momo) {
+        setError('The payment was declined or timed out. No money was taken.');
+        setPhase('error');
+        return;
+      }
       const mine = (await fetchOrders().catch(() => [])).find((o) => o.id === orderId);
       if (!live || !mine) return;
       setOrder(mine);
@@ -93,7 +153,7 @@ export function Payment({
       live = false;
       clearInterval(id);
     };
-  }, [phase, orderId, onPaid, onLeave]);
+  }, [phase, orderId, onPaid, onLeave, momo]);
 
   const cancel = async () => {
     try {
@@ -120,13 +180,17 @@ export function Payment({
           />
         </View>
         <Text style={s.title}>
-          {phase === 'starting'
-            ? 'Preparing your secure payment'
-            : ok
-              ? 'Payment confirmed'
-              : bad
-                ? 'Payment did not start'
-                : 'Complete your payment'}
+          {phase === 'choose'
+            ? 'How would you like to pay?'
+            : phase === 'starting'
+              ? 'Preparing your secure payment'
+              : ok
+                ? 'Payment confirmed'
+                : bad
+                  ? 'Payment did not go through'
+                  : momo
+                    ? 'Approve on your phone'
+                    : 'Complete your payment'}
         </Text>
         {order ? (
           <Text style={s.total} accessibilityLabel={`Amount to pay ${ghs(order.amount)}`}>
@@ -134,25 +198,68 @@ export function Payment({
           </Text>
         ) : null}
         <Text style={s.meta}>
-          {phase === 'starting'
-            ? 'This takes a few seconds. Please keep this page open.'
-            : ok
-              ? 'Thank you. Taking you to your orders.'
-              : bad
-                ? 'No money was taken.'
-                : 'Finish paying in the Paystack window. This page updates as soon as we hear back, so you do not need to refresh.'}
+          {phase === 'choose'
+            ? 'Choose a method. You can change it any time before you pay.'
+            : phase === 'starting'
+              ? 'This takes a few seconds. Please keep this page open.'
+              : ok
+                ? 'Thank you. Taking you to your orders.'
+                : bad
+                  ? 'No money was taken.'
+                  : momo
+                    ? `We sent a prompt to ${momo.phone}. Enter your MoMo PIN to approve. This page updates as soon as we hear back.`
+                    : 'Finish paying in the Paystack window. This page updates as soon as we hear back, so you do not need to refresh.'}
         </Text>
-        {!ok && !bad ? (
+        {!ok && !bad && phase !== 'choose' ? (
           <View style={s.live} accessibilityLiveRegion="polite">
             <ActivityIndicator size="small" color={colors.brand600} />
             <Text style={s.liveText}>
-              {phase === 'starting' ? 'Connecting to Paystack' : 'Waiting for your payment'}
+              {phase === 'starting'
+                ? 'Connecting to Paystack'
+                : momo
+                  ? 'Waiting for your approval'
+                  : 'Waiting for your payment'}
             </Text>
           </View>
         ) : null}
       </Card>
 
       {!bad ? <Steps at={at} s={s} /> : null}
+
+      {phase === 'choose' && order ? (
+        <PaymentMethod amount={order.amount} phone={profilePhone} busy={false} onPay={begin} />
+      ) : null}
+
+      {phase === 'waiting' && momo ? (
+        <Card style={s.confirm}>
+          {momo.status === 'send_otp' ? (
+            <>
+              <Text style={s.head}>Enter the code</Text>
+              <Text style={s.meta}>
+                {momo.hint || 'Enter the voucher or OTP code from your network to continue.'}
+              </Text>
+              <Input label="Code" value={otp} onChangeText={setOtp} keyboardType="number-pad" />
+              <Button label="Confirm code" onPress={sendOtp} disabled={!otp.trim()} />
+            </>
+          ) : (
+            <Text style={s.meta}>
+              No prompt? Check that {momo.phone} is the number for the network you chose and has
+              signal.
+            </Text>
+          )}
+          <Button
+            variant="outline"
+            label={
+              now - momo.at < RESEND_AFTER_S * 1000
+                ? `Resend prompt in ${Math.ceil((RESEND_AFTER_S * 1000 - (now - momo.at)) / 1000)}s`
+                : 'Resend prompt'
+            }
+            disabled={now - momo.at < RESEND_AFTER_S * 1000}
+            onPress={() => begin(momo.method)}
+          />
+          <Button variant="ghost" label="Change method" onPress={() => setPhase('choose')} />
+        </Card>
+      ) : null}
 
       {error ? <Banner text={error} /> : null}
 
@@ -174,7 +281,7 @@ export function Payment({
         </Card>
       ) : null}
 
-      {!ok ? (
+      {!ok && phase !== 'choose' ? (
         <View style={s.secure}>
           <Icon name="shield" size={16} color={colors.brandInk} />
           <Text style={s.secureText}>
@@ -183,7 +290,7 @@ export function Payment({
         </View>
       ) : null}
 
-      {phase === 'waiting' && checkoutUrl ? (
+      {phase === 'waiting' && !momo && checkoutUrl ? (
         <Button
           icon="lock"
           size="lg"
@@ -191,7 +298,7 @@ export function Payment({
           onPress={() => openPayment(checkoutUrl)}
         />
       ) : null}
-      {bad ? <Button size="lg" label="Try again" onPress={begin} /> : null}
+      {bad ? <Button size="lg" label="Choose a method" onPress={() => setPhase('choose')} /> : null}
       {!ok ? (
         confirmCancel ? (
           <Card style={s.confirm}>

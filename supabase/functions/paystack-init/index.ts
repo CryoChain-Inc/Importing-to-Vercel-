@@ -6,10 +6,14 @@ import {
   callbackUrl,
   cors,
   json,
+  localMsisdn,
   paystack,
 } from '../_shared/paystack.ts';
 
 const PENDING_TTL_MS = 30 * 60 * 1000;
+// A row this young without a checkout URL is another request mid-start (not a finished MoMo charge).
+const STARTING_MS = 15 * 1000;
+const MOMO_PROVIDERS = ['mtn', 'vod', 'atl'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -22,7 +26,16 @@ Deno.serve(async (req) => {
   const { data: who } = await caller.auth.getUser();
   if (!who.user) return json({ error: 'Sign in again to continue.' }, 401);
 
-  const { order_id, native } = await req.json().catch(() => ({}));
+  const {
+    order_id,
+    native,
+    channel,
+    phone,
+    provider,
+    fresh,
+    otp,
+    reference: otpRef,
+  } = await req.json().catch(() => ({}));
   // Own-order check rides on RLS (orders_select_own); buyers row gives the contact email.
   const { data: order } = await caller
     .from('orders')
@@ -34,6 +47,25 @@ Deno.serve(async (req) => {
     return json({ error: 'This order is not awaiting payment.' }, 409);
 
   const db = admin();
+
+  // Telecel (and some MoMo charges) ask for a voucher/OTP after the prompt; it belongs to this order's live payment.
+  if (otp) {
+    const { data: live } = await db
+      .from('payments')
+      .select('reference')
+      .eq('order_id', order.id)
+      .eq('reference', otpRef ?? '')
+      .eq('status', 'pending')
+      .maybeSingle();
+    if (!live) return json({ error: 'This payment is no longer waiting. Start again.' }, 409);
+    const res = await paystack('/charge/submit_otp', {
+      method: 'POST',
+      body: JSON.stringify({ otp: String(otp).trim(), reference: live.reference }),
+    });
+    if (!res.status) return json({ error: res.message || 'That code was not accepted.' }, 422);
+    return json({ reference: live.reference, status: res.data?.status ?? 'pending' });
+  }
+
   // Cart orders: if the supply hold lapsed the order is cancelled rather than charged for stock that may be gone.
   const { data: ready } = await db.rpc('cart_order_ready', { p_order_id: order.id });
   if (ready === false)
@@ -49,11 +81,12 @@ Deno.serve(async (req) => {
   const reuse = async () => {
     const { data: live } = await findPending();
     if (!live) return null;
-    if (Date.now() - new Date(live.created_at).getTime() < PENDING_TTL_MS) {
-      return live.authorization_url
-        ? json({ url: live.authorization_url, reference: live.reference })
-        : json({ error: 'A payment is already being started. Try again in a moment.' }, 409);
-    }
+    const age = Date.now() - new Date(live.created_at).getTime();
+    if (!live.authorization_url && age < STARTING_MS)
+      return json({ error: 'A payment is already being started. Try again in a moment.' }, 409);
+    // `fresh` = the buyer picked a method again; supersede (after the Paystack check below) instead of reusing.
+    if (!fresh && live.authorization_url && age < PENDING_TTL_MS)
+      return json({ url: live.authorization_url, reference: live.reference });
     // Stale: ask Paystack what happened before opening a new attempt, so a paid-but-unconfirmed charge isn't doubled.
     const res = await paystack(`/transaction/verify/${encodeURIComponent(live.reference)}`);
     if (res.status && res.data) {
@@ -88,6 +121,46 @@ Deno.serve(async (req) => {
     return json({ error: 'Could not start the payment.' }, 500);
   }
 
+  const email = buyer?.email || who.user.email || `${who.user.id}@pay.cryochain.app`;
+
+  if (channel === 'mobile_money') {
+    // Direct MoMo charge: Paystack sends the approval prompt to the phone, no checkout page.
+    const number = localMsisdn(phone);
+    if (!/^0\d{9}$/.test(number) || !MOMO_PROVIDERS.includes(provider)) {
+      await db.rpc('fail_paystack_payment', {
+        p_reference: reference,
+        p_status: 'failed',
+        p_message: 'invalid mobile money details',
+      });
+      return json({ error: 'Enter a valid Ghana mobile money number and network.' }, 400);
+    }
+    const charge = await paystack('/charge', {
+      method: 'POST',
+      body: JSON.stringify({
+        reference,
+        amount: pesewas,
+        currency: 'GHS',
+        email,
+        mobile_money: { phone: number, provider },
+        metadata: { order_id: order.id, order_code: order.code },
+      }),
+    });
+    const st = charge.data?.status;
+    if (!charge.status || st === 'failed') {
+      await db.rpc('fail_paystack_payment', {
+        p_reference: reference,
+        p_status: 'failed',
+        p_message: charge.data?.message || charge.message,
+      });
+      console.error('paystack charge failed', charge.message);
+      return json(
+        { error: charge.data?.message || charge.message || 'Could not send the payment prompt.' },
+        502,
+      );
+    }
+    return json({ reference, status: st, hint: charge.data?.display_text ?? null });
+  }
+
   const res = await paystack('/transaction/initialize', {
     method: 'POST',
     body: JSON.stringify({
@@ -95,8 +168,9 @@ Deno.serve(async (req) => {
       amount: pesewas,
       currency: 'GHS',
       // Paystack requires an email; buyers who signed up by phone get a stable placeholder.
-      email: buyer?.email || who.user.email || `${who.user.id}@pay.cryochain.app`,
-      // No `channels`: Paystack shows every method enabled on the account (mobile money, bank, card).
+      email,
+      // Card option offers card + bank only; mobile money has its own in-app flow above.
+      ...(channel === 'card' ? { channels: ['card', 'bank'] } : {}),
       // The app opens checkout in an auth session that closes when Paystack redirects to its own URL scheme.
       ...(callbackUrl(req, native === true)
         ? { callback_url: callbackUrl(req, native === true) }

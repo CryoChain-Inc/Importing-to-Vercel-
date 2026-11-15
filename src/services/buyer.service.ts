@@ -230,19 +230,35 @@ export async function cancelOrder(id: string): Promise<void> {
 }
 
 /** Asks Paystack for a checkout URL for an unpaid order (first try or retry). The order turns paid only via the webhook/verify. */
-export async function startPayment(orderId: string): Promise<{ url: string; reference: string }> {
-  const { data, error } = await supabase.functions.invoke('paystack-init', {
-    body: { order_id: orderId, native: Platform.OS !== 'web' },
-  });
-  if (error || !data?.url) {
-    // Non-2xx responses hide the body inside error.context; surface our message when there is one.
-    const body = await (error as { context?: Response } | null)?.context
-      ?.json?.()
-      .catch(() => null);
-    throw new Error(body?.error ?? data?.error ?? 'Could not start the payment. Please try again.');
-  }
-  return { url: data.url, reference: data.reference };
+export type PayMethod =
+  { channel: 'card' } | { channel: 'mobile_money'; phone: string; provider: 'mtn' | 'vod' | 'atl' };
+
+export interface PaymentStart {
+  /** Paystack checkout page; only for card. */
+  url?: string;
+  reference: string;
+  /** MoMo charge state: pay_offline (approve on phone), send_otp (voucher/OTP needed), pending. */
+  status?: string;
+  hint?: string | null;
 }
+
+async function paymentCall(body: object): Promise<PaymentStart> {
+  const { data, error } = await supabase.functions.invoke('paystack-init', { body });
+  if (error || !data?.reference) {
+    // Non-2xx responses hide the body inside error.context; surface our message when there is one.
+    const res = await (error as { context?: Response } | null)?.context?.json?.().catch(() => null);
+    throw new Error(res?.error ?? data?.error ?? 'Could not start the payment. Please try again.');
+  }
+  return data;
+}
+
+/** Starts (or restarts) a payment with the buyer's chosen method. Always supersedes an earlier unfinished attempt. */
+export const startPayment = (orderId: string, method: PayMethod) =>
+  paymentCall({ order_id: orderId, native: Platform.OS !== 'web', fresh: true, ...method });
+
+/** Sends the voucher/OTP code Paystack asked for after a MoMo charge. */
+export const submitPaymentOtp = (orderId: string, reference: string, otp: string) =>
+  paymentCall({ order_id: orderId, reference, otp });
 
 export const openPayment = openCheckout;
 
@@ -449,7 +465,11 @@ export async function fetchOrderTracking(orderId: string): Promise<OrderTracking
     polyline: r.polyline ?? null,
     deliveredAt: r.deliveredAt ?? null,
     driver: r.driver
-      ? { name: r.driver.name ?? 'Your driver', phone: r.driver.phone ?? '', plate: r.driver.plate ?? '' }
+      ? {
+          name: r.driver.name ?? 'Your driver',
+          phone: r.driver.phone ?? '',
+          plate: r.driver.plate ?? '',
+        }
       : null,
   };
 }
