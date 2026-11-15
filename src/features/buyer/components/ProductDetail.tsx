@@ -238,33 +238,46 @@ function AddToCart({
           <Text style={s.total}>{ghs(total)}</Text>
         </View>
       </View>
-      <Button
-        icon="cart"
-        size="lg"
-        label={`${inCart ? 'Update cart' : 'Add to cart'} · ${ghs(total)}`}
-        disabled={!changed}
-        onPress={() => onSet(qty)}
-      />
-      {inCart > 0 ? (
+      {inCart > 0 && !changed ? (
         <View style={s.inCart}>
-          <View style={s.inCartText}>
-            <Icon name="check" size={16} color={colors.brandInk} />
-            <Text style={s.inCartLabel}>{fmtQty(inCart, item.unit)} in your cart</Text>
+          <View style={s.inCartBadge}>
+            <Icon name="check" size={16} color="#ffffff" />
           </View>
-          <View style={s.inCartActions}>
-            <Button size="sm" variant="ghost" label="View cart" onPress={onOpenCart} />
-            <Button
-              size="sm"
-              variant="outline"
-              icon="trash"
-              label="Remove"
-              onPress={() => {
-                onSet(0);
-                setQty(start);
-              }}
-            />
+          <View style={s.inCartBody}>
+            <Text style={s.inCartLabel}>In your cart</Text>
+            <Text style={s.meta}>
+              {fmtQty(inCart, item.unit)} · {ghs(inCart * item.price)}
+            </Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remove from cart"
+            hitSlop={6}
+            onPress={() => {
+              onSet(0);
+              setQty(start);
+            }}
+            style={({ pressed }) => [s.removeBtn, pressed && s.pressed]}
+          >
+            <Icon name="trash" size={18} color={colors.dangerInk} />
+          </Pressable>
         </View>
+      ) : (
+        <Button
+          icon="cart"
+          size="lg"
+          label={`${inCart ? 'Update cart' : 'Add to cart'} · ${ghs(total)}`}
+          disabled={!changed}
+          onPress={() => onSet(qty)}
+        />
+      )}
+      {inCart > 0 ? (
+        <Button
+          variant={changed ? 'ghost' : 'tonal'}
+          label={changed ? 'Keep current quantity' : 'View cart'}
+          icon={changed ? undefined : 'cart'}
+          onPress={changed ? () => setQty(inCart) : onOpenCart}
+        />
       ) : null}
     </Card>
   );
@@ -384,8 +397,31 @@ const styles = (c: Record<ColorToken, string>) => ({
     color: c.ink,
     fontVariant: ['tabular-nums' as const],
   },
-  inCart: { gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.borderSubtle },
-  inCartText: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  inCartLabel: { fontFamily: fonts.sansBold, fontSize: 14, color: c.brandInk },
-  inCartActions: { flexDirection: 'row' as const, gap: 8, flexWrap: 'wrap' as const },
+  inCart: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: c.brandTint,
+  },
+  inCartBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brand600,
+  },
+  inCartBody: { flex: 1, gap: 1 },
+  inCartLabel: { fontFamily: fonts.sansBold, fontSize: 15, color: c.brandInk },
+  removeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.surfaceCard,
+  },
+  pressed: { opacity: 0.6 },
 });
