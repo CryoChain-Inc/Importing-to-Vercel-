@@ -1,20 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Linking,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { Banner, SkeletonCard } from '../../../components/feedback';
 import { useNearEnd } from '../../../components/layout';
 import {
   cancelOrder,
+  fetchSupportContact,
   orderStage,
   orderStatus,
   stillCollecting,
   type Order,
   type OrderStage,
+  type SupportContact,
 } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 import { warmMap } from '../../../components/location/LiveMap';
+import { callPhone } from '../../../services/truck.chat.service';
+import { downloadReceipt } from '../../../services/invoice.service';
+import { canReceipt } from '../../../utils/orderReceipt';
 import { etaIn, OrderLiveMap, time, useOrderTracking } from './OrderLiveMap';
 
 const day = (iso: string) =>
@@ -52,6 +66,77 @@ const summary = (o: Order) => {
     ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more`
     : names.join(', ');
 };
+
+const NATIVE = Platform.OS !== 'web';
+
+/** Eases a card in once as it mounts; the first few stagger, the rest appear at once. Skipped for reduced motion. */
+function Reveal({ index = 0, children }: { index?: number; children: React.ReactNode }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    let run: Animated.CompositeAnimation | null = null;
+    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      if (reduce) return v.setValue(1);
+      run = Animated.timing(v, {
+        toValue: 1,
+        duration: 420,
+        delay: Math.min(index, 6) * 55,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: NATIVE,
+      });
+      run.start();
+    });
+    return () => run?.stop();
+  }, [v, index]);
+  return (
+    <Animated.View
+      style={{
+        opacity: v,
+        transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/** A soft ring that breathes around the step an order is on right now. */
+function Pulse({ color }: { color: string }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: NATIVE,
+      }),
+    );
+    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => !reduce && loop.start());
+    return () => loop.stop();
+  }, [v]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: color,
+        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
+        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2.1] }) }],
+      }}
+    />
+  );
+}
+
+const initials = (n: string) =>
+  n
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
 
 /** The buyer's orders as a list with live status; tap one for the full tracking timeline and receipt. */
 export function Orders({
@@ -102,7 +187,15 @@ export function Orders({
 
   return (
     <View style={s.list}>
-      <Text style={s.heading}>My orders</Text>
+      <View style={s.headRow}>
+        <Text style={s.heading}>My orders</Text>
+        {orders.length > 0 ? (
+          <Text style={s.meta}>
+            {orders.length}
+            {hasMore ? '+' : ''} total
+          </Text>
+        ) : null}
+      </View>
       <View style={s.seg} accessibilityRole="tablist">
         {(['active', 'past'] as const).map((k) => (
           <Pressable
@@ -142,48 +235,59 @@ export function Orders({
         </Card>
       ) : null}
 
-      {shown.map((o) => {
+      {shown.map((o, idx) => {
         const st = orderStatus(o);
         const stage = orderStage(o);
         const unpaid = o.state === 'awaiting_payment';
         return (
-          <Pressable
-            key={o.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Order ${o.code}, ${st.label}, view details`}
-            onPress={() => onOpen(o.id)}
-          >
-            {({ pressed }) => (
-              <Card style={[s.item, pressed && s.pressed]}>
-                <View style={s.top}>
-                  <View style={s.grow}>
-                    <Text style={s.name}>{o.code}</Text>
-                    <Text style={s.meta}>
-                      {day(o.createdAt)} · {o.items.length} item{o.items.length === 1 ? '' : 's'}
-                    </Text>
-                  </View>
-                  <Badge label={st.label} tone={st.tone} />
-                </View>
-                <Text style={s.summary} numberOfLines={1}>
-                  {summary(o)}
-                </Text>
-                {o.refunds.length > 0 ? <ShortageNote o={o} compact /> : null}
-                {stage !== 'cancelled' ? <MiniTrack stage={stage} s={s} /> : null}
-                {stage !== 'cancelled' ? <Text style={s.hint}>{STAGE_HINT[stage](o)}</Text> : null}
-                <View style={s.top}>
-                  <Text style={s.total}>{ghs(o.amount)}</Text>
-                  {unpaid ? (
-                    <Button size="sm" label="Pay now" onPress={() => onPay(o.id)} />
-                  ) : (
-                    <View style={s.more}>
-                      <Text style={s.moreText}>Track order</Text>
-                      <Icon name="chevronRight" size={16} color={colors.brandInk} />
+          <Reveal key={o.id} index={idx}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Order ${o.code}, ${st.label}, view details`}
+              onPress={() => onOpen(o.id)}
+            >
+              {({ pressed }) => (
+                <Card style={[s.item, pressed && s.pressed]}>
+                  <View style={s.top}>
+                    <View style={s.grow}>
+                      <Text style={s.name} numberOfLines={2}>
+                        {summary(o)}
+                      </Text>
+                      <Text style={s.meta}>
+                        {o.code} · {day(o.createdAt)} · {o.items.length} item
+                        {o.items.length === 1 ? '' : 's'}
+                      </Text>
                     </View>
-                  )}
-                </View>
-              </Card>
-            )}
-          </Pressable>
+                    <Badge label={st.label} tone={st.tone} />
+                  </View>
+                  {o.refunds.length > 0 ? <ShortageNote o={o} compact /> : null}
+                  {stage !== 'cancelled' ? (
+                    <View style={s.progress}>
+                      <MiniTrack stage={stage} s={s} />
+                      <Text style={s.hint}>{STAGE_HINT[stage](o)}</Text>
+                    </View>
+                  ) : null}
+                  <View style={s.foot}>
+                    <Text style={s.total}>{ghs(o.amount)}</Text>
+                    {unpaid ? (
+                      <Button size="sm" label="Pay now" onPress={() => onPay(o.id)} />
+                    ) : (
+                      <View style={s.more}>
+                        <Text style={s.moreText}>
+                          {stage === 'delivered'
+                            ? 'View receipt'
+                            : stage === 'cancelled'
+                              ? 'View order'
+                              : 'Track order'}
+                        </Text>
+                        <Icon name="chevronRight" size={16} color={colors.brandInk} />
+                      </View>
+                    )}
+                  </View>
+                </Card>
+              )}
+            </Pressable>
+          </Reveal>
         );
       })}
       {loadingMore ? <SkeletonCard /> : null}
@@ -308,6 +412,13 @@ function OrderDetail({
   const { pickupsTotal, deliveredAt } = o.progress;
   const live = o.state === 'paid' && !deliveredAt;
   const track = useOrderTracking(live ? o.id : null);
+  const [support, setSupport] = useState<SupportContact | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => {
+    fetchSupportContact().then(setSupport, () => undefined);
+  }, []);
+  const driver = live ? track?.driver : null;
 
   const steps: { title: string; note: string }[] = [
     { title: 'Order placed', note: stamp(o.createdAt) },
@@ -356,11 +467,13 @@ function OrderDetail({
       <View style={s.top}>
         <View style={s.grow}>
           <Text style={s.heading}>{o.code}</Text>
-          <Text style={s.meta}>Placed {day(o.createdAt)}</Text>
+          <Text style={s.meta}>
+            Placed {day(o.createdAt)} · {summary(o)}
+          </Text>
         </View>
         <Badge label={st.label} tone={st.tone} />
       </View>
-      {error ? <Banner text={error} /> : null}
+      {error || saveError ? <Banner text={(error ?? saveError)!} /> : null}
 
       {unpaid ? (
         <Card tone="tint" style={s.box}>
@@ -395,6 +508,45 @@ function OrderDetail({
 
       {live ? <OrderLiveMap t={track} preparing={stage === 'preparing'} /> : null}
 
+      {stage === 'delivered' ? (
+        <View style={s.done} accessibilityLabel="Order delivered">
+          <View style={s.doneIcon}>
+            <Icon name="check" size={22} color="#ffffff" strokeWidth={3} />
+          </View>
+          <View style={s.grow}>
+            <Text style={s.doneTitle}>Delivered</Text>
+            <Text style={s.doneSub}>
+              {deliveredAt ? stamp(deliveredAt) : 'Your produce has arrived'}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {driver ? (
+        <Card style={s.box}>
+          <View style={s.person}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{initials(driver.name) || '?'}</Text>
+            </View>
+            <View style={s.grow}>
+              <Text style={s.meta}>Your driver</Text>
+              <Text style={s.k}>{driver.name}</Text>
+              {driver.plate ? <Text style={s.meta}>Truck {driver.plate}</Text> : null}
+            </View>
+            {driver.phone ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Call ${driver.name}`}
+                onPress={() => callPhone(driver.phone).catch(() => undefined)}
+                style={({ pressed }) => [s.callBtn, pressed && s.pressed]}
+              >
+                <Icon name="phone" size={20} color="#ffffff" />
+              </Pressable>
+            ) : null}
+          </View>
+        </Card>
+      ) : null}
+
       {stage === 'cancelled' ? (
         <Card style={s.box}>
           <Text style={s.title}>This order was cancelled</Text>
@@ -416,7 +568,10 @@ function OrderDetail({
                       {isDone ? (
                         <Icon name="check" size={13} color="#ffffff" strokeWidth={3} />
                       ) : now ? (
-                        <View style={s.dotPulse} />
+                        <>
+                          <Pulse color={colors.harvestFill} />
+                          <View style={s.dotPulse} />
+                        </>
                       ) : null}
                     </View>
                     {i < steps.length - 1 ? <View style={[s.line, isDone && s.lineDone]} /> : null}
@@ -470,6 +625,35 @@ function OrderDetail({
             </Text>
           </View>
         ))}
+        {canReceipt(o) ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Download receipt as PDF"
+            accessibilityState={{ busy: saving }}
+            disabled={saving}
+            onPress={() => {
+              setSaving(true);
+              setSaveError(null);
+              downloadReceipt(o)
+                .catch((e) =>
+                  setSaveError(e instanceof Error ? e.message : 'Could not make the receipt.'),
+                )
+                .finally(() => setSaving(false));
+            }}
+            style={({ pressed }) => [s.receipt, (pressed || saving) && s.pressed]}
+          >
+            <View style={s.receiptIcon}>
+              <Icon name="clipboard" size={20} color="#ffffff" />
+            </View>
+            <View style={s.grow}>
+              <Text style={s.k}>Receipt</Text>
+              <Text style={s.meta}>{saving ? 'Preparing your PDF…' : 'Save or share as PDF'}</Text>
+            </View>
+            <View style={s.receiptGo}>
+              <Icon name="download" size={18} color={colors.brandInk} />
+            </View>
+          </Pressable>
+        ) : null}
       </Card>
 
       {o.deliveryAddress ? (
@@ -481,12 +665,114 @@ function OrderDetail({
           </View>
         </Card>
       ) : null}
+
+      {support && (support.phone || support.email) ? (
+        <Card style={s.box}>
+          <Text style={s.title}>Need help with this order?</Text>
+          <Text style={s.meta}>Quote {o.code} when you reach us.</Text>
+          <View style={s.tiles}>
+            {support.phone ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Call support on +${support.phone}`}
+                onPress={() => callPhone(`+${support.phone}`).catch(() => undefined)}
+                style={({ pressed }) => [s.tile, pressed && s.pressed]}
+              >
+                <Icon name="phone" size={20} color={colors.brandInk} />
+                <Text style={s.tileTitle}>Call</Text>
+                <Text style={s.meta} numberOfLines={1}>
+                  +{support.phone}
+                </Text>
+              </Pressable>
+            ) : null}
+            {support.email ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Email support at ${support.email}`}
+                onPress={() =>
+                  Linking.openURL(
+                    `mailto:${support.email}?subject=${encodeURIComponent(`Order ${o.code}`)}`,
+                  ).catch(() => undefined)
+                }
+                style={({ pressed }) => [s.tile, pressed && s.pressed]}
+              >
+                <Icon name="mail" size={20} color={colors.brandInk} />
+                <Text style={s.tileTitle}>Email</Text>
+                <Text style={s.meta} numberOfLines={1}>
+                  {support.email}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </Card>
+      ) : null}
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  list: { gap: 12 },
+  list: { gap: 14 },
+  headRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    justifyContent: 'space-between' as const,
+  },
+  progress: { gap: 8 },
+  foot: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: c.borderSubtle,
+  },
+  done: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 14,
+    padding: 18,
+    borderRadius: 20,
+    backgroundColor: c.brand900,
+  },
+  doneIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brand600,
+  },
+  doneTitle: { fontFamily: fonts.heading, fontSize: 22, letterSpacing: -0.3, color: '#ffffff' },
+  doneSub: { fontFamily: fonts.sansMedium, fontSize: 14, color: '#bfe9cf' },
+  person: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14 },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
+  avatarText: { fontFamily: fonts.heading, fontSize: 18, color: c.brandInk },
+  callBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brand600,
+  },
+  tiles: { flexDirection: 'row' as const, gap: 10, flexWrap: 'wrap' as const },
+  tile: {
+    flexGrow: 1,
+    flexBasis: 140,
+    minHeight: 88,
+    gap: 4,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: c.surfaceSunken,
+  },
+  tileTitle: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink },
   heading: { fontFamily: fonts.heading, fontSize: 26, letterSpacing: -0.4, color: c.ink },
   seg: {
     flexDirection: 'row' as const,
@@ -532,8 +818,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   grow: { flex: 1, gap: 2 },
   title: { fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },
-  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
-  summary: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink },
+  name: { fontFamily: fonts.heading, fontSize: 18, letterSpacing: -0.2, color: c.ink },
   meta: {
     fontFamily: fonts.sansRegular,
     fontSize: 13,
@@ -619,6 +904,31 @@ const styles = (c: Record<ColorToken, string>) => ({
     fontSize: 22,
     color: c.ink,
     fontVariant: ['tabular-nums' as const],
+  },
+  receipt: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    minHeight: 64,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: c.brandTint,
+  },
+  receiptIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brand600,
+  },
+  receiptGo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.surfaceCard,
   },
   divider: { height: 1, backgroundColor: c.borderSubtle },
   addr: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8 },

@@ -430,6 +430,8 @@ export interface OrderTracking {
   /** Google encoded road line from the truck to this address; only when this is the truck's next stop. */
   polyline: string | null;
   deliveredAt: string | null;
+  /** Who is driving, once a driver has the drop-off. */
+  driver: { name: string; phone: string; plate: string } | null;
 }
 
 /** Where the truck is for one of the buyer's own orders. Never includes other stops. */
@@ -446,5 +448,21 @@ export async function fetchOrderTracking(orderId: string): Promise<OrderTracking
       : null,
     polyline: r.polyline ?? null,
     deliveredAt: r.deliveredAt ?? null,
+    driver: r.driver
+      ? { name: r.driver.name ?? 'Your driver', phone: r.driver.phone ?? '', plate: r.driver.plate ?? '' }
+      : null,
   };
+}
+
+export interface SupportContact {
+  phone: string;
+  email: string;
+}
+
+/** Ops support phone (digits, with country code) and email; either may be blank. */
+export async function fetchSupportContact(): Promise<SupportContact> {
+  const { data, error } = await supabase.rpc('get_support_contact');
+  fail('Could not load the support details.')(error);
+  const r = data?.[0];
+  return { phone: r?.phone ?? '', email: r?.email ?? '' };
 }
