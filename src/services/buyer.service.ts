@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import type { AddressValue } from './maps.service';
 import { requireUserId, supabase } from './supabase';
+import { EXT, readBytes, type PickedImage } from './catalogueImage';
 import { openCheckout } from './checkout';
 import { paymentReturnReference } from '../utils/paymentReturn';
 
@@ -52,6 +53,8 @@ export interface BuyerDetails {
   /** The default address; empty until the buyer adds one. */
   location: string;
   addresses: BuyerAddress[];
+  /** Storage key of the optional profile photo. */
+  photoPath: string | null;
 }
 
 const fail = (msg: string) => (error: unknown) => {
@@ -87,7 +90,9 @@ export interface CatalogueItem {
 }
 
 export async function fetchCatalogue(search = ''): Promise<CatalogueItem[]> {
-  const { data, error } = await supabase.rpc('buyer_catalogue', { p_search: search.trim() || null });
+  const { data, error } = await supabase.rpc('buyer_catalogue', {
+    p_search: search.trim() || null,
+  });
   fail('Could not load the shop.')(error);
   return (data ?? []).map((r: any) => ({
     productId: r.product_id,
@@ -265,7 +270,7 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
   const { data, error } = await supabase
     .from('buyers')
     .select(
-      'organization_name, delivery_location, profiles(display_name, phone, email), buyer_addresses(id, label, address, line1, landmark, city, postcode, latitude, longitude, is_default, created_at)',
+      'organization_name, delivery_location, photo_path, profiles(display_name, phone, email), buyer_addresses(id, label, address, line1, landmark, city, postcode, latitude, longitude, is_default, created_at)',
     )
     .eq('id', buyerId)
     .single();
@@ -304,6 +309,7 @@ export async function fetchBuyerDetails(): Promise<BuyerDetails> {
     email: profile?.email ?? '',
     location: data!.delivery_location,
     addresses,
+    photoPath: (data as any).photo_path ?? null,
   };
 }
 
@@ -315,6 +321,31 @@ export async function saveBuyerDetails(
     p_name: b.name,
   });
   fail('Could not save your details.')(error);
+}
+
+/** Sets (or clears, with null) the optional profile photo and removes the old file. */
+export async function saveBuyerPhoto(
+  img: PickedImage | null,
+  oldPath: string | null,
+): Promise<void> {
+  const id = await requireUserId();
+  const bucket = supabase.storage.from('produce');
+  let path: string | null = null;
+  if (img) {
+    const type = img.mimeType ?? 'image/jpeg';
+    if (!EXT[type]) throw new Error('Use a JPEG, PNG or WebP image.');
+    const body = await readBytes(img.uri);
+    if (body.byteLength === 0) throw new Error('The photo could not be read. Pick it again.');
+    path = `${id}/profile-${Date.now()}.${EXT[type]}`;
+    if ((await bucket.upload(path, body, { contentType: type })).error)
+      throw new Error('Could not upload the photo (max 2 MB).');
+  }
+  const { error } = await supabase.rpc('set_buyer_photo', { p_path: path });
+  if (error) {
+    if (path) await bucket.remove([path]);
+    throw new Error('Could not save your photo.');
+  }
+  if (oldPath) await bucket.remove([oldPath]).catch(() => undefined);
 }
 
 export const ADDRESS_MAX = 5;

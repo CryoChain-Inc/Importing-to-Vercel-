@@ -196,13 +196,10 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
           {tab === 'truck' ? <TruckBooking transfer={data.transfer} /> : null}
           {tab === 'account' ? (
             <>
-              <BuyerAccount details={data.details} onRefresh={load} />
-              <Button
-                label="Sign out"
-                variant="ghost"
-                icon="logOut"
-                onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))}
-                style={{ alignSelf: 'center' }}
+              <BuyerAccount
+                details={data.details}
+                onRefresh={load}
+                onSignOut={() => authService.signOut().finally(() => reset({ name: 'landing' }))}
               />
               <AccountFooter onDeleted={() => reset({ name: 'landing' })} />
             </>

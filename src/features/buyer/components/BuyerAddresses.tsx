@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Text, View } from 'react-native';
-import { Badge, Button, Card, Icon, Input } from '../../../components/common';
+import React, { useRef, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { Button, Card, Icon, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { AddressFields } from '../../../components/location/AddressFields';
 import {
@@ -18,10 +18,11 @@ import {
 } from '../../../services/maps.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { useAction } from '../../ops/components/useAction';
+import { Sheet } from '../../ops/components/Sheet';
 
-/** Delivery address book: add, edit, pick the default, remove. `adding` is lifted so the checklist can open the form. */
+/** Delivery address book: tap a card to deliver there, add/edit in a sheet, remove. `adding` is lifted so the checklist can open the sheet. */
 export function BuyerAddresses({
-  addresses,
+  addresses: fetched,
   adding,
   onAdding,
   onRefresh,
@@ -38,7 +39,40 @@ export function BuyerAddresses({
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [address, setAddress] = useState<AddressValue>(emptyAddress);
+  // Optimistic view: taps show instantly; the server call and refresh run behind it. A new `fetched` drops it.
+  const [view, setView] = useState<{ base: BuyerAddress[]; list: BuyerAddress[] } | null>(null);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const addresses = view && view.base === fetched ? view.list : fetched;
   const full = addresses.length >= ADDRESS_MAX;
+
+  const quick = (list: BuyerAddress[], call: () => Promise<void>) => {
+    setQuickError(null);
+    setView({ base: fetched, list });
+    queue.current = queue.current
+      .then(call)
+      .then(onRefresh)
+      .catch((e) => {
+        setQuickError(e instanceof Error ? e.message : 'Something went wrong.');
+        setView(null);
+        return onRefresh().catch(() => undefined);
+      });
+  };
+  const makeDefault = (id: string) =>
+    quick(
+      addresses
+        .map((a) => ({ ...a, isDefault: a.id === id }))
+        .sort((a, b) => Number(b.isDefault) - Number(a.isDefault)),
+      () => setDefaultAddress(id),
+    );
+  const remove = (a: BuyerAddress) => {
+    setRemoveId(null);
+    const rest = addresses.filter((x) => x.id !== a.id);
+    quick(
+      a.isDefault && rest.length ? rest.map((x, i) => ({ ...x, isDefault: i === 0 })) : rest,
+      () => deleteAddress(a.id),
+    );
+  };
   const valid = label.trim().length >= 2 && addressReady(address);
 
   const open = (a: BuyerAddress | null) => {
@@ -52,33 +86,43 @@ export function BuyerAddresses({
     setEditId(null);
     onAdding(false);
   };
-  const form = (
-    <View style={s.form}>
-      <Input
-        label="Name this place"
-        value={label}
-        onChangeText={setLabel}
-        maxLength={30}
-        placeholder="e.g. Kumasi warehouse"
-      />
-      <AddressFields value={address} onChange={(p) => setAddress({ ...address, ...p })} />
-      <View style={s.actions}>
-        <Button label="Cancel" variant="outline" onPress={close} style={s.action} />
-        <Button
-          label="Save address"
-          loading={busy}
-          disabled={!valid}
-          style={s.action}
-          onPress={() =>
-            run(async () => {
-              await saveAddress(editId, label, address);
-              close();
-            })
-          }
-        />
-      </View>
-    </View>
-  );
+  const sheet =
+    adding || editId ? (
+      <Sheet
+        title={editId ? 'Edit address' : 'New address'}
+        subtitle="Pin it on the map so we can find the nearest farms."
+        onClose={close}
+        footer={
+          <View style={s.actions}>
+            <Button label="Cancel" variant="outline" onPress={close} style={s.action} />
+            <Button
+              label="Save address"
+              loading={busy}
+              disabled={!valid}
+              style={s.action}
+              onPress={() =>
+                run(async () => {
+                  await saveAddress(editId, label, address);
+                  close();
+                })
+              }
+            />
+          </View>
+        }
+      >
+        <View style={s.form}>
+          {error ? <Banner text={error} /> : null}
+          <Input
+            label="Name this place"
+            value={label}
+            onChangeText={setLabel}
+            maxLength={30}
+            placeholder="e.g. Kumasi warehouse"
+          />
+          <AddressFields value={address} onChange={(p) => setAddress({ ...address, ...p })} />
+        </View>
+      </Sheet>
+    ) : null;
 
   return (
     <Card style={s.card}>
@@ -95,84 +139,84 @@ export function BuyerAddresses({
           <Button label="Add" icon="edit" variant="tonal" size="sm" onPress={() => open(null)} />
         ) : null}
       </View>
-      {error ? <Banner text={error} /> : null}
+      {quickError ? <Banner text={quickError} /> : null}
+      {error && !adding && !editId ? <Banner text={error} /> : null}
 
-      {addresses.map((a) =>
-        editId === a.id ? (
-          <View key={a.id} style={s.tile}>
-            {form}
-          </View>
-        ) : (
-          <View key={a.id} style={[s.tile, a.isDefault && s.tileDefault]}>
-            <View style={s.tileTop}>
-              <View style={[s.pin, a.isDefault && s.pinDefault]}>
-                <Icon name="pin" size={20} color={a.isDefault ? colors.onBrand : colors.brandInk} />
-              </View>
-              <View style={s.tileText}>
-                <View style={s.labelRow}>
-                  <Text style={s.label} numberOfLines={1}>
-                    {a.label}
-                  </Text>
-                  {a.isDefault ? <Badge label="Default" tone="success" /> : null}
-                </View>
-                <Text style={s.address}>{composeAddress(a)}</Text>
-                {a.landmark ? <Text style={s.address}>Near {a.landmark}</Text> : null}
-              </View>
+      {addresses.map((a) => (
+        <View key={a.id} style={[s.tile, a.isDefault && s.tileDefault]}>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ selected: a.isDefault }}
+            accessibilityLabel={`Deliver to ${a.label}`}
+            disabled={a.isDefault}
+            onPress={() => makeDefault(a.id)}
+            style={s.tileTop}
+          >
+            <View style={[s.pin, a.isDefault && s.pinDefault]}>
+              <Icon name="pin" size={20} color={a.isDefault ? colors.onBrand : colors.brandInk} />
             </View>
-            {removeId === a.id ? (
-              <View style={s.confirm}>
-                <Text style={s.confirmText}>
-                  {a.isDefault && addresses.length > 1
-                    ? 'Remove this address? Your next one becomes the default.'
-                    : 'Remove this address?'}
-                </Text>
-                <View style={s.actions}>
-                  <Button
-                    label="Keep"
-                    variant="outline"
-                    size="sm"
-                    onPress={() => setRemoveId(null)}
-                    style={s.action}
-                  />
-                  <Button
-                    label="Remove"
-                    variant="danger"
-                    size="sm"
-                    loading={busy}
-                    style={s.action}
-                    onPress={() =>
-                      run(async () => {
-                        await deleteAddress(a.id);
-                        setRemoveId(null);
-                      })
-                    }
-                  />
-                </View>
-              </View>
-            ) : (
-              <View style={s.tileActions}>
-                <Button label="Edit" variant="ghost" size="sm" onPress={() => open(a)} />
-                {a.isDefault ? null : (
-                  <Button
-                    label="Make default"
-                    variant="ghost"
-                    size="sm"
-                    onPress={() => run(() => setDefaultAddress(a.id))}
-                  />
-                )}
+            <View style={s.tileText}>
+              <Text style={s.label} numberOfLines={1}>
+                {a.label}
+              </Text>
+              <Text style={s.address}>{composeAddress(a)}</Text>
+              {a.landmark ? <Text style={s.address}>Near {a.landmark}</Text> : null}
+            </View>
+            <View style={[s.radio, a.isDefault && s.radioOn]}>
+              {a.isDefault ? <Icon name="check" size={14} color={colors.onBrand} /> : null}
+            </View>
+          </Pressable>
+          {removeId === a.id ? (
+            <View style={s.confirm}>
+              <Text style={s.confirmText}>
+                {a.isDefault && addresses.length > 1
+                  ? 'Remove this address? Your next one becomes the default.'
+                  : 'Remove this address?'}
+              </Text>
+              <View style={s.actions}>
+                <Button
+                  label="Keep"
+                  variant="outline"
+                  size="sm"
+                  onPress={() => setRemoveId(null)}
+                  style={s.action}
+                />
                 <Button
                   label="Remove"
-                  variant="ghost"
+                  variant="danger"
                   size="sm"
-                  onPress={() => setRemoveId(a.id)}
+                  style={s.action}
+                  onPress={() => remove(a)}
                 />
               </View>
-            )}
-          </View>
-        ),
-      )}
-
-      {adding ? <View style={s.tile}>{form}</View> : null}
+            </View>
+          ) : (
+            <View style={s.foot}>
+              <Text style={[s.hint, a.isDefault && s.hintOn]}>
+                {a.isDefault ? 'Orders deliver here' : 'Tap to deliver here'}
+              </Text>
+              <Pressable
+                onPress={() => open(a)}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit ${a.label}`}
+                style={s.icon}
+              >
+                <Icon name="edit" size={18} color={colors.ink} />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setRemoveId(a.id);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${a.label}`}
+                style={s.icon}
+              >
+                <Icon name="trash" size={18} color={colors.ink} />
+              </Pressable>
+            </View>
+          )}
+        </View>
+      ))}
 
       {addresses.length === 0 && !adding ? (
         <View style={s.empty}>
@@ -191,6 +235,7 @@ export function BuyerAddresses({
           You&apos;ve reached {ADDRESS_MAX} addresses. Remove one to add another.
         </Text>
       ) : null}
+      {sheet}
     </Card>
   );
 }
@@ -234,7 +279,26 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   label: { flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   address: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.inkMuted },
-  tileActions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 4, marginLeft: 40 },
+  radio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: c.cardEdge,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  radioOn: { borderColor: c.brand600, backgroundColor: c.brand600 },
+  foot: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginLeft: 52 },
+  hint: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
+  hintOn: { color: c.brandInk },
+  icon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   confirm: { gap: 10, marginLeft: 52 },
   confirmText: { fontFamily: fonts.sansMedium, fontSize: 14, lineHeight: 20, color: c.ink },
   form: { gap: 16 },
