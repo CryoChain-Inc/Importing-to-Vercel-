@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { Banner, SkeletonCard } from '../../../components/feedback';
+import { useNearEnd } from '../../../components/layout';
 import {
   cancelOrder,
   orderStage,
@@ -14,7 +15,7 @@ import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../them
 import { fmtQty, ghs } from '../../../utils/format';
 import { useAction } from '../../ops/components/useAction';
 import { warmMap } from '../../../components/location/LiveMap';
-import { OrderLiveMap } from './OrderLiveMap';
+import { etaIn, OrderLiveMap, time, useOrderTracking } from './OrderLiveMap';
 
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -34,6 +35,17 @@ const DONE: Record<Exclude<OrderStage, 'cancelled'>, number> = {
   delivered: 5,
 };
 
+const STAGE_HINT: Record<Exclude<OrderStage, 'cancelled'>, (o: Order) => string> = {
+  placed: () => 'Pay to start preparing your produce',
+  preparing: () => 'Lining up farms near you',
+  on_the_way: (o) =>
+    stillCollecting(o)
+      ? `${o.progress.pickupsDone} of ${o.progress.pickupsTotal} farm pickups collected`
+      : 'Heading to your address',
+  delivered: (o) =>
+    o.progress.deliveredAt ? `Delivered ${stamp(o.progress.deliveredAt)}` : 'Delivered',
+};
+
 const summary = (o: Order) => {
   const names = [...new Set(o.items.map((i) => i.name))];
   return names.length > 2
@@ -44,19 +56,36 @@ const summary = (o: Order) => {
 /** The buyer's orders as a list with live status; tap one for the full tracking timeline and receipt. */
 export function Orders({
   orders,
+  openId,
+  onOpen,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   onPay,
   onRefresh,
 }: {
   orders: Order[];
+  openId: string | null;
+  onOpen: (id: string | null) => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   onPay: (orderId: string) => void;
   onRefresh: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const [tab, setTab] = useState<'active' | 'past'>('active');
-  const [openId, setOpenId] = useState<string | null>(null);
   useEffect(warmMap, []);
   const { busy, error, run } = useAction(onRefresh);
+
+  const isPast = (o: Order) => ['cancelled', 'delivered'].includes(orderStage(o));
+  const shown = orders.filter((o) => (tab === 'past') === isPast(o));
+  useNearEnd(onLoadMore);
+  // A tab with few matches may not scroll, so the scroll trigger never fires; fill it from the backend.
+  useEffect(() => {
+    if (!openId && hasMore && !loadingMore && shown.length < 5) onLoadMore();
+  });
 
   const opened = orders.find((o) => o.id === openId);
   if (opened)
@@ -65,14 +94,11 @@ export function Orders({
         order={opened}
         busy={busy}
         error={error}
-        onBack={() => setOpenId(null)}
+        onBack={() => onOpen(null)}
         onPay={onPay}
         onCancel={() => run(() => cancelOrder(opened.id))}
       />
     );
-
-  const isPast = (o: Order) => ['cancelled', 'delivered'].includes(orderStage(o));
-  const shown = orders.filter((o) => (tab === 'past') === isPast(o));
 
   return (
     <View style={s.list}>
@@ -125,7 +151,7 @@ export function Orders({
             key={o.id}
             accessibilityRole="button"
             accessibilityLabel={`Order ${o.code}, ${st.label}, view details`}
-            onPress={() => setOpenId(o.id)}
+            onPress={() => onOpen(o.id)}
           >
             {({ pressed }) => (
               <Card style={[s.item, pressed && s.pressed]}>
@@ -143,6 +169,7 @@ export function Orders({
                 </Text>
                 {o.refunds.length > 0 ? <ShortageNote o={o} compact /> : null}
                 {stage !== 'cancelled' ? <MiniTrack stage={stage} s={s} /> : null}
+                {stage !== 'cancelled' ? <Text style={s.hint}>{STAGE_HINT[stage](o)}</Text> : null}
                 <View style={s.top}>
                   <Text style={s.total}>{ghs(o.amount)}</Text>
                   {unpaid ? (
@@ -159,6 +186,8 @@ export function Orders({
           </Pressable>
         );
       })}
+      {loadingMore ? <SkeletonCard /> : null}
+      {!hasMore && orders.length > 0 ? <Text style={s.end}>All your orders are shown</Text> : null}
     </View>
   );
 }
@@ -215,6 +244,46 @@ function MiniTrack({
   );
 }
 
+/** The headline of an order in transit: what is happening, when it arrives and how far along it is. */
+function OrderHero({
+  o,
+  stage,
+  eta,
+}: {
+  o: Order;
+  stage: 'preparing' | 'on_the_way';
+  eta: string | null;
+}) {
+  const s = useThemedStyles(styles);
+  const { colors } = useTheme();
+  const headline =
+    stage === 'preparing'
+      ? 'Preparing your order'
+      : stillCollecting(o)
+        ? 'On a truck'
+        : 'On the way to you';
+  return (
+    <View style={s.hero} accessibilityLabel={`${headline}. ${eta ? `Arriving ${etaIn(eta)}` : ''}`}>
+      <View style={s.heroTop}>
+        <Icon name="truck" size={18} color={colors.brandInk} />
+        <Text style={s.heroKicker}>{headline}</Text>
+      </View>
+      <Text style={s.heroEta}>{eta ? etaIn(eta) : 'Arrival time soon'}</Text>
+      <Text style={s.heroSub}>
+        {eta ? `Expected around ${time(eta)}` : 'We will show the time once a truck is assigned'}
+      </Text>
+      <View style={s.mini}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <View
+            key={i}
+            style={[s.heroSeg, i < DONE[stage] && s.heroSegDone, i === DONE[stage] && s.heroSegNow]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function OrderDetail({
   order: o,
   busy,
@@ -237,6 +306,8 @@ function OrderDetail({
   const unpaid = o.state === 'awaiting_payment';
   const retry = o.payment === 'failed' || o.payment === 'abandoned';
   const { pickupsTotal, deliveredAt } = o.progress;
+  const live = o.state === 'paid' && !deliveredAt;
+  const track = useOrderTracking(live ? o.id : null);
 
   const steps: { title: string; note: string }[] = [
     { title: 'Order placed', note: stamp(o.createdAt) },
@@ -258,7 +329,7 @@ function OrderDetail({
       note:
         stage === 'on_the_way'
           ? stillCollecting(o)
-            ? 'Your produce is on a truck'
+            ? `${o.progress.pickupsDone} of ${pickupsTotal} farm pickups collected`
             : 'Heading to you'
           : 'A driver collects it and brings it to you',
     },
@@ -318,9 +389,11 @@ function OrderDetail({
 
       {o.refunds.length > 0 ? <ShortageNote o={o} /> : null}
 
-      {o.state === 'paid' && !deliveredAt ? (
-        <OrderLiveMap orderId={o.id} preparing={stage === 'preparing'} />
+      {live ? (
+        <OrderHero o={o} stage={stage as 'preparing' | 'on_the_way'} eta={track?.eta ?? null} />
       ) : null}
+
+      {live ? <OrderLiveMap t={track} preparing={stage === 'preparing'} /> : null}
 
       {stage === 'cancelled' ? (
         <Card style={s.box}>
@@ -479,6 +552,22 @@ const styles = (c: Record<ColorToken, string>) => ({
     backgroundColor: c.harvestTint,
   },
   alertTitle: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
+  end: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+    paddingVertical: 8,
+  },
+  hint: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
+  hero: { gap: 6, padding: 20, borderRadius: 20, backgroundColor: c.brand900 },
+  heroTop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  heroKicker: { fontFamily: fonts.sansBold, fontSize: 14, color: c.brandInk },
+  heroEta: { fontFamily: fonts.heading, fontSize: 34, letterSpacing: -0.6, color: '#ffffff' },
+  heroSub: { fontFamily: fonts.sansMedium, fontSize: 14, color: '#bfe9cf', marginBottom: 8 },
+  heroSeg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
+  heroSegDone: { backgroundColor: c.brand500 },
+  heroSegNow: { backgroundColor: c.harvestFill },
   mini: { flexDirection: 'row' as const, gap: 4 },
   seg5: { flex: 1, height: 5, borderRadius: 3, backgroundColor: c.borderSubtle },
   seg5Done: { backgroundColor: c.brand600 },

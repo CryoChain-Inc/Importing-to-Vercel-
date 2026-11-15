@@ -55,6 +55,7 @@ export function TabShell<K extends string>({
   tab,
   onSelect,
   refresh,
+  floating,
   children,
 }: {
   tabs: TabDef<K>[];
@@ -62,6 +63,8 @@ export function TabShell<K extends string>({
   onSelect: (k: K) => void;
   /** Enables pull to refresh on phones. */
   refresh?: Refresh;
+  /** Pinned just above the bottom bar (bottom-right of the content on wide screens). */
+  floating?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const wide = useIsWide();
@@ -125,7 +128,7 @@ export function TabShell<K extends string>({
       <ScrollView
         ref={scrollRef}
         style={s.main}
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={[s.scroll, floating ? s.scrollFloat : null]}
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={120}
         onScroll={({ nativeEvent: e }) => {
@@ -150,6 +153,13 @@ export function TabShell<K extends string>({
           </NearEndContext.Provider>
         </View>
       </ScrollView>
+      {floating ? (
+        <View pointerEvents="box-none" style={[s.float, wide ? s.floatWide : null]}>
+          <View pointerEvents="box-none" style={s.floatInner}>
+            {floating}
+          </View>
+        </View>
+      ) : null}
       {wide ? null : (
         <View style={s.bar} accessibilityRole="tablist">
           {tabs.map((t) => button(t))}
@@ -197,6 +207,7 @@ const styles = (c: Record<ColorToken, string>) => ({
   railFoot: { gap: 12, alignItems: 'flex-start' as const },
   main: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 32, gap: 12 },
+  scrollFloat: { paddingBottom: 112 },
   phoneTop: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -209,6 +220,9 @@ const styles = (c: Record<ColorToken, string>) => ({
     borderTopWidth: 1,
     borderTopColor: c.borderSubtle,
   },
+  float: { position: 'absolute' as const, left: 16, right: 16, bottom: 76, zIndex: 10 },
+  floatWide: { left: 264, bottom: 20 },
+  floatInner: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const },
   barTab: {
     flex: 1,
     minHeight: 60,

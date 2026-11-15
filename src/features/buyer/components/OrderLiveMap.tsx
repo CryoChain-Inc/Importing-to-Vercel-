@@ -9,16 +9,21 @@ import { decodePolyline } from '../../../utils/polyline';
 
 const POLL_MS = 15000;
 const MAP_H = 260;
-const time = (iso: string) =>
+export const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' });
 
-/** The truck on a map for a paid order: where it is now, and the road to the buyer once it is heading there. */
-export function OrderLiveMap({ orderId, preparing }: { orderId: string; preparing?: boolean }) {
-  const s = useThemedStyles(styles);
-  const { colors } = useTheme();
-  const [t, setT] = useState<OrderTracking | null>(null);
+/** "in 25 min" / "in 1 h 10 min" until the arrival time; "any moment" once it has passed. */
+export function etaIn(iso: string, now = Date.now()) {
+  const m = Math.round((new Date(iso).getTime() - now) / 60000);
+  if (m <= 1) return 'any moment now';
+  return m < 60 ? `in ${m} min` : `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+}
 
+/** Polls the truck's position for one paid order; null until the first answer. */
+export function useOrderTracking(orderId: string | null): OrderTracking | null {
+  const [t, setT] = useState<OrderTracking | null>(null);
   useEffect(() => {
+    if (!orderId) return;
     let live = true;
     const tick = () =>
       fetchOrderTracking(orderId).then(
@@ -34,6 +39,13 @@ export function OrderLiveMap({ orderId, preparing }: { orderId: string; preparin
       clearInterval(timer);
     };
   }, [orderId]);
+  return t;
+}
+
+/** The truck on a map for a paid order: where it is now, and the road to the buyer once it is heading there. */
+export function OrderLiveMap({ t, preparing }: { t: OrderTracking | null; preparing?: boolean }) {
+  const s = useThemedStyles(styles);
+  const { colors } = useTheme();
 
   if (t && (t.state === 'waiting' || t.state === 'delivered')) return null;
   // The card is on screen from the first frame; the map and text fill in when the position arrives.
@@ -70,7 +82,9 @@ export function OrderLiveMap({ orderId, preparing }: { orderId: string; preparin
                 : 'Your produce is on a truck'}
           </Text>
           <Text style={s.eta}>
-            {t.eta ? `Arriving around ${time(t.eta)}` : 'Working out the arrival time'}
+            {t.eta
+              ? `Arriving around ${time(t.eta)} (${etaIn(t.eta)})`
+              : 'Working out the arrival time'}
           </Text>
         </View>
       </View>

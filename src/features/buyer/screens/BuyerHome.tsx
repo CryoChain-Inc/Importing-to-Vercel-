@@ -13,6 +13,7 @@ import type { Account } from '../../../types/auth';
 import { AccountFooter } from '../../auth/components/AccountFooter';
 import { CartProvider, useCart } from '../cart/CartProvider';
 import { BuyerAccount, buyerProfileComplete } from '../components/BuyerAccount';
+import { ActiveOrderPill } from '../components/ActiveOrderPill';
 import { Cart } from '../components/Cart';
 import { Orders } from '../components/Orders';
 import { Payment } from '../components/Payment';
@@ -81,17 +82,25 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   const [tab, setTab] = useTabRoute(firstTab ?? 'shop');
   // The order being paid. While set, the payment page replaces the tabs' content.
   const [paying, setPaying] = useState<string | null>(null);
+  const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
+  // Orders loaded so far; reloads refetch that many so live updates don't drop later pages.
+  const loaded = useRef(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const want = Math.max(buyer.ORDERS_PAGE, loaded.current);
     try {
       const [catalogue, orders, transfer, details] = await Promise.all([
         buyer.fetchCatalogue(),
-        buyer.fetchOrders(),
+        buyer.fetchOrders(want),
         buyer.fetchTransferDetails(),
         buyer.fetchBuyerDetails(),
       ]);
+      loaded.current = orders.length;
+      setHasMore(orders.length >= want);
       setData({ catalogue, orders, transfer, details });
       setError(null);
       await refreshAccount();
@@ -103,6 +112,25 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await buyer.fetchOrders(buyer.ORDERS_PAGE, loaded.current);
+      setHasMore(next.length === buyer.ORDERS_PAGE);
+      loaded.current += next.length;
+      setData((d) => {
+        if (!d) return d;
+        const seen = new Set(d.orders.map((o) => o.id));
+        return { ...d, orders: [...d.orders, ...next.filter((o) => !seen.has(o.id))] };
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load more orders.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore]);
   const live = useLiveReload(load, LIVE_TABLES);
 
   // Paystack sends the buyer back with ?reference=...; confirm it (the webhook may be slower) and refresh.
@@ -158,7 +186,21 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
           : t,
       )}
       tab={tab}
-      onSelect={setTab}
+      onSelect={(k) => {
+        setOpenOrder(null);
+        setTab(k);
+      }}
+      floating={
+        tab === 'shop' && data ? (
+          <ActiveOrderPill
+            orders={data.orders}
+            onOpen={(id) => {
+              setOpenOrder(id);
+              setTab('orders');
+            }}
+          />
+        ) : null
+      }
     >
       <View style={s.header}>
         {toPay ? (
@@ -191,7 +233,16 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
             />
           ) : null}
           {tab === 'orders' ? (
-            <Orders orders={data.orders} onPay={setPaying} onRefresh={load} />
+            <Orders
+              orders={data.orders}
+              openId={openOrder}
+              onOpen={setOpenOrder}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={loadMore}
+              onPay={setPaying}
+              onRefresh={load}
+            />
           ) : null}
           {tab === 'truck' ? <TruckBooking transfer={data.transfer} /> : null}
           {tab === 'account' ? (

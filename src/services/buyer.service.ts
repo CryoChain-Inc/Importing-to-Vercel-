@@ -168,14 +168,18 @@ export async function checkoutCart(lines: CartLine[], addressId: string): Promis
   return { ok: true, orderId: data.order_id };
 }
 
-export async function fetchOrders(): Promise<Order[]> {
+export const ORDERS_PAGE = 15;
+
+/** Newest first: `limit` orders after the first `offset`. A full page means there may be more. */
+export async function fetchOrders(limit = ORDERS_PAGE, offset = 0): Promise<Order[]> {
   const [{ data, error }, tracking] = await Promise.all([
     supabase
       .from('orders')
       .select(
         'id, code, amount, state, created_at, paid_at, delivery_address, order_items(unit, kg, line_total, products(name)), payments(status, created_at), refunds(amount, status)',
       )
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1),
     supabase.rpc('buyer_order_progress'),
   ]);
   fail('Could not load your orders.')(error);
