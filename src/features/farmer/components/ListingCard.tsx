@@ -55,7 +55,7 @@ export function ListingCard({
         <View style={s.thumb}>
           {photo ? (
             <Image
-              source={{ uri: produceImageUrl(photo) }}
+              source={{ uri: produceImageUrl(photo, 600) }}
               style={s.img}
               accessibilityIgnoresInvertColors
             />

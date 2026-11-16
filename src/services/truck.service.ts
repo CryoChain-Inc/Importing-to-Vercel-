@@ -348,9 +348,7 @@ export async function reportTruckLocation(
     throw new Error('Could not share your location.');
 }
 
-export async function fetchTripLive(
-  bookingId: string,
-): Promise<{
+export async function fetchTripLive(bookingId: string): Promise<{
   startedAt: string | null;
   completedAt: string | null;
   elapsedMinutes: number | null;

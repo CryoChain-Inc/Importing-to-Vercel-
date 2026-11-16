@@ -174,16 +174,14 @@ async function send(item: QueuedListing): Promise<string | null> {
     if (isNetworkError(e) || (e as { statusCode?: string })?.statusCode?.startsWith('5')) throw e;
     return 'Could not upload a photo (max 2 MB each).';
   }
-  const { error, status } = await supabase
-    .from('produce_listings')
-    .insert({
-      id: item.id,
-      farmer_id: item.farmerId,
-      product: item.product,
-      weight_kg: item.weightKg,
-      unit: item.unit,
-      image_paths: paths,
-    });
+  const { error, status } = await supabase.from('produce_listings').insert({
+    id: item.id,
+    farmer_id: item.farmerId,
+    product: item.product,
+    weight_kg: item.weightKg,
+    unit: item.unit,
+    image_paths: paths,
+  });
   if (!error || error.code === '23505') return null;
   if (status === 0 || status >= 500 || status === 408 || status === 429 || isNetworkError(error))
     throw error;

@@ -1,3 +1,4 @@
+import { signedUrl } from './signedUrl';
 import { supabase } from './supabase';
 import { likeTerm, pageRange, type Paged } from './paging';
 
@@ -88,11 +89,7 @@ const BOARD_BASE = `id, code, amount, state, created_at, delivery_address, buyer
   order_allocations(id, unit, kg, amount, status, expires_at, km_to_buyer, products(name), profiles(display_name)),
   delivery_stops(id, kind, label, seq, state, done_at, drivers(profiles(display_name)))`;
 
-async function signed(bucket: string, path: string | null | undefined): Promise<string | null> {
-  if (!path) return null;
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
-  return data?.signedUrl ?? null;
-}
+const signed = signedUrl;
 
 function publicProduce(path: string) {
   return supabase.storage.from('produce').getPublicUrl(path).data.publicUrl;

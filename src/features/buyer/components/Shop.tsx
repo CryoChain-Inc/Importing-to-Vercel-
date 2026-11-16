@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { SkeletonCard } from '../../../components/feedback';
+import { useNearEnd } from '../../../components/layout';
 import {
   fetchCatalogue,
   setDefaultAddress,
@@ -18,6 +19,7 @@ import { AddToCartSheet } from './AddToCartSheet';
 import { QtyStepper } from './QtyStepper';
 import { ProductDetail } from './ProductDetail';
 
+const PAGE = 24;
 const ALL = 'all';
 const GAP = 12;
 
@@ -91,6 +93,11 @@ export function Shop({
       (a, b) => Number(b.some((i) => i.availableKg > 0)) - Number(a.some((i) => i.availableKg > 0)),
     );
   }, [items, found, dq, category]);
+  // Cards render a page at a time, so a long catalogue never downloads every photo up front.
+  const filterKey = `${dq}|${category}`;
+  const [page, setPage] = useState({ key: filterKey, n: PAGE });
+  const shown = page.key === filterKey ? page.n : PAGE; // a new search or category starts from page one
+  useNearEnd(() => setPage({ key: filterKey, n: Math.min(shown + PAGE, products.length) }));
   const opened = items.filter((i) => i.productId === open);
   const cartTotal = lines.reduce(
     (sum, l) =>
@@ -218,9 +225,9 @@ export function Shop({
 
       <View style={s.grid}>
         {cardW > 0
-          ? products.map((g) => {
+          ? products.slice(0, shown).map((g) => {
               const p = g[0];
-              const uri = imageUrl(p.image);
+              const uri = imageUrl(p.image, 400);
               const stocked = g.filter((i) => i.availableKg > 0);
               // A product can sell in several units whose prices don't compare, so the card leads with the first in-stock unit.
               const lead = stocked[0] ?? g[0];

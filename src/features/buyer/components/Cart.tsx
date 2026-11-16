@@ -123,7 +123,7 @@ export function Cart({
   const itemsList = (
     <View style={s.col}>
       {rows.map(({ line, item, available, over }) => {
-        const uri = imageUrl(item?.image ?? null);
+        const uri = imageUrl(item?.image ?? null, 200);
         return (
           <Card key={`${line.productId}-${line.unit}`} style={[s.item, over && s.itemOver]}>
             <View style={s.top}>

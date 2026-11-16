@@ -1,5 +1,6 @@
 import { readBytes, type PickedImage } from './catalogueImage';
 import { requireUserId, supabase } from './supabase';
+import { signedUrl } from './signedUrl';
 
 export type HandoverMediaKind = 'photo' | 'video';
 
@@ -64,11 +65,7 @@ const num = (v: unknown): number | null => (v == null || v === '' ? null : Numbe
 const kindOf = (v: unknown): HandoverMediaKind | null =>
   v === 'video' || v === 'photo' ? v : null;
 
-async function signedDelivery(path: string | null): Promise<string | null> {
-  if (!path) return null;
-  const { data } = await supabase.storage.from('deliveries').createSignedUrl(path, 60 * 60);
-  return data?.signedUrl ?? null;
-}
+const signedDelivery = (path: string | null) => signedUrl('deliveries', path);
 
 const mapPickup = async (r: any): Promise<PickupStop> => ({
   stopId: r.stopId,

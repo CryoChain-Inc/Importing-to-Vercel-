@@ -54,8 +54,13 @@ export async function imageFingerprint(uri: string): Promise<string | null> {
 }
 
 /** Public URL for a stored image; null when the item has none. */
-export const imageUrl = (path: string | null | undefined) =>
-  path ? supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl : null;
+export const imageUrl = (path: string | null | undefined, width?: number) =>
+  path
+    ? supabase.storage
+        .from(BUCKET)
+        .getPublicUrl(path, width ? { transform: { width, quality: 70 } } : undefined).data
+        .publicUrl
+    : null;
 
 /**
  * Uploads to a fresh path (so cached copies of the old image never show) and removes the old file.

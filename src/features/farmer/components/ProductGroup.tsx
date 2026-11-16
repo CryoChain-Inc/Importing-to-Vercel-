@@ -35,7 +35,7 @@ export function ProductGroup({ group: g, onOpen }: { group: Group; onOpen: () =>
           <View style={s.thumb}>
             {photo ? (
               <Image
-                source={{ uri: produceImageUrl(photo) }}
+                source={{ uri: produceImageUrl(photo, 200) }}
                 style={s.img}
                 accessibilityIgnoresInvertColors
               />

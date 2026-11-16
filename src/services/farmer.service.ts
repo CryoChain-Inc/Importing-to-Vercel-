@@ -2,6 +2,8 @@ import { normalizePhone } from '../utils/format';
 import { EXT, readBytes, type PickedImage } from './catalogueImage';
 import { cached } from './offlineCache';
 import type { AddressValue } from './maps.service';
+import { sharedPriceBoard } from './prices.service';
+import { shared } from './shared';
 import { requireUserId, supabase } from './supabase';
 
 export interface Farmer {
@@ -75,8 +77,11 @@ export interface CollectionPoint {
 const PRODUCE_BUCKET = 'produce';
 export const MIN_PHOTOS = 3;
 export const MAX_PHOTOS = 6;
-export const produceImageUrl = (path: string) =>
-  supabase.storage.from(PRODUCE_BUCKET).getPublicUrl(path).data.publicUrl;
+/** Pass `width` for thumbnails: the server resizes, so a card never downloads a full-size photo. */
+export const produceImageUrl = (path: string, width?: number) =>
+  supabase.storage
+    .from(PRODUCE_BUCKET)
+    .getPublicUrl(path, width ? { transform: { width, quality: 70 } } : undefined).data.publicUrl;
 
 const FARMER_COLUMNS =
   'address, line1, landmark, city, postcode, locality, latitude, longitude, momo_network, momo_number, momo_name, wallet_verified_at, photo_path, profiles(display_name, phone)';
@@ -259,7 +264,7 @@ export interface ProductOption {
 /** Active, priced products (the farmer's view of price_board()). */
 export const fetchProductOptions = () => cached('fetchProductOptions', loadProductOptions);
 async function loadProductOptions(): Promise<ProductOption[]> {
-  const { data, error } = await supabase.rpc('price_board');
+  const { data, error } = await sharedPriceBoard();
   if (error) throw new Error('Could not load products.');
   return (data ?? []).map((r: any): ProductOption => ({
     name: r.product_name,
@@ -272,7 +277,9 @@ async function loadProductOptions(): Promise<ProductOption[]> {
 /** Category name per product name, for grouping a farmer's listings. */
 export const fetchProductCategories = () => cached('fetchProductCategories', loadProductCategories);
 async function loadProductCategories(): Promise<Record<string, string>> {
-  const { data, error } = await supabase.from('products').select('name, categories(name)');
+  const { data, error } = await shared('product_categories', 60_000, async () =>
+    supabase.from('products').select('name, categories(name)'),
+  );
   if (error) throw new Error('Could not load categories.');
   const out: Record<string, string> = {};
   for (const r of (data ?? []) as { name: string; categories?: { name?: string } | null }[])
