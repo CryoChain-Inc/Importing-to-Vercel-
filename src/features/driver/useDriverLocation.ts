@@ -13,8 +13,9 @@ const ALIAS: Record<string, string> = {
   dashboard: 'home',
   'trucks-live': 'truck',
   'trucks-past': 'truck',
-  'deliveries-live': 'delivery',
-  'deliveries-past': 'delivery',
+  delivery: 'stops',
+  'deliveries-live': 'stops',
+  'deliveries-past': 'stops',
 };
 
 const read = (tabs: string[]): DriverLocation => {
