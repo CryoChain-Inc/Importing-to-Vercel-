@@ -104,6 +104,10 @@ export function ProductForm({
   const [description, setDescription] = useState(product?.description ?? '');
   const [aliases, setAliases] = useState(product?.aliases ?? '');
   const [unit, setUnit] = useState(product?.unit ?? UNITS[0]);
+  const [weight, setWeight] = useState(
+    product?.unitWeightKg == null ? '' : String(product.unitWeightKg),
+  );
+  const weightOk = weight.trim() === '' || (Number(weight) > 0 && Number(weight) <= 1000);
   const [gallery, setGallery] = useState({
     saved: product?.imagePaths ?? [],
     picked: [] as PickedImage[],
@@ -122,7 +126,7 @@ export function ProductForm({
             <Button
               label={product ? 'Save product' : 'Add product'}
               loading={busy}
-              disabled={name.trim().length < 2 || !unit.trim() || !current}
+              disabled={name.trim().length < 2 || !unit.trim() || !current || !weightOk}
               onPress={() =>
                 run(async () => {
                   await saveProduct({
@@ -136,6 +140,7 @@ export function ProductForm({
                     description,
                     aliases,
                     unit,
+                    unitWeightKg: unit === 'kg' ? '' : weight,
                     gallery: {
                       keep: gallery.saved,
                       dropped: (product?.imagePaths ?? []).filter(
@@ -167,6 +172,18 @@ export function ProductForm({
             sizes (crate of 30, 50 kg bag) in the description, not here. It cannot change once the
             product has listings or orders.
           </Text>
+          {unit === 'kg' ? null : (
+            <Input
+              label={`Weight of one ${unit} (kg, optional)`}
+              value={weight}
+              onChangeText={setWeight}
+              keyboardType="decimal-pad"
+              maxLength={7}
+              placeholder="1.5"
+              hint="Only used to estimate how much of a truck an order fills. Empty uses the default for this unit (Logistics settings)."
+              error={weightOk ? undefined : 'Enter a weight above 0 and up to 1000 kg'}
+            />
+          )}
           <Input
             label="Other names"
             value={aliases}

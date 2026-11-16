@@ -8,16 +8,17 @@ import {
   type Logistics,
 } from '../../../services/ops.control.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { UnitWeights } from './UnitWeights';
 import { useAction } from './useAction';
 
 /** Each field with its unit, allowed range (same as the database checks) and what it changes. */
 const FIELDS: { key: keyof Logistics; label: string; min: number; max: number; help: string }[] = [
   {
     key: 'dispatchWaitMinutes',
-    label: 'Wait for the truck to fill (minutes)',
+    label: 'Wait for truck space (minutes)',
     min: 0,
     max: 1440,
-    help: 'A load leaves when the truck is full or the oldest order has waited this long. 0 sends every order at once.',
+    help: 'A free truck takes an order straight away. If every truck is full or none is online, the order waits this long for space, then you are asked to assign it by hand.',
   },
   {
     key: 'detourKm',
@@ -106,69 +107,75 @@ export function LogisticsSettings({ rev }: { rev: number }) {
   };
 
   return (
-    <Card style={s.form}>
-      <Text style={s.title}>Logistics</Text>
-      <Text style={s.meta}>
-        How orders are grouped onto trucks, routed and timed. Changes are recorded and apply within
-        5 minutes.
-      </Text>
-      {error ? <Banner text={error} /> : null}
-      <View style={s.row}>
-        <Input
-          label="Dispatch from (HH:MM)"
-          value={v.dispatchStart}
-          onChangeText={set('dispatchStart')}
-          maxLength={5}
-          style={s.half}
-          error={TIME.test(v.dispatchStart) ? undefined : 'Use 24-hour time, e.g. 06:00'}
-        />
-        <Input
-          label="Dispatch until (HH:MM)"
-          value={v.dispatchEnd}
-          onChangeText={set('dispatchEnd')}
-          maxLength={5}
-          style={s.half}
-          error={
-            !TIME.test(v.dispatchEnd)
-              ? 'Use 24-hour time, e.g. 17:00'
-              : !hoursOk
-                ? 'Must be after the start'
-                : undefined
-          }
-        />
-      </View>
-      <Text style={s.meta}>Trucks are only sent out between these times (Accra time).</Text>
-      {FIELDS.map((f) => (
-        <Input
-          key={f.key}
-          label={f.label}
-          value={v[f.key]}
-          onChangeText={set(f.key)}
-          keyboardType="decimal-pad"
-          hint={f.help}
-          error={ok(v[f.key], f.min, f.max) ? undefined : `Between ${f.min} and ${f.max}`}
-        />
-      ))}
-      {saved ? <Banner tone="info" text="Saved. The next planning run uses these values." /> : null}
-      <View style={s.row}>
-        {dirty ? <Button label="Discard" variant="ghost" onPress={() => setV(base)} /> : null}
-        <Button
-          label="Save logistics"
-          loading={busy}
-          disabled={!valid || !dirty}
-          onPress={() =>
-            run(async () => {
-              await saveLogistics(v);
-              setSaved(true);
-            })
-          }
-        />
-      </View>
-    </Card>
+    <View style={s.stack}>
+      <Card style={s.form}>
+        <Text style={s.title}>Logistics</Text>
+        <Text style={s.meta}>
+          How orders are grouped onto trucks, routed and timed. Changes are recorded and apply
+          within 5 minutes.
+        </Text>
+        {error ? <Banner text={error} /> : null}
+        <View style={s.row}>
+          <Input
+            label="Dispatch from (HH:MM)"
+            value={v.dispatchStart}
+            onChangeText={set('dispatchStart')}
+            maxLength={5}
+            style={s.half}
+            error={TIME.test(v.dispatchStart) ? undefined : 'Use 24-hour time, e.g. 06:00'}
+          />
+          <Input
+            label="Dispatch until (HH:MM)"
+            value={v.dispatchEnd}
+            onChangeText={set('dispatchEnd')}
+            maxLength={5}
+            style={s.half}
+            error={
+              !TIME.test(v.dispatchEnd)
+                ? 'Use 24-hour time, e.g. 17:00'
+                : !hoursOk
+                  ? 'Must be after the start'
+                  : undefined
+            }
+          />
+        </View>
+        <Text style={s.meta}>Trucks are only sent out between these times (Accra time).</Text>
+        {FIELDS.map((f) => (
+          <Input
+            key={f.key}
+            label={f.label}
+            value={v[f.key]}
+            onChangeText={set(f.key)}
+            keyboardType="decimal-pad"
+            hint={f.help}
+            error={ok(v[f.key], f.min, f.max) ? undefined : `Between ${f.min} and ${f.max}`}
+          />
+        ))}
+        {saved ? (
+          <Banner tone="info" text="Saved. The next planning run uses these values." />
+        ) : null}
+        <View style={s.row}>
+          {dirty ? <Button label="Discard" variant="ghost" onPress={() => setV(base)} /> : null}
+          <Button
+            label="Save logistics"
+            loading={busy}
+            disabled={!valid || !dirty}
+            onPress={() =>
+              run(async () => {
+                await saveLogistics(v);
+                setSaved(true);
+              })
+            }
+          />
+        </View>
+      </Card>
+      <UnitWeights rev={rev} />
+    </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
+  stack: { gap: 16 },
   form: { gap: 12 },
   row: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
   half: { flex: 1, minWidth: 140 },

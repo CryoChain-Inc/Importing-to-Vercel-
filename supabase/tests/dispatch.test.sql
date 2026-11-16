@@ -1,7 +1,7 @@
--- dispatch: merged pickup lines, truck capacity, the dispatch window, mid-trip additions and arrival times.
+-- dispatch: merged pickup lines, kilo-based truck capacity, immediate dispatch, waiting for space, mid-trip additions and arrival times.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(25);
 
 -- Dispatch hours cover the whole day so the test does not depend on when it runs.
 update public.ops_config set dispatch_start = '00:00', dispatch_end = '23:59:59', dispatch_wait_minutes = 120, detour_km = 25;
@@ -54,25 +54,20 @@ end $$;
 create function pg_temp.driver_of(p_order uuid) returns uuid language sql as
   $$ select max(driver_id::text)::uuid from public.delivery_stops where order_id = p_order $$;
 
--- ── One line for two listings; the order waits inside the window ────────────
+-- ── One line for two listings; a free truck takes the order at once ─────────
 select pg_temp.pay('00000000-0000-0000-0000-0000000d0e01', '00000000-0000-0000-0000-0000000d0a01', 100);
 select is((select count(*) from public.order_allocations where order_id = '00000000-0000-0000-0000-0000000d0e01'), 2::bigint, 'the order draws on both listings');
 select is((select count(*) from public.delivery_stops where order_id = '00000000-0000-0000-0000-0000000d0e01' and kind = 'pickup'), 1::bigint, 'two listings at one farm are one pickup line');
 select matches((select label from public.delivery_stops where order_id = '00000000-0000-0000-0000-0000000d0e01' and kind = 'pickup'), '^Pick up 100(\.00)? kg Dispatch Tomato', 'the line carries the combined quantity');
-select is(pg_temp.driver_of('00000000-0000-0000-0000-0000000d0e01'), null, 'a lone small order waits for the truck to fill');
-select is((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-0000000d0f01' and title = 'Truck on the way'), 0::bigint, 'the farmer is not given a time before dispatch');
+select is(pg_temp.driver_of('00000000-0000-0000-0000-0000000d0e01'), '00000000-0000-0000-0000-0000000d0d01'::uuid, 'a small order does not wait for the truck to fill: the online truck takes it');
 
--- ── After the window it leaves, with a route and arrival times ──────────────
-update public.delivery_stops set created_at = now() - interval '3 hours' where order_id = '00000000-0000-0000-0000-0000000d0e01';
-select private.plan_routes();
-select is(pg_temp.driver_of('00000000-0000-0000-0000-0000000d0e01'), '00000000-0000-0000-0000-0000000d0d01'::uuid, 'after the window the order goes to the truck that is online');
+-- ── It leaves with a route and arrival times ───────────────────────────────
 select results_eq($$select kind, seq, eta is not null from public.delivery_stops where order_id = '00000000-0000-0000-0000-0000000d0e01' order by seq$$,
   $$values ('pickup', 1, true), ('dropoff', 2, true)$$, 'pickup first, drop-off second, both with an arrival time');
 select is((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-0000000d0f01' and title = 'Truck on the way'), 1::bigint, 'the farmer is told once when the truck is dispatched');
 select is((select count(*) from public.order_allocations where order_id = '00000000-0000-0000-0000-0000000d0e01' and pickup_at is not null), 2::bigint, 'both allocations carry the pickup time');
 
 -- ── Capacity and mid-trip additions ─────────────────────────────────────────
-update public.ops_config set dispatch_wait_minutes = 0;
 insert into public.driver_locations (driver_id, lat, lng) values ('00000000-0000-0000-0000-0000000d0d02', 5.61, -0.21);
 select pg_temp.pay('00000000-0000-0000-0000-0000000d0e02', '00000000-0000-0000-0000-0000000d0a02', 700);
 select is(pg_temp.driver_of('00000000-0000-0000-0000-0000000d0e02'), '00000000-0000-0000-0000-0000000d0d01'::uuid, 'a nearby order that fits joins the truck already on the road (100 + 700 of 1000)');
@@ -86,6 +81,25 @@ select is(pg_temp.driver_of('00000000-0000-0000-0000-0000000d0e05'), null, 'an o
 
 select ok((select bool_and(ok) from (select eta >= lag(eta, 1, eta) over (order by seq) as ok from public.delivery_stops
             where driver_id = '00000000-0000-0000-0000-0000000d0d01' and state = 'pending') x), 'arrival times never go backwards along the route');
+
+-- ── Units: a piece or a bunch is not a kilo ─────────────────────────────────
+insert into public.products (id, name, unit, active, category_id) values
+  ('00000000-0000-0000-0000-0000000d0a04', 'Dispatch Cabbage', 'piece', true, '00000000-0000-0000-0000-0000000d0c01');
+select is(private.unit_kg('00000000-0000-0000-0000-0000000d0a01'), 1::numeric, 'a kilo weighs one kilo');
+select is(private.unit_kg('00000000-0000-0000-0000-0000000d0a04'), (select kg from public.unit_weights where unit = 'piece'), 'a piece uses the default weight for pieces');
+update public.products set unit_weight_kg = 2.5 where id = '00000000-0000-0000-0000-0000000d0a04';
+select is(private.unit_kg('00000000-0000-0000-0000-0000000d0a04'), 2.5::numeric, 'a product weight overrides the unit default');
+select is(private.order_load_kg('00000000-0000-0000-0000-0000000d0e02'), 700::numeric, 'an order in kilos loads its quantity');
+select is(private.unit_kg('00000000-0000-0000-0000-0000000d0e99'), null, 'an unknown product has no weight');
+
+-- ── No truck has space: the order waits, then ops are asked; a truck freeing up takes it at once ─
+update public.delivery_stops set created_at = now() - interval '3 hours' where order_id = '00000000-0000-0000-0000-0000000d0e05';
+select private.plan_routes();
+select is((select count(*) from public.ops_decisions where order_id = '00000000-0000-0000-0000-0000000d0e05' and kind = 'no_driver' and status = 'open'), 1::bigint, 'after the wait with no truck free, ops are asked to assign it');
+update public.delivery_stops set state = 'done' where driver_id = '00000000-0000-0000-0000-0000000d0d02' and state = 'pending';
+select private.plan_routes();
+select is(pg_temp.driver_of('00000000-0000-0000-0000-0000000d0e05'), '00000000-0000-0000-0000-0000000d0d02'::uuid, 'as soon as a truck is free the waiting order goes to it');
+select is((select count(*) from public.ops_decisions where order_id = '00000000-0000-0000-0000-0000000d0e05' and kind = 'no_driver' and status = 'open'), 0::bigint, 'and the decision closes itself');
 
 -- ── Collecting a merged line ────────────────────────────────────────────────
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000d0d01"}', true);

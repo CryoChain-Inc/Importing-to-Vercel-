@@ -90,6 +90,26 @@ export async function fetchActivity(orderId: string): Promise<Activity[]> {
   return (data ?? []) as Activity[];
 }
 
+/** Estimated kilos in one unit, as text for editing. Empty means "not set" (a truck load counts it as 1 kg). */
+export type UnitWeights = Record<string, string>;
+
+export async function fetchUnitWeights(): Promise<UnitWeights> {
+  const { data, error } = await supabase.from('unit_weights').select('unit, kg');
+  if (error) throw new Error('Could not load the unit weights.');
+  return Object.fromEntries((data ?? []).map((r) => [r.unit as string, String(Number(r.kg))]));
+}
+
+export async function saveUnitWeights(units: readonly string[], v: UnitWeights): Promise<void> {
+  for (const unit of units) {
+    const raw = (v[unit] ?? '').trim();
+    const res = raw
+      ? await supabase.from('unit_weights').upsert({ unit, kg: Number(raw) })
+      : await supabase.from('unit_weights').delete().eq('unit', unit);
+    if (res.error)
+      throw new Error('Could not save the unit weights. Each must be above 0 and at most 1000.');
+  }
+}
+
 export interface Logistics {
   dispatchWaitMinutes: string;
   dispatchStart: string;

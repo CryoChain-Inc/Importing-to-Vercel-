@@ -52,6 +52,8 @@ export interface Product {
   aliases: string;
   /** The one unit this product is listed, ordered, collected and paid in. */
   unit: string;
+  /** Estimated kilos in one unit, for truck capacity only. Null uses the unit's default. */
+  unitWeightKg: number | null;
   /** Base price per unit; buyer and farmer prices are derived from it. Null until ops set one (not for sale until then). */
   price: number | null;
   prevPrice: number | null;
@@ -225,7 +227,7 @@ export async function fetchProductsPage(
   let query = supabase
     .from('products')
     .select(
-      'id, name, category_id, image_path, image_paths, description, aliases, unit, active, categories(name), product_prices(price, prev_price)',
+      'id, name, category_id, image_path, image_paths, description, aliases, unit, unit_weight_kg, active, categories(name), product_prices(price, prev_price)',
       { count: 'exact' },
     );
   if (q.trim()) {
@@ -250,6 +252,7 @@ export async function fetchProductsPage(
       aliases: r.aliases ?? '',
       active: r.active,
       unit: r.unit,
+      unitWeightKg: r.unit_weight_kg == null ? null : Number(r.unit_weight_kg),
       price: one(r.product_prices)?.price == null ? null : Number(one(r.product_prices).price),
       prevPrice:
         one(r.product_prices)?.prev_price == null ? null : Number(one(r.product_prices).prev_price),
@@ -323,7 +326,14 @@ export interface GalleryInput {
 }
 
 export async function saveProduct(
-  p: ProductInput & { description: string; aliases: string; unit: string; gallery: GalleryInput },
+  p: ProductInput & {
+    description: string;
+    aliases: string;
+    unit: string;
+    /** Kilos in one unit; empty uses the unit's default. */
+    unitWeightKg: string;
+    gallery: GalleryInput;
+  },
 ) {
   const description = p.description.trim();
   // Tidy the list so search sees clean words: trimmed, no empty entries.
@@ -342,6 +352,7 @@ export async function saveProduct(
       description: description || null,
       aliases,
       unit: p.unit.trim(),
+      unit_weight_kg: p.unitWeightKg.trim() === '' ? null : Number(p.unitWeightKg),
     },
     p.image,
     p.oldImagePath,
