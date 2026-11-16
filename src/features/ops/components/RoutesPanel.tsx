@@ -19,6 +19,83 @@ const noSignal = (d: DriverRoute) =>
   d.stops.some((x) => x.state === 'pending') &&
   (!d.seenAt || Date.now() - new Date(d.seenAt).getTime() > SIGNAL_MS);
 const ALL = 'All trucks';
+const clock = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' }) : '';
+const sameDay = (iso: string | null) =>
+  !iso || new Date(iso).toDateString() === new Date().toDateString();
+
+type RouteStop = DriverRoute['stops'][number];
+interface Place {
+  key: string;
+  kind: RouteStop['kind'];
+  label: string;
+  seq: number | null;
+  eta: string | null;
+  done: boolean;
+  orders: string[];
+  readings: string[];
+}
+/** One physical stop: lines of the same farm or buyer that sit next to each other in the route. */
+const places = (stops: RouteStop[]): Place[] =>
+  [...stops]
+    .sort((a, b) => (a.seq ?? 999) - (b.seq ?? 999))
+    .reduce<Place[]>((acc, x) => {
+      const p = acc[acc.length - 1];
+      if (p && p.kind === x.kind && p.label === x.label) {
+        p.orders.push(x.order);
+        p.done = p.done && x.state === 'done';
+        if (x.reading) p.readings.push(x.reading);
+        return acc;
+      }
+      acc.push({
+        key: x.id,
+        kind: x.kind,
+        label: x.label,
+        seq: x.seq,
+        eta: x.eta,
+        done: x.state === 'done',
+        orders: [x.order],
+        readings: x.reading ? [x.reading] : [],
+      });
+      return acc;
+    }, []);
+
+function Timeline({ items }: { items: Place[] }) {
+  const s = useThemedStyles(styles);
+  return (
+    <View>
+      {items.map((p, i) => (
+        <View key={p.key} style={s.railRow}>
+          <View style={s.rail}>
+            <View style={[s.node, p.kind === 'dropoff' ? s.nodeDrop : s.nodePick, p.done ? s.nodeDone : null]}>
+              <Text style={s.nodeN}>{p.done ? '✓' : (p.seq ?? i + 1)}</Text>
+            </View>
+            {i < items.length - 1 ? <View style={[s.rule, p.done ? s.ruleDone : null]} /> : null}
+          </View>
+          <View style={s.place}>
+            <View style={s.row}>
+              <Text style={[s.stop, p.done && s.done]} numberOfLines={2}>
+                {p.label}
+              </Text>
+              <Badge
+                label={p.done ? 'Done' : p.kind === 'pickup' ? 'Pickup' : 'Delivery'}
+                tone={p.done ? 'success' : 'neutral'}
+              />
+            </View>
+            <Text style={s.meta}>
+              {[`Order ${p.orders.join(', ')}`, !p.done && p.eta ? `~${clock(p.eta)}` : ''].filter(Boolean).join(' · ')}
+            </Text>
+            {p.readings.map((r, j) => (
+              <Text key={j} style={s.meta}>
+                {r}
+              </Text>
+            ))}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 /** Each driver's last reported position and their route, built and re-sequenced by the system as orders change. */
 export function RoutesPanel({
@@ -40,6 +117,7 @@ export function RoutesPanel({
   // The driver whose stops are being reordered, with the order being built.
   const [editing, setEditing] = useState<{ driver: string; ids: string[] } | null>(null);
   const [reason, setReason] = useState('');
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const move = (i: number, by: number) =>
     setEditing((e) => {
       if (!e) return e;
@@ -128,6 +206,10 @@ export function RoutesPanel({
       />
       {drivers.map((d) => {
         const todo = d.stops.filter((x) => x.state === 'pending');
+        // A day's route is what is pending plus what was finished today; older stops are history.
+        const today = d.stops.filter((x) => x.state === 'pending' || sameDay(x.doneAt));
+        const earlier = d.stops.filter((x) => !today.includes(x));
+        const todayDone = today.filter((x) => x.state === 'done').length;
         return (
           <Card key={d.id} style={s.item}>
             <View style={s.top}>
@@ -248,24 +330,36 @@ export function RoutesPanel({
             {d.stops.length === 0 ? (
               <Text style={s.meta}>No stops. New orders are assigned automatically.</Text>
             ) : (
-              d.stops.map((x) => (
-                <View key={x.id} style={s.row}>
-                  <View style={s.grow}>
-                    <Text style={[s.stop, x.state === 'done' && s.done]} numberOfLines={2}>
-                      {x.seq ? `${x.seq}. ` : ''}
-                      {x.label} · {x.order}
-                      {x.state === 'pending' && x.eta
-                        ? ` · ~${new Date(x.eta).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}`
-                        : ''}
-                    </Text>
-                    {x.reading ? <Text style={s.meta}>{x.reading}</Text> : null}
-                  </View>
-                  <Badge
-                    label={x.state === 'done' ? 'Done' : x.kind}
-                    tone={x.state === 'done' ? 'success' : 'neutral'}
-                  />
+              <>
+                <View style={s.bar}>
+                  <View style={[s.barFill, { width: `${(todayDone / Math.max(today.length, 1)) * 100}%` }]} />
                 </View>
-              ))
+                <Text style={s.meta}>
+                  {`${todayDone} of ${today.length} stops done today · ${new Set(today.map((x) => x.order)).size} orders`}
+                </Text>
+                <Timeline items={places(today)} />
+                {earlier.length > 0 ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      label={
+                        open.has(d.id)
+                          ? 'Hide earlier stops'
+                          : `Show earlier stops · ${earlier.length}`
+                      }
+                      onPress={() =>
+                        setOpen((o) => {
+                          const n = new Set(o);
+                          if (!n.delete(d.id)) n.add(d.id);
+                          return n;
+                        })
+                      }
+                    />
+                    {open.has(d.id) ? <Timeline items={places(earlier)} /> : null}
+                  </>
+                ) : null}
+              </>
             )}
           </Card>
         );
@@ -295,5 +389,24 @@ const styles = (c: Record<ColorToken, string>) => ({
   done: { color: c.inkMuted, textDecorationLine: 'line-through' as const },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   edit: { gap: 8 },
+  bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' as const },
+  barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand600 },
+  railRow: { flexDirection: 'row' as const, gap: 12 },
+  rail: { width: 28, alignItems: 'center' as const },
+  node: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2,
+  },
+  nodePick: { backgroundColor: c.brandTint, borderColor: c.brand600 },
+  nodeDrop: { backgroundColor: c.harvestTint, borderColor: c.harvestFill },
+  nodeDone: { backgroundColor: c.brand600, borderColor: c.brand600 },
+  nodeN: { fontFamily: fonts.sansBold, fontSize: 12, color: c.ink },
+  rule: { flex: 1, width: 2, marginVertical: 3, backgroundColor: c.borderSubtle },
+  ruleDone: { backgroundColor: c.brand600 },
+  place: { flex: 1, gap: 2, paddingBottom: 14 },
   actionsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
 });

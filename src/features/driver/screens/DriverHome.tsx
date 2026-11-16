@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, type IconName } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
@@ -22,6 +22,7 @@ import {
   StopList,
   StopPage,
   StopRow,
+  RouteHeader,
   type FinishedStop,
 } from '../components/StopPages';
 import { NextCard, SectionLabel } from '../components/bits';
@@ -158,6 +159,18 @@ export function DriverHome({ account }: { account: Account }) {
   const orders = book?.orders ?? [];
   const { todo, done } = useMemo(() => buildStops(orders), [book]); // eslint-disable-line react-hooks/exhaustive-deps -- orders derives from book
   const liveDone = done.filter((x) => x.key.endsWith(':live'));
+  // Stops that show up after the route was first loaded are orders added later in the day.
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (book == null) return;
+    const keys = [...todo, ...liveDone].map((x) => x.key);
+    if (seen.current == null) seen.current = new Set(keys);
+    else {
+      const added = keys.filter((k) => !seen.current!.has(k));
+      if (added.length) setFresh((f) => new Set([...f, ...added]));
+    }
+  }, [book]); // eslint-disable-line react-hooks/exhaustive-deps -- keys derive from book
   const road = useDrivePath(
     position,
     todo.filter((x) => Number.isFinite(x.lat) && !(x.lat === 0 && x.lng === 0)),
@@ -218,6 +231,9 @@ export function DriverHome({ account }: { account: Account }) {
             path={road}
             height={wide ? 360 : 280}
           />
+          {todo.length + liveDone.length > 0 ? (
+            <RouteHeader todo={todo} doneLive={liveDone} fresh={todo.filter((x) => fresh.has(x.key)).length} />
+          ) : null}
           {todo[0] ? (
             <NextStop
               stop={todo[0]}
@@ -241,6 +257,8 @@ export function DriverHome({ account }: { account: Account }) {
                   key={x.key}
                   n={liveDone.length + i + 2}
                   stop={x}
+                  fresh={fresh.has(x.key)}
+                  last={i === Math.min(todo.length, 4) - 2}
                   onPress={() => openStop(x.key)}
                 />
               ))}
@@ -298,7 +316,7 @@ export function DriverHome({ account }: { account: Account }) {
             <Button label="Back to stops" variant="outline" onPress={backStops} />
           </View>
         ) : (
-          <StopList todo={todo} done={done} onOpen={openStop} />
+          <StopList todo={todo} done={done} doneLive={liveDone} fresh={fresh} onOpen={openStop} />
         )
       ) : null}
 

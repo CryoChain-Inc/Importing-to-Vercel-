@@ -18,6 +18,10 @@ export interface StopLine {
   recordedKg: number | null;
   pickup: PickupStop | null;
   dropoff: DropoffStop | null;
+  /** What this line covers: the one produce for a pickup, every produce of the order for a drop-off. */
+  items: { product: string; qty: number; unit: string }[];
+  /** Drop-off only: some produce of this order is still at the farm. */
+  blocked: boolean;
 }
 
 /** One place the driver stops at. Lines for the same farmer, or the same buyer and address, share it. */
@@ -101,6 +105,8 @@ export function buildStops(orders: DeliveryOrder[]): { todo: Stop[]; done: Stop[
           recordedKg: p.recordedKg,
           pickup: p,
           dropoff: null,
+          items: [{ product: p.product, qty: p.expectedKg, unit: p.expectedUnit }],
+          blocked: false,
         },
         p.seq,
       );
@@ -139,6 +145,12 @@ export function buildStops(orders: DeliveryOrder[]): { todo: Stop[]; done: Stop[
           recordedKg: null,
           pickup: null,
           dropoff: d,
+          items: o.pickups.map((p) => ({
+            product: p.product,
+            qty: p.recordedKg ?? p.expectedKg,
+            unit: p.expectedUnit,
+          })),
+          blocked: o.pickups.some((p) => p.state === 'pending'),
         },
         d.seq,
       );

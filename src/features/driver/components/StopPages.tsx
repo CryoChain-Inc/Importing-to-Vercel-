@@ -1,21 +1,11 @@
-import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { Animated, Image, Linking, Platform, Pressable, Text, View } from 'react-native';
-import { Badge, Button, Card, Icon, Input } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
-import type { PickedImage } from '../../../services/catalogueImage';
-import {
-  recordHandover,
-  uploadHandoverMedia,
-  type HandoverMediaKind,
-} from '../../../services/driver.deliveries.service';
-import { completeStop } from '../../../services/driver.route.service';
-import { posthog } from '../../../config/posthog';
+import { Animated, Platform, Pressable, Text, View } from 'react-native';
+import { Badge, Button, Card, Icon } from '../../../components/common';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { Empty } from '../../ops/components/OpsBits';
 import { legText, type DrivePath } from '../drivePath';
-import { NOTE_MAX, parseReading } from '../reading';
 import { totalText, type Stop, type StopLine } from '../stops';
+import { MediaPreview, StopFlow, type FinishedStop } from './HandoverLines';
 import {
   BackButton,
   openMaps,
@@ -23,95 +13,143 @@ import {
   placed,
   QuickActions,
   SectionLabel,
-  StepDot,
 } from './bits';
+
+export type { FinishedStop };
 
 const clock = (iso: string | null) =>
   iso
     ? `around ${new Date(iso).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}`
     : '';
 
-const lineText = (l: StopLine) =>
-  l.pickup ? `${l.label} · ${l.qty} ${l.unit}` : `Order ${l.orderCode}`;
-
-/** What the driver is about to do, in the order they do it. */
-const STEPS = {
-  pickup: [
-    'Drive to the farm. Call ahead if you cannot find it.',
-    'Weigh each item and enter what you loaded.',
-    'Check the temperature, then take a photo.',
-    'Confirm to get your next stop.',
-  ],
-  dropoff: [
-    'Hand over every order listed here.',
-    'Check the temperature, then take a photo.',
-    'Confirm the delivery to get your next stop.',
-  ],
-};
+/** What a stop holds, one short line each: produce to collect, or each order with what is in it. */
+const holds = (l: StopLine) =>
+  l.pickup
+    ? `${l.label} · ${l.qty} ${l.unit}`
+    : `${l.orderCode} · ${l.items.map((i) => i.product).join(', ')}`;
 
 const kindLabel = (s: Stop) => (s.kind === 'pickup' ? 'Pickup' : 'Delivery');
 
-/** A stop in a list: number, who, what, and when. The next one is marked. */
+/** A stop on the route rail: number, who, what it holds, and when. The next one is marked. */
 export function StopRow({
   n,
   stop,
   now,
+  fresh,
+  last,
   onPress,
 }: {
   n: number;
   stop: Stop;
   now?: boolean;
+  fresh?: boolean;
+  last?: boolean;
   onPress: () => void;
 }) {
   const s = useThemedStyles(styles);
+  const { colors } = useTheme();
   const done = stop.state === 'done';
-  const orders = new Set(stop.lines.map((l) => l.orderId)).size;
-  const what =
-    stop.kind === 'pickup'
-      ? stop.lines.map((l) => l.label).join(', ')
-      : `${orders} order${orders === 1 ? '' : 's'}`;
+  const pickup = stop.kind === 'pickup';
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${kindLabel(stop)} ${stop.name}`}
-      style={({ pressed }) => [s.row, now ? s.rowNow : null, pressed ? s.pressed : null]}
-    >
-      <StepDot n={n} done={done} now={now} />
-      <View style={s.rowText}>
+    <View style={s.railRow}>
+      <View style={s.rail}>
+        <View style={[s.node, pickup ? s.nodePick : s.nodeDrop, done ? s.nodeDone : null]}>
+          {done ? (
+            <Icon name="check" size={14} color={colors.onBrand} strokeWidth={3} />
+          ) : (
+            <Text style={[s.nodeN, !pickup ? s.nodeNDrop : null]}>{n}</Text>
+          )}
+        </View>
+        {last ? null : <View style={[s.line, done ? s.lineDone : null]} />}
+      </View>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${kindLabel(stop)} ${stop.name}`}
+        style={({ pressed }) => [s.stopCard, now ? s.rowNow : null, pressed ? s.pressed : null]}
+      >
+        <View style={s.stopTop}>
+          <Text style={s.kind}>{kindLabel(stop)}</Text>
+          {fresh ? <Badge label="New" tone="warning" /> : null}
+          {done ? <Badge label="Done" tone="success" /> : now ? <Badge label="Next" tone="info" /> : null}
+          {!done && stop.eta ? <Text style={s.when}>{clock(stop.eta).replace('around ', '')}</Text> : null}
+        </View>
         <Text style={[s.rowTitle, done ? s.muted : null]} numberOfLines={1}>
           {stop.name}
-        </Text>
-        <Text style={s.meta} numberOfLines={1}>
-          {[what, done ? '' : clock(stop.eta)].filter(Boolean).join(' · ')}
         </Text>
         {stop.place ? (
           <Text style={s.meta} numberOfLines={1}>
             {stop.place}
           </Text>
         ) : null}
+        <View style={s.holds}>
+          {stop.lines.slice(0, 4).map((l) => (
+            <Text key={l.stopId} style={[s.holdLine, done ? s.muted : null]} numberOfLines={1}>
+              {holds(l)}
+            </Text>
+          ))}
+          {stop.lines.length > 4 ? (
+            <Text style={s.meta}>{`+ ${stop.lines.length - 4} more`}</Text>
+          ) : null}
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Today's route at a glance: how far along it is and what is on it. */
+export function RouteHeader({
+  todo,
+  doneLive,
+  fresh,
+}: {
+  todo: Stop[];
+  doneLive: Stop[];
+  fresh: number;
+}) {
+  const s = useThemedStyles(styles);
+  const all = [...doneLive, ...todo];
+  const orders = new Set(all.flatMap((x) => x.lines.map((l) => l.orderId))).size;
+  const load = totalText(
+    all.filter((x) => x.kind === 'pickup').flatMap((x) => x.lines.map((l) => ({ qty: l.qty, unit: l.unit }))),
+  );
+  const pct = all.length ? (doneLive.length / all.length) * 100 : 0;
+  return (
+    <Card style={s.route}>
+      <View style={s.stopTop}>
+        <Text style={s.routeTitle}>Today&apos;s route</Text>
+        {fresh > 0 ? <Badge label={`${fresh} new`} tone="warning" /> : null}
       </View>
-      <Badge
-        label={done ? 'Done' : now ? 'Next' : kindLabel(stop)}
-        tone={done ? 'success' : now ? 'info' : 'neutral'}
-      />
-    </Pressable>
+      <Text style={s.routeBig}>{`${doneLive.length} of ${all.length} stops done`}</Text>
+      <View style={s.bar}>
+        <View style={[s.barFill, { width: `${pct}%` }]} />
+      </View>
+      <Text style={s.meta}>
+        {[`${orders} order${orders === 1 ? '' : 's'}`, load ? `${load} to collect` : ''].filter(Boolean).join(' · ')}
+      </Text>
+    </Card>
   );
 }
 
 export function StopList({
   todo,
   done,
+  doneLive,
+  fresh,
   onOpen,
 }: {
   todo: Stop[];
   done: Stop[];
+  doneLive: Stop[];
+  fresh: Set<string>;
   onOpen: (key: string) => void;
 }) {
   const s = useThemedStyles(styles);
+  const earlier = done.filter((x) => !doneLive.includes(x));
+  const route = [...doneLive, ...todo];
   return (
     <View style={s.list}>
-      {todo.length === 0 ? (
+      {route.length === 0 ? (
         <Empty
           icon="package"
           title="No stops right now"
@@ -119,17 +157,27 @@ export function StopList({
         />
       ) : (
         <>
-          <SectionLabel text={`To do · ${todo.length}`} />
-          {todo.map((x, i) => (
-            <StopRow key={x.key} n={i + 1} stop={x} now={i === 0} onPress={() => onOpen(x.key)} />
-          ))}
+          <RouteHeader todo={todo} doneLive={doneLive} fresh={todo.filter((x) => fresh.has(x.key)).length} />
+          <View>
+            {route.map((x, i) => (
+              <StopRow
+                key={x.key}
+                n={i + 1}
+                stop={x}
+                now={x === todo[0]}
+                fresh={fresh.has(x.key)}
+                last={i === route.length - 1}
+                onPress={() => onOpen(x.key)}
+              />
+            ))}
+          </View>
         </>
       )}
-      {done.length > 0 ? (
+      {earlier.length > 0 ? (
         <>
-          <SectionLabel text={`Completed · ${done.length}`} />
-          {done.map((x, i) => (
-            <StopRow key={x.key} n={i + 1} stop={x} onPress={() => onOpen(x.key)} />
+          <SectionLabel text={`Earlier · ${earlier.length}`} />
+          {earlier.map((x, i) => (
+            <StopRow key={x.key} n={i + 1} stop={x} last onPress={() => onOpen(x.key)} />
           ))}
         </>
       ) : null}
@@ -155,6 +203,7 @@ export function NextStop({
   const { colors } = useTheme();
   const leg = legText(path?.legs[0]);
   const shown = stop.lines.slice(0, 4);
+  const orderCount = new Set(stop.lines.map((l) => l.orderId)).size;
   return (
     <Card style={s.next}>
       <View style={s.nextTop}>
@@ -162,7 +211,7 @@ export function NextStop({
           <Text style={s.nextNum}>{index}</Text>
         </View>
         <View style={s.rowText}>
-          <Text style={s.eyebrow}>{`${kindLabel(stop)} · stop ${index} of ${total}`}</Text>
+          <Text style={s.eyebrow}>{`${kindLabel(stop)} · stop ${index} of ${total}${orderCount > 1 ? ` · ${orderCount} orders` : ''}`}</Text>
           <Text style={s.nextTitle} numberOfLines={2}>
             {stop.name}
           </Text>
@@ -187,7 +236,7 @@ export function NextStop({
       <View style={s.items}>
         {shown.map((l) => (
           <Text key={l.stopId} style={s.item}>
-            {lineText(l)}
+            {holds(l)}
           </Text>
         ))}
         {stop.lines.length > shown.length ? (
@@ -223,22 +272,8 @@ export function NextStop({
           style={s.callBtn}
         />
       ) : null}
-      <View style={s.steps}>
-        <Text style={s.stepsTitle}>What to do here</Text>
-        {STEPS[stop.kind].map((t, i) => (
-          <View key={t} style={s.step}>
-            <Text style={s.stepN}>{i + 1}</Text>
-            <Text style={s.stepText}>{t}</Text>
-          </View>
-        ))}
-      </View>
     </Card>
   );
-}
-
-export interface FinishedStop {
-  stop: Stop;
-  next: Stop | null;
 }
 
 /** One screen for a stop: who and where, what is on it, and the form that completes it. */
@@ -299,25 +334,10 @@ export function StopPage({
       {done ? (
         <StopSummary stop={stop} onBack={onBack} backLabel={backLabel} />
       ) : (
-        <HandoverForm
-          stop={stop}
-          next={next}
-          range={range}
-          onChange={onChange}
-          onFinished={onFinished}
-        />
+        <StopFlow stop={stop} next={next} range={range} onChange={onChange} onFinished={onFinished} />
       )}
     </View>
   );
-}
-
-function MediaPreview({ uri, kind }: { uri: string; kind: HandoverMediaKind }) {
-  const s = useThemedStyles(styles);
-  if (kind === 'video')
-    return (
-      <Button size="sm" variant="outline" label="Open video" onPress={() => Linking.openURL(uri)} />
-    );
-  return <Image source={{ uri }} style={s.thumb} accessibilityLabel="Photo taken at this stop" />;
 }
 
 function StopSummary({
@@ -341,7 +361,7 @@ function StopSummary({
         <Text key={l.stopId} style={s.item}>
           {l.pickup
             ? `${l.label} · ${l.recordedKg ?? l.qty} ${l.unit} collected`
-            : `Order ${l.orderCode} delivered`}
+            : `Order ${l.orderCode} delivered · ${l.items.map((i) => i.product).join(', ')}`}
         </Text>
       ))}
       <Text style={s.meta}>
@@ -352,212 +372,6 @@ function StopSummary({
       {stop.note ? <Text style={s.meta}>{stop.note}</Text> : null}
       {stop.mediaUrl ? <MediaPreview uri={stop.mediaUrl} kind={stop.mediaKind ?? 'photo'} /> : null}
       <Button label={backLabel} variant="tonal" onPress={onBack} />
-    </Card>
-  );
-}
-
-/**
- * Records every line at the stop in one go: a quantity per produce line, one temperature, one photo or video.
- * The photo and temperature are shared, so a farm with three crops takes one photo, not three.
- */
-function HandoverForm({
-  stop,
-  next,
-  range,
-  onChange,
-  onFinished,
-}: {
-  stop: Stop;
-  next: Stop | null;
-  range: { min: number | null; max: number | null };
-  onChange: () => Promise<void>;
-  onFinished: (f: FinishedStop) => void;
-}) {
-  const s = useThemedStyles(styles);
-  const pending = stop.lines.filter((l) => l.state === 'pending');
-  const first = pending[0];
-  const saved = pending.find((l) => l.pickup?.mediaPath ?? l.dropoff?.mediaPath);
-  const savedPath = saved?.pickup?.mediaPath ?? saved?.dropoff?.mediaPath ?? null;
-  const savedKind = saved?.pickup?.mediaKind ?? saved?.dropoff?.mediaKind ?? null;
-  const savedUrl = saved?.pickup?.mediaUrl ?? saved?.dropoff?.mediaUrl ?? null;
-
-  const [kgs, setKgs] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      pending.map((l) => [
-        l.stopId,
-        l.pickup?.recordedKg == null ? '' : String(l.pickup.recordedKg),
-      ]),
-    ),
-  );
-  const [temp, setTemp] = useState(stop.temperatureC == null ? '' : String(stop.temperatureC));
-  const [note, setNote] = useState(stop.note);
-  const [picked, setPicked] = useState<PickedImage | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const lo = range.min ?? -100;
-  const hi = range.max ?? 100;
-  const parsed = pending.map((l) => ({
-    line: l,
-    r: parseReading({
-      kind: stop.kind,
-      kg: kgs[l.stopId] ?? '',
-      temp,
-      note,
-      min: range.min,
-      max: range.max,
-      reservedKg: l.pickup ? (l.qty ?? undefined) : undefined,
-    }),
-  }));
-  const bad = parsed.find((p) => !p.r.ok);
-  const hasMedia = Boolean(picked || savedPath);
-  const blocked = stop.kind === 'dropoff' && stop.waiting > 0;
-  const ready = !bad && hasMedia && !blocked && pending.length > 0;
-
-  const choose = async (from: 'camera' | 'library') => {
-    if (from === 'camera') {
-      const { granted } = await ImagePicker.requestCameraPermissionsAsync();
-      if (!granted) return;
-    }
-    const opts = {
-      mediaTypes: ['images', 'videos'] as ImagePicker.MediaType[],
-      videoMaxDuration: 30,
-      quality: 0.6,
-    };
-    const r =
-      from === 'camera'
-        ? await ImagePicker.launchCameraAsync(opts)
-        : await ImagePicker.launchImageLibraryAsync(opts);
-    if (!r.canceled && r.assets[0])
-      setPicked({
-        uri: r.assets[0].uri,
-        mimeType: r.assets[0].mimeType,
-        assetId: r.assets[0].assetId,
-      });
-  };
-
-  const submit = async () => {
-    if (!ready || !first) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const media = picked
-        ? await uploadHandoverMedia(first.stopId, picked)
-        : { path: savedPath as string, kind: (savedKind ?? 'photo') as HandoverMediaKind };
-      for (const p of parsed) {
-        if (!p.r.ok) continue;
-        await recordHandover(p.line.stopId, {
-          ...p.r.value,
-          mediaPath: media.path,
-          mediaKind: media.kind,
-        });
-        await completeStop(p.line.stopId);
-      }
-      posthog?.capture(stop.kind === 'pickup' ? 'pickup_completed' : 'delivery_completed', {
-        handover_media_kind: media.kind,
-        lines: pending.length,
-      });
-      onFinished({ stop, next });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
-    } finally {
-      setBusy(false);
-      onChange().catch(() => undefined);
-    }
-  };
-
-  return (
-    <Card style={s.form}>
-      <Text style={s.formTitle}>
-        {stop.kind === 'pickup' ? 'What you collected' : `What you are delivering`}
-      </Text>
-      {stop.kind === 'pickup' ? (
-        pending.map((l) => (
-          <View key={l.stopId} style={s.lineBox}>
-            <View style={s.lineTop}>
-              <Text style={s.item}>{l.label}</Text>
-              <Text style={s.meta}>{`Reserved ${l.qty} ${l.unit}`}</Text>
-            </View>
-            <Input
-              label={`Quantity collected (${l.unit})`}
-              value={kgs[l.stopId] ?? ''}
-              onChangeText={(v) => setKgs((k) => ({ ...k, [l.stopId]: v }))}
-              keyboardType="decimal-pad"
-              maxLength={8}
-              hint="Enter 0 if there was nothing. The farmer is paid for what you record."
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Use the full reserved amount for ${l.label}`}
-              onPress={() => setKgs((k) => ({ ...k, [l.stopId]: String(l.qty) }))}
-              style={({ pressed }) => [s.fill, pressed ? s.pressed : null]}
-            >
-              <Text style={s.fillText}>{`Full amount · ${l.qty} ${l.unit}`}</Text>
-            </Pressable>
-          </View>
-        ))
-      ) : (
-        <View style={s.lineBox}>
-          {pending.map((l) => (
-            <Text key={l.stopId} style={s.item}>{`Order ${l.orderCode}`}</Text>
-          ))}
-        </View>
-      )}
-      <Input
-        label="Temperature (°C)"
-        value={temp}
-        onChangeText={setTemp}
-        keyboardType="numbers-and-punctuation"
-        maxLength={6}
-        hint={`Safe range ${lo} to ${hi} °C`}
-      />
-      <Input
-        label="Condition notes (optional)"
-        value={note}
-        onChangeText={setNote}
-        maxLength={NOTE_MAX}
-        hint={`${note.length}/${NOTE_MAX}`}
-      />
-      <Text style={s.stepsTitle}>Photo or short video</Text>
-      <View style={s.actions}>
-        <Button
-          size="sm"
-          variant="outline"
-          icon="camera"
-          label="Take photo or video"
-          onPress={() => choose('camera')}
-        />
-        <Button size="sm" variant="outline" label="Upload" onPress={() => choose('library')} />
-      </View>
-      {picked ? (
-        <MediaPreview
-          uri={picked.uri}
-          kind={(picked.mimeType || '').startsWith('video/') ? 'video' : 'photo'}
-        />
-      ) : savedUrl ? (
-        <MediaPreview uri={savedUrl} kind={savedKind ?? 'photo'} />
-      ) : (
-        <Text style={s.meta}>Add one photo or video. It is kept with the record of this stop.</Text>
-      )}
-      {error ? <Banner text={error} /> : null}
-      {blocked ? (
-        <Banner tone="info" text="Collect every farmer's produce before delivering these orders." />
-      ) : bad && !bad.r.ok && (temp !== '' || Object.values(kgs).some(Boolean)) ? (
-        <Banner tone="info" text={bad.r.error} />
-      ) : null}
-      <Button
-        size="lg"
-        icon="check"
-        label={stop.kind === 'pickup' ? 'Confirm pickup' : 'Confirm delivery'}
-        loading={busy}
-        disabled={!ready}
-        onPress={submit}
-      />
-      {next ? (
-        <Text style={s.meta}>{`Next: ${next.name}`}</Text>
-      ) : (
-        <Text style={s.meta}>This is your last stop.</Text>
-      )}
     </Card>
   );
 }
@@ -653,6 +467,49 @@ const styles = (c: Record<ColorToken, string>) => ({
     borderColor: c.borderSubtle,
   },
   rowNow: { borderColor: c.brand600, borderWidth: 2 },
+  railRow: { flexDirection: 'row' as const, gap: 12 },
+  rail: { width: 32, alignItems: 'center' as const },
+  node: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2,
+  },
+  nodePick: { backgroundColor: c.brandTint, borderColor: c.brand600 },
+  nodeDrop: { backgroundColor: c.harvestTint, borderColor: c.harvestFill },
+  nodeDone: { backgroundColor: c.brand600, borderColor: c.brand600 },
+  nodeN: { fontFamily: fonts.sansBold, fontSize: 14, color: c.brandInk },
+  nodeNDrop: { color: c.harvestInk },
+  line: { flex: 1, width: 2, marginVertical: 4, backgroundColor: c.borderSubtle },
+  lineDone: { backgroundColor: c.brand600 },
+  stopCard: {
+    flex: 1,
+    gap: 4,
+    padding: 14,
+    marginBottom: 12,
+    backgroundColor: c.surfaceCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.borderSubtle,
+  },
+  stopTop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  kind: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase' as const,
+    color: c.inkMuted,
+  },
+  when: { marginLeft: 'auto' as const, fontFamily: fonts.sansBold, fontSize: 13, color: c.ink },
+  holds: { gap: 2, marginTop: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.borderSubtle },
+  holdLine: { fontFamily: fonts.sansMedium, fontSize: 14, lineHeight: 20, color: c.ink },
+  route: { gap: 8, padding: 18 },
+  routeTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: c.brandInk },
+  routeBig: { fontFamily: fonts.heading, fontSize: 24, lineHeight: 30, color: c.ink },
+  bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' as const },
+  barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand600 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { fontFamily: fonts.sansBold, fontSize: 17, color: c.ink },

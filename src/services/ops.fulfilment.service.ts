@@ -300,6 +300,7 @@ export interface DriverRoute {
     lat: number;
     lng: number;
     eta: string | null;
+    doneAt: string | null;
     legPolyline: string | null;
   }[];
   /** Ops set this route's order by hand; the system keeps it until the trip ends. */
@@ -325,7 +326,7 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
       'id, plate_number, vehicle_type, route_locked, profiles(display_name, phone), driver_locations(lat, lng, updated_at)',
     );
   const withReading =
-    'id, driver_id, kind, label, seq, state, lat, lng, eta, leg_polyline, orders(code), order_allocations!order_allocations_pickup_stop_id_fkey(unit), delivery_handovers(recorded_kg, temperature_c)';
+    'id, driver_id, kind, label, seq, state, lat, lng, eta, done_at, leg_polyline, orders(code), order_allocations!order_allocations_pickup_stop_id_fkey(unit), delivery_handovers(recorded_kg, temperature_c)';
   type StopQuery = { data: any[] | null; error: { message: string } | null };
   let stops = (await supabase
     .from('delivery_stops')
@@ -370,6 +371,7 @@ export async function fetchDriverRoutes(): Promise<DriverRoute[]> {
           lat: Number(x.lat),
           lng: Number(x.lng),
           eta: x.eta ?? null,
+          doneAt: x.done_at ?? null,
           legPolyline: x.leg_polyline ?? null,
           order: x.orders?.code ?? '',
           reading: readingOf(
