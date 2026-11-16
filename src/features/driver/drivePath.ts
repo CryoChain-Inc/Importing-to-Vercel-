@@ -52,7 +52,7 @@ export function useDriverPosition(): LatLng | null {
         const perm = await Location.requestForegroundPermissionsAsync();
         if (perm.status !== 'granted' || !live) return;
         sub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, distanceInterval: 30, timeInterval: 15000 },
+          { accuracy: Location.Accuracy.High, distanceInterval: 30, timeInterval: 15000 },
           (p) => live && setPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
         );
         if (!live) sub.remove();

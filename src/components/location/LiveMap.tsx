@@ -11,6 +11,7 @@ const PROVIDER =
     ? undefined
     : PROVIDER_GOOGLE;
 const ACCRA = { latitude: 5.6037, longitude: -0.187 };
+const MIN_SPAN = 0.05;
 const PIN = { pickup: '#d98b1f', dropoff: '#2E7D4F', done: '#9aa5a0' } as const;
 
 export const warmMap = () => undefined;
@@ -34,12 +35,19 @@ export function LiveMap({
 
   useEffect(() => {
     if (all.length === 0) return;
-    map.current?.fitToCoordinates(
-      all.map((p) => ({ latitude: p.lat, longitude: p.lng })),
+    const lats = all.map((p) => p.lat);
+    const lngs = all.map((p) => p.lng);
+    const [south, north] = [Math.min(...lats), Math.max(...lats)];
+    const [west, east] = [Math.min(...lngs), Math.max(...lngs)];
+    // Never closer than ~5 km across, so a lone truck or two nearby stops still shows the surroundings.
+    map.current?.animateToRegion(
       {
-        edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
-        animated: true,
+        latitude: (south + north) / 2,
+        longitude: (west + east) / 2,
+        latitudeDelta: Math.max((north - south) * 1.5, MIN_SPAN),
+        longitudeDelta: Math.max((east - west) * 1.5, MIN_SPAN),
       },
+      350,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- framed by frameKey on purpose
   }, [frameKey]);

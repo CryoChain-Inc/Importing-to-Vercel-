@@ -111,7 +111,7 @@ export function DriverHome({ account }: { account: Account }) {
           return;
         }
         const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.High,
         });
         await pingLocation(pos.coords.latitude, pos.coords.longitude);
         // Google's drive times replace the rough estimates; the reload below picks them up.

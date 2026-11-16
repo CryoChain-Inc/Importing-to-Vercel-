@@ -46,7 +46,7 @@ export async function startTripTracking(): Promise<TrackingResult> {
   if (!granted) return 'foreground_only';
   if (await Location.hasStartedLocationUpdatesAsync(TRIP_TASK)) return 'background';
   await Location.startLocationUpdatesAsync(TRIP_TASK, {
-    accuracy: Location.Accuracy.Balanced,
+    accuracy: Location.Accuracy.High,
     timeInterval: 30000,
     distanceInterval: 100,
     foregroundService: {

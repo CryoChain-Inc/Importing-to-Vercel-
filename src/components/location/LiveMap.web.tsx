@@ -5,6 +5,7 @@ import type { LiveMapProps } from './liveMapTypes';
 
 export type { LiveMapProps, LivePlace, LatLng } from './liveMapTypes';
 
+const MAX_FIT_ZOOM = 20;
 const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_KEY;
 const ACCRA = { lat: 5.6037, lng: -0.187 };
 const PIN = { pickup: '#d98b1f', dropoff: '#2E7D4F', done: '#9aa5a0' } as const;
@@ -142,6 +143,10 @@ export function LiveMap({
         const b = new g.maps.LatLngBounds();
         all.forEach((p) => b.extend(p));
         map.fitBounds(b, 48);
+        // A lone truck or close stops would otherwise fill the screen with one street.
+        g.maps.event.addListenerOnce(map, 'idle', () => {
+          if ((map.getZoom() ?? 0) > MAX_FIT_ZOOM) map.setZoom(MAX_FIT_ZOOM);
+        });
       }
     } else {
       const { L, map } = e;
@@ -179,7 +184,7 @@ export function LiveMap({
         );
       }
       if (all.length && framed.current !== key)
-        map.fitBounds(L.latLngBounds(all.map((p) => [p.lat, p.lng])), { padding: [32, 32] });
+        map.fitBounds(L.latLngBounds(all.map((p) => [p.lat, p.lng])), { padding: [32, 32], maxZoom: MAX_FIT_ZOOM });
     }
     framed.current = key;
   }, [ready, truck, places, route, trail]);
