@@ -38,10 +38,15 @@ export function orderTrack(o: BoardOrder): OrderTrack {
   const cancelled = o.state === 'cancelled';
   const live = o.allocations.filter((a) => ACTIVE.includes(a.status));
   const allocatedKg = live.reduce((n, a) => n + a.kg, 0);
-  const collectedKg = o.allocations.reduce(
-    (n, a) => n + (a.takenKg ?? (a.status === 'collected' ? a.kg : 0)),
-    0,
-  );
+  // A pickup line can cover several allocations that all carry its recorded quantity, so count each line once.
+  const stopKg = o.stops.reduce((n, s) => n + (s.kind === 'pickup' ? (s.takenKg ?? 0) : 0), 0);
+  const collectedKg =
+    stopKg > 0
+      ? stopKg
+      : o.allocations.reduce(
+          (n, a) => n + (a.takenKg ?? (a.status === 'collected' ? a.kg : 0)),
+          0,
+        );
   const dropDone = o.stops.some((s) => s.kind === 'dropoff' && s.state === 'done');
   const pickups = o.stops.filter((s) => s.kind === 'pickup');
   const pickupsDone = pickups.filter((s) => s.state === 'done').length;
