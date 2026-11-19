@@ -117,7 +117,7 @@ function PriceCard({
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const photo = imageUrl(product.imagePath);
+  const photo = imageUrl(product.imagePath, 160);
   const d = change(product);
   const missing = product.price == null;
   return (

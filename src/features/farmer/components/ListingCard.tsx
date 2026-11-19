@@ -87,7 +87,7 @@ export function ListingCard({
               {l.imagePaths.map((p, i) => (
                 <Image
                   key={p}
-                  source={{ uri: produceImageUrl(p) }}
+                  source={{ uri: produceImageUrl(p, 400) }}
                   style={s.photo}
                   accessibilityLabel={`${l.product} photo ${i + 1} of ${l.imagePaths.length}`}
                 />

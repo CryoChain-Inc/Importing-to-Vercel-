@@ -235,7 +235,7 @@ export function ProductForm({
 function Thumb({ path }: { path: string | null }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
-  const uri = imageUrl(path);
+  const uri = imageUrl(path, 160);
   return uri ? (
     <Image source={{ uri }} style={s.thumb} accessibilityLabel="Image" />
   ) : (

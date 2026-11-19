@@ -47,36 +47,6 @@ const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20">
 </svg>`;
 export const TRUCK_URL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(TRUCK_SVG)}`;
 
-function googleDrivingPath(
-  google: any,
-  from: Place,
-  to: Place,
-): Promise<{ lat: number; lng: number }[]> {
-  return new Promise((resolve) => {
-    try {
-      new google.maps.DirectionsService().route(
-        {
-          origin: { lat: from.lat, lng: from.lng },
-          destination: { lat: to.lat, lng: to.lng },
-          travelMode: google.maps.TravelMode.DRIVING,
-        },
-        (result: any, status: string) => {
-          const path = result?.routes?.[0]?.overview_path;
-          if (status !== 'OK' || !path?.length) return resolve([]);
-          resolve(
-            path.map((p: { lat: () => number; lng: () => number }) => ({
-              lat: p.lat(),
-              lng: p.lng(),
-            })),
-          );
-        },
-      );
-    } catch {
-      resolve([]);
-    }
-  });
-}
-
 /** Pickup and drop-off map. A tap sets whichever stop is selected, unless this map is only showing a trip. */
 export function TripMap({
   pickup,
@@ -204,10 +174,8 @@ export function TripMap({
       if (fresh) {
         path = [];
         if (pickup && dropoff) {
-          path =
-            engine.kind === 'google' ? await googleDrivingPath(engine.google, pickup, dropoff) : [];
-          if (!live) return;
-          if (!path.length) path = await roadRoute(pickup, dropoff);
+          // Google's legacy Directions API is not enabled on our key (REQUEST_DENIED), so use OSRM directly.
+          path = await roadRoute(pickup, dropoff);
         }
         if (!live) return;
         routeCache.current = { key: routeKey, path };
