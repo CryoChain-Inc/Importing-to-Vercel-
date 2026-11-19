@@ -7,7 +7,7 @@ import { fetchBuyersPage } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone, ghs } from '../../../utils/format';
 import type { PageProps } from '../useOpsLocation';
-import { Empty, Pager, PanelSkeleton, useServerPage } from './OpsBits';
+import { Empty, Pager, PanelSkeleton, useServerPage, RevealCard } from './OpsBits';
 
 const TONE = { awaiting_payment: 'warning', paid: 'success', cancelled: 'neutral' } as const;
 
@@ -36,7 +36,7 @@ export function BuyersPanel({ params, setParams, rev }: PageProps) {
     };
   }, [ids, rev]);
 
-  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton />;
+  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton variant="list" />;
   if (!total && !q && !loading)
     return (
       <Empty
@@ -60,7 +60,7 @@ export function BuyersPanel({ params, setParams, rev }: PageProps) {
         const spent = mine.filter((o) => o.state === 'paid').reduce((n, o) => n + o.amount, 0);
         const on = open === b.id;
         return (
-          <Card key={b.id} style={s.item}>
+          <RevealCard key={b.id} style={s.item}>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: on }}
@@ -118,7 +118,7 @@ export function BuyersPanel({ params, setParams, rev }: PageProps) {
                 )}
               </View>
             ) : null}
-          </Card>
+          </RevealCard>
         );
       })}
       <Pager page={page} total={total} onPage={goPage} />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, ChoiceChips, Input } from '../../../components/common';
+import { Badge, Button, ChoiceChips, Input } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
   cancelLine,
@@ -67,8 +67,17 @@ export function OrderControls({
   const stopRow = (p: BoardStop) => {
     const isOpen = open?.stop === p.id;
     return (
-      <View key={p.id} style={s.stop}>
-        <Text style={s.value}>{p.label}</Text>
+      <View key={p.id} style={s.tile}>
+        <View style={s.tileHead}>
+          <View style={s.grow}>
+            <Text style={s.value}>{p.label}</Text>
+            <Text style={s.meta}>{p.kind === 'pickup' ? 'Pickup' : 'Delivery'}</Text>
+          </View>
+          <Badge
+            label={p.state === 'done' ? 'Done' : 'Pending'}
+            tone={p.state === 'done' ? 'success' : 'neutral'}
+          />
+        </View>
         <View style={s.row}>
           {p.state === 'pending' && p.kind === 'pickup' ? (
             <>
@@ -150,19 +159,24 @@ export function OrderControls({
 
   return (
     <View style={s.wrap}>
-      <Text style={s.sub}>Fix this order</Text>
-      <Input
-        label="Reason (kept in the activity log)"
-        value={reason}
-        onChangeText={setReason}
-        maxLength={280}
-        placeholder="e.g. Driver's phone is dead, confirmed by call"
-      />
+      <View style={s.reason}>
+        <Input
+          label="Reason (kept in the activity log)"
+          value={reason}
+          onChangeText={setReason}
+          maxLength={280}
+          placeholder="e.g. Driver's phone is dead, confirmed by call"
+        />
+        <Text style={s.meta}>
+          {why ? 'Choose a fix below.' : 'Write a reason first. The buttons below stay off until you do.'}
+        </Text>
+      </View>
       {error ? <Banner text={error} /> : null}
       {warning ? <Banner tone="info" text={warning} /> : null}
 
       {pending.length > 0 && !collected ? (
-        <View style={s.stop}>
+        <View style={s.tile}>
+          <Text style={s.sub}>Move this order</Text>
           <ChoiceChips
             label="Move to"
             options={[WAITING, ...drivers.map(label)]}
@@ -188,10 +202,11 @@ export function OrderControls({
           />
         </View>
       ) : null}
+      {o.stops.length > 0 ? <Text style={s.sub}>Stops</Text> : null}
       {o.stops.map(stopRow)}
 
       {log ? (
-        <View style={s.stop}>
+        <View style={s.tile}>
           <Text style={s.sub}>Activity</Text>
           {log.map((a, i) => (
             <Text key={i} style={s.meta}>
@@ -210,7 +225,17 @@ export function OrderControls({
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  wrap: { gap: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.borderSubtle },
+  wrap: { gap: 12 },
+  reason: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: c.surfaceSunken },
+  tile: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.borderSubtle,
+  },
+  tileHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  grow: { flex: 1, gap: 2 },
   stop: { gap: 6 },
   row: {
     flexDirection: 'row' as const,

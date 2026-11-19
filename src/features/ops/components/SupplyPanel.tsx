@@ -6,7 +6,7 @@ import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { supplyByProduct } from '../data';
 import type { PageProps } from '../useOpsLocation';
 import { fmtQty } from '../../../utils/format';
-import { Empty, Hero, Pager, SectionTitle, usePaged, useServerPage } from './OpsBits';
+import { Empty, Hero, Pager, SectionTitle, usePaged, useServerPage, RevealCard } from './OpsBits';
 
 /** One row per product and unit: quantity farmers have listed. Pages so a long catalogue stays short. */
 export function ProductSupply({ supply, page = 5 }: { supply: SupplyRow[]; page?: number }) {
@@ -72,7 +72,7 @@ export function SupplyPanel({
       <SectionTitle title="Farmer listings" note={`${supply.length} listings`} />
       <View style={[s.gap, loading && s.busy]}>
         {rows.map((r) => (
-          <Card key={r.id} style={s.item}>
+          <RevealCard key={r.id} style={s.item}>
             <Text style={s.name} numberOfLines={1}>
               {r.product} · {fmtQty(r.remainingKg, r.unit)} left of {fmtQty(r.weightKg, r.unit)}
             </Text>
@@ -80,7 +80,7 @@ export function SupplyPanel({
               {[r.farmer, r.locality, r.point].filter(Boolean).join(' · ')}
             </Text>
             <Text style={s.meta}>Listed {new Date(r.createdAt).toLocaleDateString('en-GH')}</Text>
-          </Card>
+          </RevealCard>
         ))}
       </View>
       <Pager page={page} total={total} onPage={goPage} />

@@ -6,7 +6,7 @@ import * as svc from '../../../services/ops.payouts.service';
 import type { FarmerRow } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone, ghs } from '../../../utils/format';
-import { Empty, Hero, Segmented, usePaged } from './OpsBits';
+import { Empty, Hero, Segmented, usePaged, RevealCard } from './OpsBits';
 import { useAction } from './useAction';
 
 const RUN_TONE = {
@@ -103,7 +103,7 @@ export function PayoutsPanel({
           {toPay.rows.map((x) => {
             const canPick = !x.inRun && hasWallet.has(x.farmerId);
             return (
-              <Card key={x.id} style={s.item}>
+              <RevealCard key={x.id} style={s.item}>
                 <View style={s.top}>
                   <Text style={s.name} numberOfLines={1}>
                     {x.farmer}
@@ -128,7 +128,7 @@ export function PayoutsPanel({
                     onPress={() => toggle(x.id)}
                   />
                 ) : null}
-              </Card>
+              </RevealCard>
             );
           })}
           {toPay.more}

@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  Linking,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
-import { Banner, Dialog, SkeletonCard } from '../../../components/feedback';
+import { Banner, Dialog, Pulse, Reveal, SkeletonCard } from '../../../components/feedback';
 import { useNearEnd } from '../../../components/layout';
 import {
   cancelOrder,
@@ -66,69 +57,6 @@ const summary = (o: Order) => {
     ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more`
     : names.join(', ');
 };
-
-const NATIVE = Platform.OS !== 'web';
-
-/** Eases a card in once as it mounts; the first few stagger, the rest appear at once. Skipped for reduced motion. */
-function Reveal({ index = 0, children }: { index?: number; children: React.ReactNode }) {
-  const [v] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    let run: Animated.CompositeAnimation | null = null;
-    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
-      if (reduce) return v.setValue(1);
-      run = Animated.timing(v, {
-        toValue: 1,
-        duration: 420,
-        delay: Math.min(index, 6) * 55,
-        easing: Easing.out(Easing.exp),
-        useNativeDriver: NATIVE,
-      });
-      run.start();
-    });
-    return () => run?.stop();
-  }, [v, index]);
-  return (
-    <Animated.View
-      style={{
-        opacity: v,
-        transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
-      }}
-    >
-      {children}
-    </Animated.View>
-  );
-}
-
-/** A soft ring that breathes around the step an order is on right now. */
-function Pulse({ color }: { color: string }) {
-  const [v] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(v, {
-        toValue: 1,
-        duration: 1600,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: NATIVE,
-      }),
-    );
-    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => !reduce && loop.start());
-    return () => loop.stop();
-  }, [v]);
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: color,
-        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
-        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2.1] }) }],
-      }}
-    />
-  );
-}
 
 const initials = (n: string) =>
   n

@@ -6,7 +6,7 @@ import { fetchFarmersPage } from '../../../services/ops.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { fmtQty, formatPhone } from '../../../utils/format';
 import type { PageProps } from '../useOpsLocation';
-import { Empty, Pager, PanelSkeleton, useServerPage } from './OpsBits';
+import { Empty, Pager, PanelSkeleton, useServerPage, RevealCard } from './OpsBits';
 
 /** Farmers with a search box; open one for contact details, wallet state and everything they have listed. */
 export function FarmersPanel({ params, setParams, rev }: PageProps) {
@@ -20,7 +20,7 @@ export function FarmersPanel({ params, setParams, rev }: PageProps) {
     fetchFarmersPage,
   );
 
-  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton />;
+  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton variant="list" />;
   if (!total && !q && !loading)
     return (
       <Empty
@@ -43,7 +43,7 @@ export function FarmersPanel({ params, setParams, rev }: PageProps) {
         const mine = f.listings;
         const on = open === f.id;
         return (
-          <Card key={f.id} style={s.item}>
+          <RevealCard key={f.id} style={s.item}>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: on }}
@@ -101,7 +101,7 @@ export function FarmersPanel({ params, setParams, rev }: PageProps) {
                 ) : null}
               </View>
             ) : null}
-          </Card>
+          </RevealCard>
         );
       })}
       <Pager page={page} total={total} onPage={goPage} />

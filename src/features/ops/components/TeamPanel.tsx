@@ -5,7 +5,7 @@ import { Banner } from '../../../components/feedback';
 import { inviteStaff, type StaffRole, type TeamMember } from '../../../services/ops.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { EMAIL_MAX, NAME_MAX, formatPhone, isEmail, isPhone } from '../../../utils/format';
-import { Empty, SectionTitle, Stat, StatGrid } from './OpsBits';
+import { Empty, SectionTitle, Stat, StatGrid, RevealCard } from './OpsBits';
 import { useAction } from './useAction';
 
 const ROLES: StaffRole[] = ['driver', 'ops'];
@@ -101,7 +101,7 @@ export function TeamPanel({
           <View key={r} style={s.group}>
             <SectionTitle title={LABEL[r]} />
             {members.map((m) => (
-              <Card key={m.id} style={s.item}>
+              <RevealCard key={m.id} style={s.item}>
                 <View style={s.avatar}>
                   <Text style={s.avatarText}>{m.name.slice(0, 1).toUpperCase()}</Text>
                 </View>
@@ -114,7 +114,7 @@ export function TeamPanel({
                   {m.detail ? <Text style={s.meta}>{m.detail}</Text> : null}
                 </View>
                 <Badge label={m.role} tone={m.role === 'ops' ? 'info' : 'neutral'} />
-              </Card>
+              </RevealCard>
             ))}
           </View>
         );

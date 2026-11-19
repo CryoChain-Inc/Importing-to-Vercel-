@@ -1,29 +1,54 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, Switch, Text, View } from 'react-native';
 import { Button, Card, Icon, Pagination, type IconName } from '../../../components/common';
-import { Skeleton, SkeletonCard, useToast } from '../../../components/feedback';
+import { GrowBar, Reveal, Skeleton, SkeletonCard, useToast } from '../../../components/feedback';
 import { PAGE_SIZE, type Paged } from '../../../services/paging';
 import type { Params } from '../useOpsLocation';
-import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import {
+  fonts,
+  focusRing,
+  useTheme,
+  useThemedStyles,
+  type ColorToken,
+  type PressState,
+} from '../../../theme';
 
 export const kg = (n: number) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 0 })} kg`;
 
-/** Headline number with a caption; `tone` colours the figure. */
+/** KPI tile: a figure with a caption. Give it `onPress` and it becomes a shortcut to the list behind the number. */
 export function Stat({
   label,
   value,
   note,
   tone,
+  icon,
+  onPress,
 }: {
   label: string;
   value: string;
   note?: string;
   tone?: 'brand' | 'warn' | 'danger';
+  icon?: IconName;
+  onPress?: () => void;
 }) {
   const s = useThemedStyles(styles);
-  return (
-    <Card style={s.stat}>
-      <Text style={s.statLabel}>{label}</Text>
+  const { colors } = useTheme();
+  const tint =
+    tone === 'warn' ? colors.harvestTint : tone === 'danger' ? colors.dangerTint : colors.brandTint;
+  const ink =
+    tone === 'warn' ? colors.harvestInk : tone === 'danger' ? colors.dangerInk : colors.brandInk;
+  const body = (
+    <>
+      <View style={s.statTop}>
+        <Text style={s.statLabel} numberOfLines={1}>
+          {label}
+        </Text>
+        {icon ? (
+          <View style={[s.statIcon, { backgroundColor: tint }]}>
+            <Icon name={icon} size={16} color={ink} />
+          </View>
+        ) : null}
+      </View>
       <Text
         style={[
           s.statValue,
@@ -36,15 +61,68 @@ export function Stat({
       >
         {value}
       </Text>
-      {note ? <Text style={s.note}>{note}</Text> : null}
-    </Card>
+      {note || onPress ? (
+        <View style={s.statFoot}>
+          <Text style={[s.note, s.growText]} numberOfLines={1}>
+            {note ?? ''}
+          </Text>
+          {onPress ? <Icon name="arrowRight" size={14} color={colors.inkMuted} /> : null}
+        </View>
+      ) : null}
+    </>
+  );
+  if (!onPress) return <View style={s.stat}>{body}</View>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}. Open the list`}
+      onPress={onPress}
+      style={({ hovered, pressed, focused }: PressState) => [
+        s.stat,
+        hovered && s.statHover,
+        pressed && s.statPress,
+        focused && focusRing(colors.focusRing),
+      ]}
+    >
+      {body}
+    </Pressable>
   );
 }
 
-/** Row of Stat tiles that wraps two-up on phones and fills the row on wide screens. */
+/** Row of KPI tiles that wraps two-up on phones and fills the row on wide screens; tiles rise in one after another. */
 export function StatGrid({ children }: { children: React.ReactNode }) {
   const s = useThemedStyles(styles);
-  return <View style={s.grid}>{children}</View>;
+  return (
+    <View style={s.grid}>
+      {React.Children.toArray(children).map((c, i) => (
+        <Reveal key={i} index={i} style={s.cell}>
+          {c}
+        </Reveal>
+      ))}
+    </View>
+  );
+}
+
+/** A Card that rises in as it mounts. */
+export function RevealCard({ index, ...rest }: React.ComponentProps<typeof Card> & { index?: number }) {
+  return (
+    <Reveal index={index}>
+      <Card {...rest} />
+    </Reveal>
+  );
+}
+
+/** Thin progress bar that grows to `pct` (0-100). */
+export function Meter({ pct, tone }: { pct: number; tone?: 'warn' }) {
+  const s = useThemedStyles(styles);
+  return (
+    <GrowBar
+      pct={Math.max(0, Math.min(100, pct))}
+      trackStyle={s.meter}
+      fillStyle={[s.meterFill, tone === 'warn' && s.meterWarn]}
+      label={`${Math.round(pct)} percent`}
+    />
+  );
 }
 
 export { StatHero as Hero } from '../../../components/common';
@@ -74,7 +152,7 @@ export function Segmented<K extends string>({
           >
             <Text style={[s.segText, on && s.segTextOn]} numberOfLines={1}>
               {o.label}
-              {o.count != null ? <Text style={s.segCount}> {o.count}</Text> : null}
+              {o.count != null ? <Text style={s.segCount}>  {o.count}</Text> : null}
             </Text>
           </Pressable>
         );
@@ -252,16 +330,19 @@ export function useServerPage<T>(
   };
 }
 
-/** Skeleton shaped like a panel: hero, two tiles, then list rows. */
-export function PanelSkeleton() {
+/** Skeleton shaped like a panel. `stats` is a row of KPI tiles then rows; `hero` adds the green headline card on top. */
+export function PanelSkeleton({ variant = 'hero' }: { variant?: 'hero' | 'stats' | 'list' }) {
   const s = useThemedStyles(styles);
   return (
     <View style={s.skel}>
-      <Skeleton height={150} radius={24} />
-      <View style={s.grid}>
-        <Skeleton height={84} radius={16} style={s.tile} />
-        <Skeleton height={84} radius={16} style={s.tile} />
-      </View>
+      {variant === 'hero' ? <Skeleton height={150} radius={24} /> : null}
+      {variant !== 'list' ? (
+        <View style={s.grid}>
+          {[0, 1, 2].slice(0, variant === 'hero' ? 2 : 3).map((i) => (
+            <Skeleton key={i} height={92} radius={16} style={s.cell} />
+          ))}
+        </View>
+      ) : null}
       {[0, 1, 2].map((i) => (
         <SkeletonCard key={i} lines={3} lead />
       ))}
@@ -274,13 +355,15 @@ export function Empty({ icon, title, hint }: { icon: IconName; title: string; hi
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   return (
-    <Card style={s.empty}>
-      <View style={s.emptyIcon}>
-        <Icon name={icon} size={22} color={colors.brandInk} />
-      </View>
-      <Text style={s.emptyTitle}>{title}</Text>
-      <Text style={[s.note, s.center]}>{hint}</Text>
-    </Card>
+    <Reveal>
+      <Card style={s.empty}>
+        <View style={s.emptyIcon}>
+          <Icon name={icon} size={22} color={colors.brandInk} />
+        </View>
+        <Text style={s.emptyTitle}>{title}</Text>
+        <Text style={[s.note, s.center]}>{hint}</Text>
+      </Card>
+    </Reveal>
   );
 }
 
@@ -407,13 +490,41 @@ const styles = (c: Record<ColorToken, string>) => ({
     gap: 12,
     flexWrap: 'wrap' as const,
   },
-  tile: { flexGrow: 1, flexBasis: 150, width: undefined },
+  cell: { flexGrow: 1, flexBasis: 160 },
   grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
-  stat: { flexGrow: 1, flexBasis: 150, gap: 4, padding: 16 },
-  statLabel: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
+  stat: {
+    flexGrow: 1,
+    gap: 6,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.cardEdge,
+    backgroundColor: c.surfaceCard,
+    shadowColor: c.brand900,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  statHover: { borderColor: c.borderStrong, backgroundColor: c.surfaceSunken },
+  statPress: { opacity: 0.85, transform: [{ scale: 0.985 }] },
+  statTop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  statIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  statFoot: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  growText: { flex: 1 },
+  meter: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken },
+  meterFill: { height: 8, borderRadius: 4, backgroundColor: c.brand600 },
+  meterWarn: { backgroundColor: c.harvestFill },
+  statLabel: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
   statValue: {
     fontFamily: fonts.heading,
-    fontSize: 26,
+    fontSize: 28,
     letterSpacing: -0.4,
     color: c.ink,
     fontVariant: ['tabular-nums' as const],

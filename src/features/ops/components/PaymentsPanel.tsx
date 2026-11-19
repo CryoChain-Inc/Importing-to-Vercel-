@@ -6,7 +6,7 @@ import { cancelOrder, fetchOrdersPage, type OrderRow } from '../../../services/o
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { formatPhone, ghs } from '../../../utils/format';
 import type { PageProps } from '../useOpsLocation';
-import { Empty, Hero, Pager, Segmented, useServerPage } from './OpsBits';
+import { Empty, Hero, Pager, Segmented, useServerPage, RevealCard } from './OpsBits';
 import { useAction } from './useAction';
 
 const TONE = { awaiting_payment: 'warning', paid: 'success', cancelled: 'neutral' } as const;
@@ -63,7 +63,7 @@ export function PaymentsPanel({
         />
       ) : null}
       {rows.map((o) => (
-        <Card key={o.id} style={s.item}>
+        <RevealCard key={o.id} style={s.item}>
           <View style={s.top}>
             <Text style={s.name} numberOfLines={1}>
               {o.buyer}
@@ -93,7 +93,7 @@ export function PaymentsPanel({
               />
             </View>
           ) : null}
-        </Card>
+        </RevealCard>
       ))}
       <Pager page={page} total={total} onPage={goPage} />
     </View>

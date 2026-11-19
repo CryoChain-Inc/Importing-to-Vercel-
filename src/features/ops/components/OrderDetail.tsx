@@ -10,7 +10,7 @@ import {
   type PressableStateCallbackType,
 } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { Banner, Reveal } from '../../../components/feedback';
 import {
   retryAllocation,
   type AllocationStatus,
@@ -21,7 +21,7 @@ import {
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { boardFilter, orderTrack, TRACK_STEPS } from '../orderTrack';
-import { when } from './OpsBits';
+import { Meter, when } from './OpsBits';
 import { OrderControls } from './OrderControls';
 import { useAction } from './useAction';
 
@@ -106,17 +106,31 @@ export function OrderDetail({
         <Progress track={track} />
       </Card>
 
+      <Collected order={o} track={track} payout={payout} />
+
       {error ? <Banner text={error} /> : null}
 
       <DriverWatch order={o} />
 
       <Card style={s.section}>
-        <View style={s.sectionHead}>
-          <Text style={s.h}>Farmers and produce</Text>
-          {payout > 0 ? (
-            <Text style={s.meta}>
-              We pay {ghs(payout)} · margin {ghs(o.amount - payout)}
-            </Text>
+        <View style={s.headRow}>
+          <View style={s.grow}>
+            <Text style={s.h}>Farmers and produce</Text>
+            {payout > 0 ? (
+              <Text style={s.meta}>
+                We pay {ghs(payout)} · margin {ghs(o.amount - payout)}
+              </Text>
+            ) : null}
+          </View>
+          {o.state === 'paid' && st.stage !== 'done' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              icon="arrowRight"
+              label="Re-run allocation"
+              loading={busy}
+              onPress={() => run(() => retryAllocation(o.id))}
+            />
           ) : null}
         </View>
         {o.allocations.length === 0 ? (
@@ -145,6 +159,9 @@ export function OrderDetail({
                   <Stat label="From buyer" value={`${a.kmToBuyer} km`} />
                 ) : null}
               </View>
+              {a.takenKg != null && a.kg > 0 ? (
+                <Meter pct={(a.takenKg / a.kg) * 100} />
+              ) : null}
               {a.status === 'offered' ? (
                 <Text style={s.meta}>Farmer must answer by {when(a.expiresAt)}.</Text>
               ) : null}
@@ -170,16 +187,6 @@ export function OrderDetail({
             </View>
           ))
         )}
-        {o.state === 'paid' && st.stage !== 'done' ? (
-          <Button
-            size="sm"
-            variant="outline"
-            label="Re-run allocation"
-            loading={busy}
-            onPress={() => run(() => retryAllocation(o.id))}
-            style={s.self}
-          />
-        ) : null}
       </Card>
 
       <Card style={s.section}>
@@ -237,6 +244,13 @@ export function OrderDetail({
 
       {o.state === 'paid' ? (
         <Card style={s.section}>
+          <View style={s.grow}>
+            <Text style={s.h}>Fix this order</Text>
+            <Text style={s.meta}>
+              Manual changes for when something goes wrong on the road. Each one needs a reason and
+              is kept in the activity log.
+            </Text>
+          </View>
           <OrderControls order={o} drivers={drivers} onChange={onChange} />
         </Card>
       ) : null}
@@ -267,8 +281,6 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function Progress({ track }: { track: ReturnType<typeof orderTrack> }) {
   const s = useThemedStyles(styles);
-  const ordered = Math.max(track.orderedKg, 0);
-  const pct = (n: number) => (ordered > 0 ? Math.min(100, Math.round((n / ordered) * 100)) : 0);
   return (
     <View style={s.progress}>
       <View style={s.steps}>
@@ -284,17 +296,48 @@ function Progress({ track }: { track: ReturnType<typeof orderTrack> }) {
           );
         })}
       </View>
-      <View style={s.bar} accessibilityLabel={`${pct(track.collectedKg)} percent collected`}>
-        <View
-          style={[s.fill, s.fillAlloc, { width: `${pct(track.allocatedKg)}%` as `${number}%` }]}
-        />
-        <View style={[s.fill, { width: `${pct(track.collectedKg)}%` as `${number}%` }]} />
-      </View>
-      <Text style={s.meta}>
-        {kgText(track.collectedKg, track.unit)} collected · {kgText(track.allocatedKg, track.unit)}{' '}
-        allocated · {kgText(ordered, track.unit)} ordered
-      </Text>
     </View>
+  );
+}
+
+/** How much of the order has actually been picked up, against what was ordered and allocated. */
+function Collected({
+  order: o,
+  track,
+  payout,
+}: {
+  order: BoardOrder;
+  track: ReturnType<typeof orderTrack>;
+  payout: number;
+}) {
+  const s = useThemedStyles(styles);
+  const ordered = Math.max(track.orderedKg, 0);
+  const pct = ordered > 0 ? Math.min(100, (track.collectedKg / ordered) * 100) : 0;
+  const left = Math.max(ordered - track.collectedKg, 0);
+  if (o.state !== 'paid') return null;
+  return (
+    <Reveal index={1}>
+      <Card style={s.section}>
+        <View style={s.headRow}>
+          <View style={s.grow}>
+            <Text style={s.h}>Collected</Text>
+            <Text style={s.meta}>
+              {track.collectedKg >= ordered && ordered > 0
+                ? 'Everything ordered has been picked up.'
+                : `${kgText(left, track.unit)} still to pick up.`}
+            </Text>
+          </View>
+          <Text style={s.big}>{Math.round(pct)}%</Text>
+        </View>
+        <Meter pct={pct} />
+        <View style={s.stats}>
+          <Stat label="Ordered" value={kgText(ordered, track.unit)} />
+          <Stat label="Allocated" value={kgText(track.allocatedKg, track.unit)} />
+          <Stat label="Collected" value={kgText(track.collectedKg, track.unit)} />
+          {payout > 0 ? <Stat label="Owed to farmers" value={ghs(payout)} /> : null}
+        </View>
+      </Card>
+    </Reveal>
   );
 }
 
@@ -403,6 +446,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   grow: { flex: 1, gap: 2 },
   section: { gap: 12, padding: 18 },
   sectionHead: { gap: 2 },
+  headRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, flexWrap: 'wrap' as const },
+  big: { fontFamily: fonts.heading, fontSize: 28, letterSpacing: -0.4, color: c.brandInk, fontVariant: ['tabular-nums' as const] },
   h: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   block: { gap: 10 },
   divider: { paddingTop: 12, borderTopWidth: 1, borderTopColor: c.borderSubtle },

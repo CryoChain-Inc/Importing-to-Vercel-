@@ -8,7 +8,7 @@ import {
   type Decision,
 } from '../../../services/ops.fulfilment.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { Empty, Segmented, usePaged, when } from './OpsBits';
+import { Empty, Segmented, usePaged, when, RevealCard } from './OpsBits';
 import { useAction } from './useAction';
 
 const KIND: Record<Decision['kind'], { title: string; hint: string }> = {
@@ -81,7 +81,7 @@ export function DecisionsPanel({
         />
       ) : null}
       {rows.map((d) => (
-        <Card key={d.id} style={s.item}>
+        <RevealCard key={d.id} style={s.item}>
           <View style={s.top}>
             <Text style={s.name}>
               {KIND[d.kind].title}
@@ -128,7 +128,7 @@ export function DecisionsPanel({
           ) : (
             <Text style={s.meta}>Decision: {d.resolution}</Text>
           )}
-        </Card>
+        </RevealCard>
       ))}
       {more}
     </View>

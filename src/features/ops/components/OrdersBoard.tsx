@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, View, type PressableStateCallbackType } from 'react-native';
+import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from 'react-native';
 import { Badge, Button, Card, Icon, Input } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { Banner, Reveal } from '../../../components/feedback';
 import {
   fetchBoardOrder,
   fetchBoardPage,
@@ -11,21 +11,200 @@ import {
 } from '../../../services/ops.fulfilment.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
-import { boardFilter, orderTrack, TRACK_STEPS } from '../orderTrack';
+import { boardFilter, orderTrack, TRACK_STEPS, type BoardFilter } from '../orderTrack';
 import type { PageProps } from '../useOpsLocation';
 import { OrderDetail } from './OrderDetail';
-import { Empty, PanelSkeleton, Pager, Segmented, useServerPage, when } from './OpsBits';
+import {
+  Empty,
+  Meter,
+  PanelSkeleton,
+  Pager,
+  Segmented,
+  useServerPage,
+  usePaged,
+  when,
+} from './OpsBits';
 
-/** Orders, paged and filtered by the server. An order opens on its own page (?order=<id>) so Back and links work. */
+const STAGES: { key: BoardFilter; label: string }[] = [
+  { key: 'moving', label: 'On the road' },
+  { key: 'farmers', label: 'Waiting for farmers' },
+  { key: 'attention', label: 'Not allocated' },
+  { key: 'done', label: 'Delivered' },
+];
+const isStage = (v?: string): v is BoardFilter => STAGES.some((x) => x.key === v);
+const qty = (n: number) => n.toLocaleString('en-GH', { maximumFractionDigits: 2 });
+
+/** Orders, filtered by payment state on the server or by journey stage from the dashboard's board. An order opens on its own page (?order=<id>) so Back and links work. */
 export function OrdersBoard({
   drivers,
+  board,
   onChange,
   params,
   setParams,
   rev,
-}: { drivers: DriverRoute[]; onChange: () => Promise<void> } & PageProps) {
+}: {
+  drivers: DriverRoute[];
+  board: BoardOrder[];
+  onChange: () => Promise<void>;
+} & PageProps) {
+  const back = () =>
+    setParams({
+      state: params.state ?? '',
+      stage: params.stage ?? '',
+      page: params.page ?? '',
+      q: params.q ?? '',
+    });
+  if (params.order)
+    return (
+      <OrderPage id={params.order} drivers={drivers} rev={rev} onChange={onChange} onBack={back} />
+    );
+  if (isStage(params.stage))
+    return <StageOrders stage={params.stage} board={board} params={params} setParams={setParams} />;
+  return <ServerOrders board={board} params={params} setParams={setParams} rev={rev} />;
+}
+
+function StageBar({
+  board,
+  active,
+  onPick,
+}: {
+  board: BoardOrder[];
+  active?: BoardFilter;
+  onPick: (k: BoardFilter | null) => void;
+}) {
+  const s = useThemedStyles(styles);
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+      {STAGES.map((x) => {
+        const on = x.key === active;
+        const n = board.filter((o) => boardFilter(o).stage === x.key).length;
+        return (
+          <Pressable
+            key={x.key}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            onPress={() => onPick(on ? null : x.key)}
+            style={[s.chip, on && s.chipOn]}
+          >
+            <Text style={[s.chipText, on && s.chipTextOn]}>{x.label}</Text>
+            <Text style={[s.chipCount, on && s.chipTextOn]}>{n}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function OrderRow({ o, index, onOpen }: { o: BoardOrder; index: number; onOpen: () => void }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
+  const st = boardFilter(o);
+  const track = orderTrack(o);
+  const pct = track.orderedKg > 0 ? (track.collectedKg / track.orderedKg) * 100 : 0;
+  const showCollected = o.state === 'paid' && track.orderedKg > 0;
+  return (
+    <Reveal index={index}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`Open order ${o.code}`}
+        onPress={onOpen}
+        style={({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+          s.row,
+          hovered && s.hover,
+          pressed && s.press,
+        ]}
+      >
+        <View style={s.top}>
+          <Text style={s.code}>{o.code}</Text>
+          <Text style={s.when}>{when(o.createdAt)}</Text>
+        </View>
+        <View style={s.mid}>
+          <View style={s.grow}>
+            <Text style={s.buyer} numberOfLines={1}>
+              {o.buyer}
+            </Text>
+            <Text style={s.meta} numberOfLines={1}>
+              {o.items.join(', ')}
+            </Text>
+          </View>
+          <Text style={s.amount}>{ghs(o.amount)}</Text>
+        </View>
+        {showCollected ? (
+          <View style={s.collect}>
+            <View style={s.collectTop}>
+              <Text style={s.meta}>
+                <Text style={s.collectNum}>{qty(track.collectedKg)}</Text> of {qty(track.orderedKg)}{' '}
+                {track.unit} collected
+              </Text>
+              <Text style={s.meta}>{Math.round(pct)}%</Text>
+            </View>
+            <Meter pct={pct} />
+          </View>
+        ) : null}
+        <View style={s.foot}>
+          <View style={s.steps} accessibilityLabel={`Step ${track.index + 1} of ${TRACK_STEPS.length}`}>
+            {TRACK_STEPS.map((step, i) => (
+              <View key={step.key} style={[s.seg, !track.cancelled && i <= track.index && s.segOn]} />
+            ))}
+          </View>
+          <Badge label={st.label} tone={st.tone} />
+          <Icon name="chevronRight" size={16} color={colors.inkMuted} />
+        </View>
+      </Pressable>
+    </Reveal>
+  );
+}
+
+/** Orders in one journey stage, read from the same latest-100 board the dashboard counts. */
+function StageOrders({
+  stage,
+  board,
+  params,
+  setParams,
+}: { stage: BoardFilter; board: BoardOrder[] } & Pick<PageProps, 'params' | 'setParams'>) {
+  const s = useThemedStyles(styles);
+  const q = (params.q ?? '').trim().toLowerCase();
+  const all = board.filter(
+    (o) => boardFilter(o).stage === stage && (!q || o.code.toLowerCase().includes(q)),
+  );
+  const { rows, more } = usePaged(all, `${stage}|${q}`, 8);
+  const label = STAGES.find((x) => x.key === stage)!.label;
+  return (
+    <View style={s.list}>
+      <StageBar board={board} active={stage} onPick={(k) => setParams(k ? { stage: k } : {})} />
+      <Input
+        label="Search orders"
+        value={params.q ?? ''}
+        onChangeText={(v) => setParams({ stage, q: v }, true)}
+        placeholder="Order code"
+      />
+      {rows.length === 0 ? (
+        <Empty
+          icon="package"
+          title={`Nothing ${stage === 'moving' ? 'on the road' : label.toLowerCase()}`}
+          hint="Orders move in here on their own as farmers accept, drivers collect and trips finish."
+        />
+      ) : (
+        rows.map((o, i) => (
+          <OrderRow key={o.id} o={o} index={i} onOpen={() => setParams({ stage, q: params.q ?? '', order: o.id })} />
+        ))
+      )}
+      {more}
+      {board.length >= 100 ? (
+        <Text style={s.meta}>Showing the latest 100 orders. Use All orders to search older ones.</Text>
+      ) : null}
+      <Button variant="ghost" size="sm" label="All orders" onPress={() => setParams({})} />
+    </View>
+  );
+}
+
+function ServerOrders({
+  board,
+  params,
+  setParams,
+  rev,
+}: { board: BoardOrder[] } & PageProps) {
+  const s = useThemedStyles(styles);
   const state = (params.state ?? 'all') as BoardState;
   const { rows, total, q, text, setText, page, goPage, loading, firstLoad, error } = useServerPage(
     params,
@@ -33,14 +212,7 @@ export function OrdersBoard({
     rev,
     (p, query) => fetchBoardPage(p, query, state),
   );
-  const back = () =>
-    setParams({ state: params.state ?? '', page: params.page ?? '', q: params.q ?? '' });
-
-  if (params.order)
-    return (
-      <OrderPage id={params.order} drivers={drivers} rev={rev} onChange={onChange} onBack={back} />
-    );
-  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton />;
+  if (firstLoad) return error ? <Banner text={error} /> : <PanelSkeleton variant="list" />;
   if (!total && !q && state === 'all' && !loading)
     return (
       <Empty
@@ -53,6 +225,7 @@ export function OrdersBoard({
   return (
     <View style={[s.list, loading && s.busy]}>
       {error ? <Banner text={error} /> : null}
+      <StageBar board={board} onPick={(k) => k && setParams({ stage: k })} />
       <Segmented
         value={state}
         onChange={(k) => setParams(k === 'all' ? {} : { state: k })}
@@ -70,61 +243,21 @@ export function OrdersBoard({
           <Button size="sm" variant="outline" label="Clear filters" onPress={() => setParams({})} />
         </Card>
       ) : (
-        rows.map((o) => {
-          const st = boardFilter(o);
-          const track = orderTrack(o);
-          return (
-            <Pressable
-              key={o.id}
-              accessibilityRole="link"
-              accessibilityLabel={`Open order ${o.code}`}
-              onPress={() =>
-                setParams({
-                  state: params.state ?? '',
-                  page: params.page ?? '',
-                  q: params.q ?? '',
-                  order: o.id,
-                })
-              }
-              style={({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-                s.row,
-                hovered && s.hover,
-                pressed && s.press,
-              ]}
-            >
-              <View style={s.top}>
-                <Text style={s.code}>{o.code}</Text>
-                <Text style={s.when}>{when(o.createdAt)}</Text>
-              </View>
-              <View style={s.mid}>
-                <View style={s.grow}>
-                  <Text style={s.buyer} numberOfLines={1}>
-                    {o.buyer}
-                  </Text>
-                  <Text style={s.meta} numberOfLines={1}>
-                    {o.items.join(', ')}
-                  </Text>
-                </View>
-                <Text style={s.amount}>{ghs(o.amount)}</Text>
-              </View>
-              <View style={s.foot}>
-                <View
-                  style={s.steps}
-                  accessibilityLabel={`Step ${track.index + 1} of ${TRACK_STEPS.length}`}
-                >
-                  {TRACK_STEPS.map((step, i) => (
-                    <View
-                      key={step.key}
-                      style={[s.seg, !track.cancelled && i <= track.index && s.segOn]}
-                    />
-                  ))}
-                </View>
-                <Badge label={st.label} tone={st.tone} />
-                <Icon name="chevronRight" size={16} color={colors.inkMuted} />
-              </View>
-            </Pressable>
-          );
-        })
+        rows.map((o, i) => (
+          <OrderRow
+            key={o.id}
+            o={o}
+            index={i}
+            onOpen={() =>
+              setParams({
+                state: params.state ?? '',
+                page: params.page ?? '',
+                q: params.q ?? '',
+                order: o.id,
+              })
+            }
+          />
+        ))
       )}
       <Pager page={page} total={total} onPage={goPage} noun="orders" />
     </View>
@@ -164,7 +297,7 @@ function OrderPage({
       live = false;
     };
   }, [id, rev]);
-  if (state === 'loading') return <PanelSkeleton />;
+  if (state === 'loading') return <PanelSkeleton variant="stats" />;
   if (!state.order)
     return (
       <>
@@ -216,4 +349,26 @@ const styles = (c: Record<ColorToken, string>) => ({
     fontVariant: ['tabular-nums' as const],
   },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
+  collect: { gap: 6, padding: 12, borderRadius: 12, backgroundColor: c.surfaceSunken },
+  collectTop: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  collectNum: { fontFamily: fonts.sansBold, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  chips: { gap: 8, paddingVertical: 2 },
+  chip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: c.surfaceSunken,
+  },
+  chipOn: { backgroundColor: c.brandTint },
+  chipText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
+  chipTextOn: { color: c.brandInk },
+  chipCount: { fontFamily: fonts.sansBold, fontSize: 12, color: c.inkMuted, fontVariant: ['tabular-nums' as const] },
 });

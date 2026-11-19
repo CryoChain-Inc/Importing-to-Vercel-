@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { Icon } from '../../../components/common/Icon';
+import { Banner, Pulse, Reveal } from '../../../components/feedback';
 import { OpsShell, type NavGroup } from '../../../components/layout/OpsShell';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
@@ -9,7 +10,7 @@ import * as buyers from '../../../services/ops.buyers.service';
 import * as fulfil from '../../../services/ops.fulfilment.service';
 import * as payouts from '../../../services/ops.payouts.service';
 import * as ops from '../../../services/ops.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { BuyersPanel } from '../components/BuyersPanel';
@@ -78,6 +79,7 @@ export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
+  const { colors } = useTheme();
   const { tab, params, go } = useOpsLocation(TABS);
   const [rev, setRev] = useState(0);
   const [core, setCore] = useState<OpsCore | null>(null);
@@ -201,6 +203,7 @@ export function OpsHome({ account }: { account: Account }) {
     },
   ];
   const [title, sub] = TITLES[tab];
+  const icon = groups.flatMap((g) => g.items).find((i) => i.key === tab)?.icon ?? 'grid';
   const page = {
     params,
     setParams: (p: Record<string, string>, replace = false) => go(tab, p, replace),
@@ -217,8 +220,20 @@ export function OpsHome({ account }: { account: Account }) {
       onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}
     >
       <View style={s.header}>
-        <Text style={s.title}>{title}</Text>
-        <Text style={s.sub}>{sub}</Text>
+        <View style={s.headIcon}>
+          <Icon name={icon} size={22} color={colors.brandInk} />
+        </View>
+        <View style={s.headText}>
+          <Text style={s.title}>{title}</Text>
+          <Text style={s.sub}>{sub}</Text>
+        </View>
+        <View style={s.livePill} accessibilityLabel="Updating live">
+          <View style={s.liveDotBox}>
+            <Pulse color={colors.brand500} size={10} />
+            <View style={s.liveDot} />
+          </View>
+          <Text style={s.liveText}>Live</Text>
+        </View>
       </View>
       {error ? (
         <>
@@ -227,14 +242,16 @@ export function OpsHome({ account }: { account: Account }) {
         </>
       ) : null}
       {tab === 'dashboard' && core ? (
-        <DashboardPanel data={core} onGo={go} />
+        <Reveal key={tab}>
+          <DashboardPanel data={core} drivers={rest?.drivers ?? null} onGo={go} />
+        </Reveal>
       ) : data ? (
-        <>
+        <Reveal key={tab}>
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
           {tab === 'orders' ? (
-            <OrdersBoard drivers={data.drivers} onChange={load} {...page} />
+            <OrdersBoard drivers={data.drivers} board={data.board} onChange={load} {...page} />
           ) : null}
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
           {tab === 'decisions' ? (
@@ -269,7 +286,7 @@ export function OpsHome({ account }: { account: Account }) {
               <LogisticsSettings rev={rev} />
             </>
           ) : null}
-        </>
+        </Reveal>
       ) : error ? null : (
         <PanelSkeleton />
       )}
@@ -278,7 +295,28 @@ export function OpsHome({ account }: { account: Account }) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  header: { gap: 2, marginBottom: 4 },
+  header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, marginBottom: 4 },
+  headIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
+  headText: { flex: 1, gap: 2 },
+  livePill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: c.surfaceSunken,
+  },
+  liveDotBox: { width: 10, height: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.brand500 },
+  liveText: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.inkMuted },
   title: {
     fontFamily: fonts.heading,
     fontSize: 28,

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips, Input } from '../../../components/common';
+import { Badge, Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { reorderStops, unlockRoute } from '../../../services/ops.control.service';
 import { LiveMap, type LivePlace } from '../../../components/location/LiveMap';
 import { decodePolyline } from '../../../utils/polyline';
-import { Banner } from '../../../components/feedback';
+import { Banner, Pulse, Reveal } from '../../../components/feedback';
 import { replanRoutes, type DriverRoute } from '../../../services/ops.fulfilment.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
-import { Empty, Hero, SectionTitle, when } from './OpsBits';
+import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { Empty, Meter, SectionTitle, Stat, StatGrid, when } from './OpsBits';
 import { useAction } from './useAction';
 
 const FRESH_MS = 30 * 60 * 1000;
@@ -106,6 +106,7 @@ export function RoutesPanel({
   onChange: () => Promise<void>;
 }) {
   const s = useThemedStyles(styles);
+  const { colors } = useTheme();
   const { busy, error, run } = useAction(onChange);
   const live = drivers.filter(online);
   const pending = drivers.reduce(
@@ -161,11 +162,23 @@ export function RoutesPanel({
   return (
     <View style={s.list}>
       {error ? <Banner text={error} /> : null}
-      <Hero
-        label="Drivers reporting"
-        value={`${live.length} of ${drivers.length}`}
-        cells={[{ label: 'Stops pending', value: String(pending) }]}
-      />
+      <StatGrid>
+        <Stat
+          icon="truck"
+          label="Drivers reporting"
+          value={`${live.length} of ${drivers.length}`}
+          tone={live.length ? 'brand' : undefined}
+        />
+        <Stat icon="pin" label="Stops pending" value={String(pending)} />
+        <Stat icon="users" label="On the road" value={String(onRoad.length)} />
+        <Stat
+          icon="alert"
+          label="No signal"
+          value={String(onRoad.filter(noSignal).length)}
+          tone={onRoad.some(noSignal) ? 'danger' : undefined}
+          note="Silent for 10+ minutes"
+        />
+      </StatGrid>
       {onRoad.length > 0 ? (
         <Card style={s.item}>
           <SectionTitle title="Live map" note={`${onRoad.length} on the road`} />
@@ -197,22 +210,40 @@ export function RoutesPanel({
           ))}
         </Card>
       ) : null}
-      <Button
-        size="sm"
-        variant="outline"
-        label="Re-plan all routes"
-        loading={busy}
-        onPress={() => run(replanRoutes)}
-      />
-      {drivers.map((d) => {
+      <View style={s.top}>
+        <View style={s.grow}>
+          <SectionTitle title="Drivers" note="One card per driver with today's route." />
+        </View>
+        <Button
+          size="sm"
+          variant="outline"
+          label="Re-plan all routes"
+          loading={busy}
+          onPress={() => run(replanRoutes)}
+        />
+      </View>
+      <View style={s.grid}>
+      {drivers.map((d, di) => {
         const todo = d.stops.filter((x) => x.state === 'pending');
         // A day's route is what is pending plus what was finished today; older stops are history.
         const today = d.stops.filter((x) => x.state === 'pending' || sameDay(x.doneAt));
         const earlier = d.stops.filter((x) => !today.includes(x));
         const todayDone = today.filter((x) => x.state === 'done').length;
         return (
-          <Card key={d.id} style={s.item}>
+          <Reveal key={d.id} index={di} style={s.cell}>
+          <Card style={s.item}>
             <View style={s.top}>
+              <View style={s.avatarBox}>
+                <View style={s.avatar}>
+                  <Text style={s.avatarText}>{(d.name || '?').slice(0, 1).toUpperCase()}</Text>
+                </View>
+                {online(d) && !noSignal(d) ? (
+                  <View style={s.dotBox}>
+                    <Pulse color={colors.brand500} size={12} />
+                    <View style={s.dot} />
+                  </View>
+                ) : null}
+              </View>
               <View style={s.grow}>
                 <Text style={s.name}>{d.name}</Text>
                 <Text style={s.meta}>
@@ -232,11 +263,14 @@ export function RoutesPanel({
                 tone={noSignal(d) ? 'warning' : online(d) ? 'success' : 'neutral'}
               />
             </View>
-            <Text style={s.meta}>
-              {d.lat != null
-                ? `Last seen ${when(d.seenAt)} · ${d.lat.toFixed(4)}, ${d.lng!.toFixed(4)}`
-                : 'Has not shared a location.'}
-            </Text>
+            <View style={s.seen}>
+              <Icon name="pin" size={14} color={colors.inkMuted} />
+              <Text style={[s.meta, s.grow]}>
+                {d.lat != null
+                  ? `Last seen ${when(d.seenAt)} · ${d.lat.toFixed(4)}, ${d.lng!.toFixed(4)}`
+                  : 'Has not shared a location.'}
+              </Text>
+            </View>
             <SectionTitle
               title="Route"
               note={`${todo.length} pending${d.routeLocked ? ' · order set by ops' : ''}`}
@@ -331,9 +365,7 @@ export function RoutesPanel({
               <Text style={s.meta}>No stops. New orders are assigned automatically.</Text>
             ) : (
               <>
-                <View style={s.bar}>
-                  <View style={[s.barFill, { width: `${(todayDone / Math.max(today.length, 1)) * 100}%` }]} />
-                </View>
+                <Meter pct={(todayDone / Math.max(today.length, 1)) * 100} />
                 <Text style={s.meta}>
                   {`${todayDone} of ${today.length} stops done today · ${new Set(today.map((x) => x.order)).size} orders`}
                 </Text>
@@ -362,15 +394,47 @@ export function RoutesPanel({
               </>
             )}
           </Card>
+          </Reveal>
         );
       })}
+      </View>
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  list: { gap: 12 },
-  item: { gap: 8, padding: 16 },
+  list: { gap: 16 },
+  grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 16, alignItems: 'flex-start' as const },
+  cell: { flexGrow: 1, flexBasis: 420, minWidth: 280 },
+  item: { gap: 10, padding: 18 },
+  avatarBox: { width: 44, height: 44 },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
+  avatarText: { fontFamily: fonts.sansBold, fontSize: 18, color: c.brandInk },
+  dotBox: {
+    position: 'absolute' as const,
+    right: -2,
+    bottom: -2,
+    width: 12,
+    height: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: c.brand500,
+    borderWidth: 2,
+    borderColor: c.surfaceCard,
+  },
+  seen: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   top: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

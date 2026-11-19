@@ -13,7 +13,7 @@ import {
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { ghs } from '../../../utils/format';
 import { posthog } from '../../../config/posthog';
-import { Empty, PanelSkeleton, Stat, StatGrid, when } from './OpsBits';
+import { Empty, PanelSkeleton, Stat, StatGrid, when, RevealCard } from './OpsBits';
 import { useAction } from './useAction';
 
 const LABEL: Record<RefundStatus, string> = {
@@ -70,7 +70,7 @@ export function RefundsPanel({ rev }: { /** Bumps when the dashboard reloads. */
         <Button label="Try again" variant="outline" onPress={reload} />
       </>
     ) : (
-      <PanelSkeleton />
+      <PanelSkeleton variant="stats" />
     );
   const sum = (rows: Refund[]) => ghs(rows.reduce((n, r) => n + r.amount, 0));
 
@@ -99,7 +99,7 @@ export function RefundsPanel({ rev }: { /** Bumps when the dashboard reloads. */
       {refunds.map((r) => {
         const note = notes[r.id] ?? '';
         return (
-          <Card key={r.id} style={s.item}>
+          <RevealCard key={r.id} style={s.item}>
             <View style={s.top}>
               <Text style={s.name} numberOfLines={1}>
                 {r.buyer} · {r.orderCode}
@@ -188,7 +188,7 @@ export function RefundsPanel({ rev }: { /** Bumps when the dashboard reloads. */
                 </View>
               </>
             ) : null}
-          </Card>
+          </RevealCard>
         );
       })}
     </View>

@@ -129,7 +129,7 @@ export function OpsShell({
       )}
       <ScrollView
         style={s.main}
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={[s.scroll, wide && s.scrollWide]}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           refresh ? (
@@ -239,5 +239,6 @@ const styles = (c: Record<ColorToken, string>) => ({
   pillOn: { backgroundColor: c.brandTint },
   main: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 40, gap: 16 },
-  content: { width: '100%' as const, maxWidth: 1040, alignSelf: 'center' as const, gap: 16 },
+  scrollWide: { padding: 32, paddingBottom: 56 },
+  content: { width: '100%' as const, maxWidth: 1200, alignSelf: 'center' as const, gap: 20 },
 });
