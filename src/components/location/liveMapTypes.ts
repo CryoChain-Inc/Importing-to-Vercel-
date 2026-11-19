@@ -11,6 +11,8 @@ export interface LivePlace extends LatLng {
 
 export interface LiveMapProps {
   truck?: LatLng | null;
+  /** The driver's name; its first letter is shown as an avatar on the truck. */
+  truckName?: string;
   places?: LivePlace[];
   /** The road ahead. */
   route?: LatLng[];

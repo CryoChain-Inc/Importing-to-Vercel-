@@ -6,6 +6,7 @@ import { LiveMap } from '../../../components/location/LiveMap';
 import { fetchOrderTracking, type OrderTracking } from '../../../services/buyer.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { decodePolyline } from '../../../utils/polyline';
+import { roadRoute } from './route';
 
 const POLL_MS = 15000;
 const MAP_H = 260;
@@ -46,6 +47,20 @@ export function useOrderTracking(orderId: string | null): OrderTracking | null {
 export function OrderLiveMap({ t, preparing }: { t: OrderTracking | null; preparing?: boolean }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
+  const [road, setRoad] = useState<{ lat: number; lng: number }[]>([]);
+  const { truck, destination } = t ?? {};
+  const needRoad = t?.state === 'next' && !t.polyline && !!truck && !!destination;
+  // The server has no road when its directions call is unavailable, so draw one here; redone as the truck moves ~100 m.
+  const at = needRoad ? `${truck!.lat.toFixed(3)},${truck!.lng.toFixed(3)}` : '';
+  useEffect(() => {
+    if (!needRoad) return;
+    let live = true;
+    roadRoute(truck!, destination!).then((r) => live && setRoad(r));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the rounded position on purpose
+  }, [needRoad, at, destination?.lat, destination?.lng]);
 
   if (t && (t.state === 'waiting' || t.state === 'delivered')) return null;
   // The card is on screen from the first frame; the map and text fill in when the position arrives.
@@ -62,7 +77,7 @@ export function OrderLiveMap({ t, preparing }: { t: OrderTracking | null; prepar
         <Skeleton height={MAP_H} radius={14} />
       </Card>
     );
-  const route = t.polyline ? decodePolyline(t.polyline) : [];
+  const route = t.polyline ? decodePolyline(t.polyline) : needRoad ? road : [];
   const places = t.destination
     ? [{ ...t.destination, label: 'Your delivery address', kind: 'dropoff' as const }]
     : [];
@@ -89,7 +104,7 @@ export function OrderLiveMap({ t, preparing }: { t: OrderTracking | null; prepar
         </View>
       </View>
       <View style={s.map}>
-        <LiveMap truck={t.truck} places={places} route={route} height={MAP_H} />
+        <LiveMap truck={t.truck} truckName={t.driver?.name} places={places} route={route} height={MAP_H} />
       </View>
       {t.state === 'on_the_way' ? (
         <Text style={s.meta}>
