@@ -16,7 +16,6 @@ import type { PageProps } from '../useOpsLocation';
 import { OrderDetail } from './OrderDetail';
 import {
   Empty,
-  Meter,
   PanelSkeleton,
   Pager,
   Segmented,
@@ -129,24 +128,22 @@ function OrderRow({ o, index, onOpen }: { o: BoardOrder; index: number; onOpen: 
           </View>
           <Text style={s.amount}>{ghs(o.amount)}</Text>
         </View>
-        {showCollected ? (
-          <View style={s.collect}>
-            <View style={s.collectTop}>
-              <Text style={s.meta}>
-                <Text style={s.collectNum}>{qty(track.collectedKg)}</Text> of {qty(track.orderedKg)}{' '}
-                {track.unit} collected
-              </Text>
-              <Text style={s.meta}>{Math.round(pct)}%</Text>
-            </View>
-            <Meter pct={pct} />
-          </View>
-        ) : null}
+        <View style={s.steps} accessibilityLabel={`Step ${track.index + 1} of ${TRACK_STEPS.length}`}>
+          {TRACK_STEPS.map((step, i) => (
+            <View key={step.key} style={[s.seg, !track.cancelled && i <= track.index && s.segOn]} />
+          ))}
+        </View>
         <View style={s.foot}>
-          <View style={s.steps} accessibilityLabel={`Step ${track.index + 1} of ${TRACK_STEPS.length}`}>
-            {TRACK_STEPS.map((step, i) => (
-              <View key={step.key} style={[s.seg, !track.cancelled && i <= track.index && s.segOn]} />
-            ))}
-          </View>
+          <Text style={[s.meta, s.grow]} numberOfLines={1}>
+            {showCollected ? (
+              <>
+                <Text style={s.collectNum}>{qty(track.collectedKg)}</Text> of {qty(track.orderedKg)}{' '}
+                {track.unit} collected · {Math.round(pct)}%
+              </>
+            ) : (
+              `Step ${track.index + 1} of ${TRACK_STEPS.length}`
+            )}
+          </Text>
           <Badge label={st.label} tone={st.tone} />
           <Icon name="chevronRight" size={16} color={colors.inkMuted} />
         </View>
@@ -331,8 +328,8 @@ const styles = (c: Record<ColorToken, string>) => ({
   mid: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, gap: 12 },
   foot: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
   grow: { flex: 1, gap: 2 },
-  steps: { flex: 1, flexDirection: 'row' as const, gap: 3 },
-  seg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: c.borderSubtle },
+  steps: { flexDirection: 'row' as const, gap: 3 },
+  seg: { flex: 1, height: 6, borderRadius: 2, backgroundColor: c.borderSubtle },
   segOn: { backgroundColor: c.brand600 },
   code: {
     fontFamily: fonts.sansBold,
@@ -349,13 +346,6 @@ const styles = (c: Record<ColorToken, string>) => ({
     fontVariant: ['tabular-nums' as const],
   },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  collect: { gap: 6, padding: 12, borderRadius: 12, backgroundColor: c.surfaceSunken },
-  collectTop: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    gap: 8,
-  },
   collectNum: { fontFamily: fonts.sansBold, color: c.ink, fontVariant: ['tabular-nums' as const] },
   chips: { gap: 8, paddingVertical: 2 },
   chip: {
