@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, ChoiceChips, Icon, Input } from '../../../components/common';
 import { Banner, Reveal } from '../../../components/feedback';
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../../services/ops.trucks.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 import { elapsedLabel, hoursLabel } from '../../../utils/duration';
-import { ghs } from '../../../utils/format';
+import { formatPhone, ghs } from '../../../utils/format';
 import { Empty, PanelSkeleton, SectionTitle, Stat, StatGrid } from './OpsBits';
 import { useAction } from './useAction';
 
@@ -29,7 +29,7 @@ export function TrucksPanel() {
   const { colors } = useTheme();
   const [loaded, setLoaded] = useState(false);
   const [rates, setRates] = useState<TruckHourRate[]>([]);
-  const [prices, setPrices] = useState<Record<string, string>>({});
+  const [adding, setAdding] = useState(false);
   const [hours, setHours] = useState('');
   const [price, setPrice] = useState('');
   const [bookings, setBookings] = useState<OpsTruckBooking[]>([]);
@@ -41,7 +41,6 @@ export function TrucksPanel() {
     try {
       const [packages, rows] = await Promise.all([fetchOpsHourRates(), fetchOpsTruckBookings()]);
       setRates(packages);
-      setPrices(Object.fromEntries(packages.map((r) => [r.id, String(r.price)])));
       setBookings(rows);
       setFares(Object.fromEntries(rows.map((b) => [b.id, String(b.amount)])));
       setLoadError(null);
@@ -62,6 +61,7 @@ export function TrucksPanel() {
   ).length;
 
   if (!loaded) return <PanelSkeleton variant="stats" />;
+  const taken = rates.some((r) => r.hours === Number(hours));
   const active = bookings.filter((b) => b.state !== 'cancelled' && !b.completedAt);
 
   return (
@@ -85,68 +85,74 @@ export function TrucksPanel() {
         />
       </StatGrid>
       <Reveal>
-      <Card style={s.form}>
-        <Text style={s.title}>Hour packages</Text>
-        <Text style={s.meta}>
-          Buyers pick one of these packages. The fare is this price, not kilometres. Add 4, 8, 12
-          hours, or any length you need.
-        </Text>
-        {rates.map((r) => (
-          <View key={r.id} style={s.rateRow}>
-            <Text style={[s.name, s.rateName]}>{hoursLabel(r.hours)}</Text>
-            <Input
-              label="GH₵"
-              value={prices[r.id] ?? ''}
-              onChangeText={(v) => setPrices({ ...prices, [r.id]: v })}
-              keyboardType="decimal-pad"
-              style={s.rateInput}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              label="Save"
-              loading={busy}
-              disabled={!Number(prices[r.id])}
-              onPress={() => run(() => saveHourRate(r.id, Number(prices[r.id])))}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              label="Remove"
-              loading={busy}
-              onPress={() => run(() => deleteHourRate(r.id))}
-            />
+        <Card style={s.form}>
+          <View style={s.top}>
+            <View style={s.grow}>
+              <Text style={s.title}>Hour packages</Text>
+              <Text style={s.meta}>
+                Buyers pick one. The fare is the package price, not kilometres.
+              </Text>
+            </View>
+            <Badge label={`${rates.length} active`} tone="info" />
           </View>
-        ))}
-        <View style={s.addRow}>
-          <Input
-            label="Hours"
-            value={hours}
-            onChangeText={setHours}
-            keyboardType="number-pad"
-            style={s.rateInput}
-          />
-          <Input
-            label="Price (GH₵)"
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="decimal-pad"
-            style={s.rateInput}
-          />
-        </View>
-        <Button
-          label="Add hour package"
-          loading={busy}
-          disabled={!Number(hours) || !Number(price)}
-          onPress={() =>
-            run(async () => {
-              await addHourRate(Number(hours), Number(price));
-              setHours('');
-              setPrice('');
-            })
-          }
-        />
-      </Card>
+          <View style={s.pkgList}>
+            {[...rates]
+              .sort((x, y) => x.hours - y.hours)
+              .map((r, i) => (
+                <PackageRow key={r.id + r.price} rate={r} first={i === 0} busy={busy} run={run} />
+              ))}
+            {rates.length === 0 ? (
+              <Text style={[s.meta, s.pkgEmpty]}>No packages yet. Add one so buyers can book.</Text>
+            ) : null}
+          </View>
+          {adding ? (
+            <View style={s.addBox}>
+              <Text style={s.value}>New package</Text>
+              <View style={s.addRow}>
+                <Input
+                  label="Hours"
+                  value={hours}
+                  onChangeText={setHours}
+                  keyboardType="number-pad"
+                  style={s.rateInput}
+                />
+                <Input
+                  label="Price (GH₵)"
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="decimal-pad"
+                  style={s.rateInput}
+                />
+              </View>
+              {taken ? (
+                <Text style={s.meta}>A {hoursLabel(Number(hours))} package already exists.</Text>
+              ) : Number(hours) > 0 && Number(price) > 0 ? (
+                <Text style={s.meta}>
+                  {hoursLabel(Number(hours))} at {ghs(Number(price) / Number(hours))} per hour
+                </Text>
+              ) : null}
+              <View style={s.addRow}>
+                <Button
+                  size="sm"
+                  label="Add package"
+                  loading={busy}
+                  disabled={!Number(hours) || !Number(price) || taken}
+                  onPress={() =>
+                    run(async () => {
+                      await addHourRate(Number(hours), Number(price));
+                      setHours('');
+                      setPrice('');
+                      setAdding(false);
+                    })
+                  }
+                />
+                <Button size="sm" variant="ghost" label="Cancel" onPress={() => setAdding(false)} />
+              </View>
+            </View>
+          ) : (
+            <Button variant="outline" label="Add hour package" onPress={() => setAdding(true)} />
+          )}
+        </Card>
       </Reveal>
       <SectionTitle
         title="Bookings"
@@ -160,104 +166,227 @@ export function TrucksPanel() {
         />
       ) : null}
       <View style={s.grid}>
-      {bookings.map((b, bi) => (
-        <Reveal key={b.id} index={bi} style={s.cell}>
-        <Card style={s.item}>
-          <View style={s.top}>
-            <Text style={s.name}>
-              {b.code} · {ghs(b.amount)}
-            </Text>
-            <Badge
-              label={
-                b.completedAt
-                  ? 'Completed'
-                  : b.startedAt
-                    ? 'On the way'
-                    : b.state === 'awaiting_payment'
-                      ? 'Awaiting payment'
-                      : b.state === 'paid'
-                        ? 'Paid'
-                        : 'Cancelled'
-              }
-              tone={
-                b.completedAt || b.state === 'paid'
-                  ? 'success'
-                  : b.state === 'cancelled'
-                    ? 'neutral'
-                    : 'warning'
-              }
-            />
-          </View>
-          <Text style={s.meta}>
-            {b.buyer} · {b.purpose === 'transfer' ? 'Transfer' : 'Pick up'}
-          </Text>
-          <View style={s.leg}>
-            <View style={s.legRail}>
-              <View style={s.legDot} />
-              <View style={s.legLine} />
-              <View style={[s.legDot, s.legEnd]} />
-            </View>
-            <View style={s.grow}>
-              <Text style={s.value}>{b.pickupLabel}</Text>
-              <Text style={s.value}>{b.dropoffLabel}</Text>
-            </View>
-          </View>
-          <Text style={s.meta}>
-            {new Date(b.pickupAt).toLocaleString('en-GH')}
-            {b.bookedHours ? ` · ${hoursLabel(b.bookedHours)}` : ''}
-          </Text>
-          {b.startedAt ? (
-            <Text style={s.meta}>
-              On the clock {elapsedLabel(b.startedAt, b.completedAt)}
-              {b.bookedHours ? ` of ${hoursLabel(b.bookedHours)} booked` : ''}.
-            </Text>
-          ) : null}
-          <View style={s.driver}>
-            <Icon name="truck" size={16} color={b.driverName ? colors.brandInk : colors.harvestInk} />
-            <Text style={[s.value, s.grow]}>
-              {b.driverName || b.driverPlate
-                ? `${b.driverName || 'Assigned'}${b.driverPlate ? ` · ${b.driverPlate}` : ''}`
-                : 'No driver allotted yet'}
-            </Text>
-          </View>
-          {b.state !== 'cancelled' && !b.startedAt ? (
-            <AssignDriver booking={b} currentId={b.driverId} run={run} />
-          ) : null}
-          {b.state === 'awaiting_payment' ? (
-            <View style={s.actions}>
-              <Input
-                label="Fare (GH₵)"
-                value={fares[b.id] ?? ''}
-                onChangeText={(v) => setFares({ ...fares, [b.id]: v })}
-                keyboardType="decimal-pad"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                label="Set fare"
-                loading={busy}
-                disabled={!Number(fares[b.id])}
-                onPress={() => run(() => saveTruckFare(b.id, Number(fares[b.id])))}
-              />
-              <Button
-                size="sm"
-                label="Confirm payment"
-                loading={busy}
-                onPress={() => run(() => confirmTruckPayment(b.id))}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                label="Cancel booking"
-                loading={busy}
-                onPress={() => run(() => cancelOpsTruckBooking(b.id))}
-              />
-            </View>
-          ) : null}
-        </Card>
-        </Reveal>
-      ))}
+        {bookings.map((b, bi) => (
+          <Reveal key={b.id} index={bi} style={s.cell}>
+            <Card style={s.item}>
+              <View style={s.top}>
+                <View style={s.grow}>
+                  <Text style={s.name}>{b.code}</Text>
+                  <Text style={s.meta}>
+                    {b.buyer}
+                    {b.buyerPhone ? ` · ${formatPhone(b.buyerPhone)}` : ''}
+                  </Text>
+                </View>
+                <View style={s.right}>
+                  <Text style={s.amount}>{ghs(b.amount)}</Text>
+                  <Badge
+                    label={
+                      b.completedAt
+                        ? 'Completed'
+                        : b.startedAt
+                          ? 'On the way'
+                          : b.state === 'awaiting_payment'
+                            ? 'Awaiting payment'
+                            : b.state === 'paid'
+                              ? 'Paid'
+                              : 'Cancelled'
+                    }
+                    tone={
+                      b.completedAt || b.state === 'paid'
+                        ? 'success'
+                        : b.state === 'cancelled'
+                          ? 'neutral'
+                          : 'warning'
+                    }
+                  />
+                </View>
+              </View>
+              <View style={s.leg}>
+                <View style={s.legRail}>
+                  <View style={s.legDot} />
+                  <View style={s.legLine} />
+                  <View style={[s.legDot, s.legEnd]} />
+                </View>
+                <View style={s.grow}>
+                  <Text style={s.value}>{b.pickupLabel}</Text>
+                  <Text style={s.value}>{b.dropoffLabel}</Text>
+                </View>
+              </View>
+              <View style={s.facts}>
+                <Fact
+                  label="Pickup"
+                  value={new Date(b.pickupAt).toLocaleString('en-GH', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
+                />
+                <Fact label="Type" value={b.purpose === 'transfer' ? 'Transfer' : 'Pick up'} />
+                {b.bookedHours ? (
+                  <Fact
+                    label="Package"
+                    value={`${hoursLabel(b.bookedHours)}${b.hourlyPrice ? ` · ${ghs(b.hourlyPrice)}/h` : ''}`}
+                  />
+                ) : null}
+                {b.distanceKm ? (
+                  <Fact label="Distance" value={`${b.distanceKm.toFixed(1)} km`} />
+                ) : null}
+                {b.startedAt ? (
+                  <Fact
+                    label="On the clock"
+                    value={`${elapsedLabel(b.startedAt, b.completedAt)}${b.bookedHours ? ` of ${hoursLabel(b.bookedHours)}` : ''}`}
+                  />
+                ) : null}
+                <Fact
+                  label="Booked"
+                  value={new Date(b.createdAt).toLocaleDateString('en-GH', { dateStyle: 'medium' })}
+                />
+              </View>
+              <View style={s.driver}>
+                <Icon
+                  name="truck"
+                  size={16}
+                  color={b.driverName ? colors.brandInk : colors.harvestInk}
+                />
+                <View style={s.grow}>
+                  <Text style={s.value}>
+                    {b.driverName || b.driverPlate
+                      ? b.driverName || 'Assigned'
+                      : 'No driver allotted yet'}
+                  </Text>
+                  {b.driverName || b.driverPlate ? (
+                    <Text style={s.meta}>
+                      {[b.driverPlate, b.driverVehicle, b.driverPhone && formatPhone(b.driverPhone)]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+              {b.state !== 'cancelled' && !b.startedAt ? (
+                <AssignDriver booking={b} currentId={b.driverId} run={run} />
+              ) : null}
+              {b.state === 'awaiting_payment' ? (
+                <View style={s.actions}>
+                  <Input
+                    label="Fare (GH₵)"
+                    value={fares[b.id] ?? ''}
+                    onChangeText={(v) => setFares({ ...fares, [b.id]: v })}
+                    keyboardType="decimal-pad"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    label="Set fare"
+                    loading={busy}
+                    disabled={!Number(fares[b.id])}
+                    onPress={() => run(() => saveTruckFare(b.id, Number(fares[b.id])))}
+                  />
+                  <Button
+                    size="sm"
+                    label="Confirm payment"
+                    loading={busy}
+                    onPress={() => run(() => confirmTruckPayment(b.id))}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    label="Cancel booking"
+                    loading={busy}
+                    onPress={() => run(() => cancelOpsTruckBooking(b.id))}
+                  />
+                </View>
+              ) : null}
+            </Card>
+          </Reveal>
+        ))}
       </View>
+    </View>
+  );
+}
+
+function PackageRow({
+  rate,
+  first,
+  busy,
+  run,
+}: {
+  rate: TruckHourRate;
+  first: boolean;
+  busy: boolean;
+  run: (fn: () => Promise<void>) => void;
+}) {
+  const s = useThemedStyles(styles);
+  const { colors } = useTheme();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(rate.price));
+  const next = Number(val);
+  return (
+    <View style={[s.pkg, !first && s.pkgDivider]}>
+      <View style={s.pkgHead}>
+        <View style={s.grow}>
+          <Text style={s.name}>{hoursLabel(rate.hours)}</Text>
+          <Text style={s.meta}>{ghs(rate.price / rate.hours)} per hour</Text>
+        </View>
+        {!editing ? (
+          <>
+            <Text style={s.amount}>{ghs(rate.price)}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${hoursLabel(rate.hours)} price`}
+              onPress={() => setEditing(true)}
+              style={s.iconBtn}
+            >
+              <Icon name="edit" size={18} color={colors.inkMuted} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${hoursLabel(rate.hours)} package`}
+              disabled={busy}
+              onPress={() => run(() => deleteHourRate(rate.id))}
+              style={s.iconBtn}
+            >
+              <Icon name="trash" size={18} color={colors.dangerInk} />
+            </Pressable>
+          </>
+        ) : null}
+      </View>
+      {editing ? (
+        <View style={s.addRow}>
+          <Input
+            label="Price (GH₵)"
+            value={val}
+            onChangeText={setVal}
+            keyboardType="decimal-pad"
+            style={s.rateInput}
+          />
+          <Button
+            size="sm"
+            label="Save"
+            loading={busy}
+            disabled={!(next > 0) || next === rate.price}
+            onPress={() => run(() => saveHourRate(rate.id, next))}
+          />
+          <Button
+            size="sm"
+            variant="ghost"
+            label="Cancel"
+            onPress={() => {
+              setVal(String(rate.price));
+              setEditing(false);
+            }}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  const s = useThemedStyles(styles);
+  return (
+    <View style={s.fact}>
+      <Text style={s.meta}>{label}</Text>
+      <Text style={s.value}>{value}</Text>
     </View>
   );
 }
@@ -344,17 +473,42 @@ function AssignDriver({
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 16 },
   form: { gap: 12 },
-  grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 14, alignItems: 'flex-start' as const },
-  cell: { flexGrow: 1, flexBasis: 360 },
-  grow: { flex: 1, gap: 2 },
-  rateRow: {
+  grid: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
-    alignItems: 'flex-end' as const,
-    gap: 8,
+    gap: 14,
+    alignItems: 'flex-start' as const,
+  },
+  cell: { flexGrow: 1, flexBasis: 360 },
+  grow: { flex: 1, gap: 2 },
+  pkgList: {
+    alignSelf: 'stretch' as const,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.borderSubtle,
+    paddingHorizontal: 14,
+  },
+  pkg: { paddingVertical: 12, gap: 10 },
+  pkgDivider: { borderTopWidth: 1, borderTopColor: c.borderSubtle },
+  pkgHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  pkgEmpty: { paddingVertical: 14 },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderRadius: 10,
+  },
+  addBox: { gap: 10, padding: 12, borderRadius: 12, backgroundColor: c.surfaceSunken },
+  right: { alignItems: 'flex-end' as const, gap: 4 },
+  amount: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
+  facts: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 14,
     alignSelf: 'stretch' as const,
   },
-  rateName: { minWidth: 72, paddingBottom: 14 },
+  fact: { gap: 1 },
   rateInput: { flex: 1, minWidth: 110 },
   addRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
   item: { gap: 8, alignItems: 'flex-start' as const, padding: 18 },
