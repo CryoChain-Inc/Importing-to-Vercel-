@@ -2,6 +2,7 @@ import { normalizePhone } from '../utils/format';
 import { likeTerm, pageRange, type Paged } from './paging';
 import { removeStoredImage, replaceImage, type PickedImage } from './catalogueImage';
 import { supabase } from './supabase';
+import { produceImageUrl } from './farmer.service';
 
 export interface FarmerRow {
   id: string;
@@ -434,25 +435,57 @@ export interface TeamMember {
   phone: string;
   email: string;
   detail: string;
+  licence: string;
+  photoUrl: string | null;
+  /** From the fleet truck assigned to this driver. */
+  truck: string;
+  plate: string;
+  capacityKg: number | null;
   joinedAt: string;
 }
 
 export async function fetchTeam(): Promise<TeamMember[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, role, display_name, phone, email, created_at, drivers(vehicle_type, plate_number)')
-    .in('role', ['driver', 'ops'])
-    .order('created_at', { ascending: false });
-  fail('Could not load the team.')(error);
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.display_name ?? 'Unnamed',
-    role: r.role,
-    phone: r.phone ?? '',
-    email: r.email ?? '',
-    detail: [r.drivers?.vehicle_type, r.drivers?.plate_number].filter(Boolean).join(' · '),
-    joinedAt: r.created_at,
-  }));
+  const [people, trucks] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select(
+        'id, role, display_name, phone, email, created_at, drivers(licence_number, photo_path)',
+      )
+      .in('role', ['driver', 'ops'])
+      .order('created_at', { ascending: false }),
+    supabase.from('trucks').select('driver_id, name, plate, capacity_kg').not('driver_id', 'is', null),
+  ]);
+  fail('Could not load the team.')(people.error);
+  const truckOf = new Map((trucks.data ?? []).map((t: any) => [t.driver_id, t]));
+  return (people.data ?? []).map((r: any) => {
+    const t: any = truckOf.get(r.id);
+    return {
+      id: r.id,
+      name: r.display_name ?? 'Unnamed',
+      role: r.role,
+      phone: r.phone ?? '',
+      email: r.email ?? '',
+      detail: [t?.name, t?.plate].filter(Boolean).join(' · '),
+      licence: r.drivers?.licence_number ?? '',
+      photoUrl: r.drivers?.photo_path ? produceImageUrl(r.drivers.photo_path, 160) : null,
+      truck: t?.name ?? '',
+      plate: t?.plate ?? '',
+      capacityKg: t?.capacity_kg == null ? null : Number(t.capacity_kg),
+      joinedAt: r.created_at,
+    };
+  });
+}
+
+export async function updateStaff(
+  id: string,
+  v: { name: string; licence: string },
+): Promise<void> {
+  const { error } = await supabase.rpc('ops_update_staff', {
+    p_id: id,
+    p_name: v.name,
+    p_licence: v.licence,
+  });
+  fail('Could not save changes. Check the name and licence number.')(error);
 }
 
 /** The edge function creates the auth user + profile with the service role and re-checks that the caller is ops. */
