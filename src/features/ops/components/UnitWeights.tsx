@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Input } from '../../../components/common';
+import { Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
   fetchUnitWeights,
@@ -9,6 +9,7 @@ import {
 } from '../../../services/ops.control.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 import { UNITS } from '../../../utils/units';
+import { SettingGroup, SettingRow } from './SettingRow';
 import { useAction } from './useAction';
 
 const valid = (v: string) => v.trim() === '' || (Number(v) > 0 && Number(v) <= 1000);
@@ -48,45 +49,49 @@ export function UnitWeights({ rev }: { rev: number }) {
     <Card style={s.form}>
       <Text style={s.title}>Truck load estimates</Text>
       <Text style={s.meta}>
-        Trucks are sized in kilos. Set about how many kilos one unit weighs so 100 pieces is not
-        counted as 100 kg. A single product can override this when you edit it.
+        Trucks hold kilos, so set what one unit weighs. A product can override this when edited.
       </Text>
       {error ? <Banner text={error} /> : null}
-      <View style={s.grid}>
+      <SettingGroup
+        title="Weight per unit"
+        summary={UNITS.map((u) => `${u} ${v[u] || 1}`).join(' · ')}
+        invalid={!ok}
+      >
         {UNITS.map((u) => (
-          <Input
+          <SettingRow
             key={u}
-            label={`1 ${u} weighs (kg)`}
+            label={`1 ${u} weighs`}
+            unit="kg"
             value={v[u] ?? ''}
             onChangeText={(x) => {
               setSaved(false);
               setV({ ...v, [u]: x });
             }}
-            keyboardType="decimal-pad"
             maxLength={7}
-            style={s.cell}
-            hint={(v[u] ?? '') === '' ? 'Not set: counted as 1 kg' : undefined}
+            help="Left empty, it counts as 1 kg."
             error={valid(v[u] ?? '') ? undefined : 'Above 0, up to 1000'}
           />
         ))}
-      </View>
+      </SettingGroup>
       {saved ? (
         <Banner tone="info" text="Saved. The next planning run uses these weights." />
       ) : null}
-      <View style={s.grid}>
-        {dirty ? <Button label="Discard" variant="ghost" onPress={() => setV(base)} /> : null}
-        <Button
-          label="Save weights"
-          loading={busy}
-          disabled={!ok || !dirty}
-          onPress={() =>
-            run(async () => {
-              await saveUnitWeights(UNITS, v);
-              setSaved(true);
-            })
-          }
-        />
-      </View>
+      {dirty ? (
+        <View style={s.grid}>
+          <Button label="Discard" variant="ghost" onPress={() => setV(base)} />
+          <Button
+            label="Save weights"
+            loading={busy}
+            disabled={!ok || !dirty}
+            onPress={() =>
+              run(async () => {
+                await saveUnitWeights(UNITS, v);
+                setSaved(true);
+              })
+            }
+          />
+        </View>
+      ) : null}
     </Card>
   );
 }
@@ -94,7 +99,6 @@ export function UnitWeights({ rev }: { rev: number }) {
 const styles = (c: Record<ColorToken, string>) => ({
   form: { gap: 12 },
   grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
-  cell: { flex: 1, minWidth: 140 },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });

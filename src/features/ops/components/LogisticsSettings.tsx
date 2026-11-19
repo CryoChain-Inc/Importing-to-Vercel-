@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Input } from '../../../components/common';
+import { Button, Card } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
   fetchLogistics,
@@ -8,59 +8,81 @@ import {
   type Logistics,
 } from '../../../services/ops.control.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { SettingGroup, SettingRow } from './SettingRow';
 import { UnitWeights } from './UnitWeights';
 import { useAction } from './useAction';
 
 /** Each field with its unit, allowed range (same as the database checks) and what it changes. */
-const FIELDS: { key: keyof Logistics; label: string; min: number; max: number; help: string }[] = [
+const FIELDS: {
+  key: keyof Logistics;
+  label: string;
+  unit: string;
+  min: number;
+  max: number;
+  help: string;
+}[] = [
   {
     key: 'dispatchWaitMinutes',
-    label: 'Wait for truck space (minutes)',
+    label: 'Wait for truck space',
+    unit: 'min',
     min: 0,
     max: 1440,
-    help: 'A free truck takes an order straight away. If every truck is full or none is online, the order waits this long for space, then you are asked to assign it by hand.',
+    help: 'When every truck is full or offline, an order waits this long, then comes to you to assign.',
   },
   {
     key: 'detourKm',
-    label: 'Detour limit (km)',
+    label: 'Detour limit',
+    unit: 'km',
     min: 0,
     max: 500,
-    help: 'How far off its route a truck may go for a new order or a top-up after a short pickup.',
+    help: 'How far off route a truck may go for a new order or a top-up.',
   },
   {
     key: 'pickupTolerancePct',
-    label: 'Pickup tolerance (%)',
+    label: 'Pickup tolerance',
+    unit: '%',
     min: 0,
     max: 50,
-    help: 'A pickup this close to the reserved quantity needs no top-up and no refund.',
+    help: 'A pickup this close to the reserved quantity needs no top-up or refund.',
   },
   {
     key: 'avgSpeedKmh',
-    label: 'Average speed for estimates (km/h)',
+    label: 'Average speed',
+    unit: 'km/h',
     min: 5,
     max: 120,
     help: 'Used for arrival times until Google’s time arrives.',
   },
   {
     key: 'roadFactor',
-    label: 'Road factor for estimates',
+    label: 'Road factor',
+    unit: '×',
     min: 1,
     max: 3,
-    help: 'Road distance compared with a straight line. 1.4 means roads are 40% longer.',
+    help: 'Road vs straight-line distance. 1.4 means roads are 40% longer.',
   },
   {
     key: 'stopMinutes',
-    label: 'Time at each stop (minutes)',
+    label: 'Time at each stop',
+    unit: 'min',
     min: 0,
     max: 240,
-    help: 'Loading or unloading time added at every farm and buyer.',
+    help: 'Loading or unloading time at every farm and buyer.',
   },
   {
     key: 'etaBufferPct',
-    label: 'Arrival buffer (%)',
+    label: 'Arrival buffer',
+    unit: '%',
     min: 0,
     max: 200,
     help: 'Added to every drive time so arrivals are not promised too early.',
+  },
+];
+const GROUPS: { title: string; keys: (keyof Logistics)[] }[] = [
+  { title: 'Pickups', keys: ['detourKm', 'pickupTolerancePct'] },
+  {
+    title: 'Arrival estimates',
+    keys: ['avgSpeedKmh', 'roadFactor', 'stopMinutes', 'etaBufferPct'],
   },
 ];
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -106,30 +128,48 @@ export function LogisticsSettings({ rev }: { rev: number }) {
     setV({ ...v, [k]: x });
   };
 
+  const row = (f: (typeof FIELDS)[number]) => (
+    <SettingRow
+      key={f.key}
+      label={f.label}
+      unit={f.unit}
+      help={f.help}
+      value={v[f.key]}
+      onChangeText={set(f.key)}
+      error={ok(v[f.key], f.min, f.max) ? undefined : `Between ${f.min} and ${f.max}`}
+    />
+  );
+
   return (
     <View style={s.stack}>
       <Card style={s.form}>
         <Text style={s.title}>Logistics</Text>
         <Text style={s.meta}>
-          How orders are grouped onto trucks, routed and timed. Changes are recorded and apply
-          within 5 minutes.
+          How orders are grouped, routed and timed. Changes apply within 5 minutes.
         </Text>
         {error ? <Banner text={error} /> : null}
-        <View style={s.row}>
-          <Input
-            label="Dispatch from (HH:MM)"
+        <SettingGroup
+          title="Dispatch"
+          summary={`${v.dispatchStart}–${v.dispatchEnd} · wait ${v.dispatchWaitMinutes} min`}
+          invalid={!hoursOk || !ok(v.dispatchWaitMinutes, 0, 1440)}
+        >
+          <SettingRow
+            label="Send trucks from"
+            help="Trucks only go out in this window (Accra time, 24-hour)."
+            placeholder="06:00"
+            keyboardType="numbers-and-punctuation"
             value={v.dispatchStart}
             onChangeText={set('dispatchStart')}
             maxLength={5}
-            style={s.half}
             error={TIME.test(v.dispatchStart) ? undefined : 'Use 24-hour time, e.g. 06:00'}
           />
-          <Input
-            label="Dispatch until (HH:MM)"
+          <SettingRow
+            label="Stop sending at"
+            placeholder="17:00"
+            keyboardType="numbers-and-punctuation"
             value={v.dispatchEnd}
             onChangeText={set('dispatchEnd')}
             maxLength={5}
-            style={s.half}
             error={
               !TIME.test(v.dispatchEnd)
                 ? 'Use 24-hour time, e.g. 17:00'
@@ -138,36 +178,40 @@ export function LogisticsSettings({ rev }: { rev: number }) {
                   : undefined
             }
           />
-        </View>
-        <Text style={s.meta}>Trucks are only sent out between these times (Accra time).</Text>
-        {FIELDS.map((f) => (
-          <Input
-            key={f.key}
-            label={f.label}
-            value={v[f.key]}
-            onChangeText={set(f.key)}
-            keyboardType="decimal-pad"
-            hint={f.help}
-            error={ok(v[f.key], f.min, f.max) ? undefined : `Between ${f.min} and ${f.max}`}
-          />
-        ))}
+          {row(FIELDS[0])}
+        </SettingGroup>
+        {GROUPS.map((g) => {
+          const fs = g.keys.map((k) => FIELDS.find((f) => f.key === k)!);
+          return (
+            <SettingGroup
+              key={g.title}
+              title={g.title}
+              summary={fs.map((f) => `${v[f.key]} ${f.unit}`).join(' · ')}
+              invalid={fs.some((f) => !ok(v[f.key], f.min, f.max))}
+            >
+              {fs.map(row)}
+            </SettingGroup>
+          );
+        })}
         {saved ? (
           <Banner tone="info" text="Saved. The next planning run uses these values." />
         ) : null}
-        <View style={s.row}>
-          {dirty ? <Button label="Discard" variant="ghost" onPress={() => setV(base)} /> : null}
-          <Button
-            label="Save logistics"
-            loading={busy}
-            disabled={!valid || !dirty}
-            onPress={() =>
-              run(async () => {
-                await saveLogistics(v);
-                setSaved(true);
-              })
-            }
-          />
-        </View>
+        {dirty ? (
+          <View style={s.row}>
+            <Button label="Discard" variant="ghost" onPress={() => setV(base)} />
+            <Button
+              label="Save logistics"
+              loading={busy}
+              disabled={!valid || !dirty}
+              onPress={() =>
+                run(async () => {
+                  await saveLogistics(v);
+                  setSaved(true);
+                })
+              }
+            />
+          </View>
+        ) : null}
       </Card>
       <UnitWeights rev={rev} />
     </View>
@@ -176,9 +220,8 @@ export function LogisticsSettings({ rev }: { rev: number }) {
 
 const styles = (c: Record<ColorToken, string>) => ({
   stack: { gap: 16 },
-  form: { gap: 12 },
+  form: { gap: 14 },
   row: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
-  half: { flex: 1, minWidth: 140 },
   title: { fontFamily: fonts.sansBold, fontSize: 18, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
 });
