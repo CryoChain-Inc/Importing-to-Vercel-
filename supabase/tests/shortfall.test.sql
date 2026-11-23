@@ -1,21 +1,21 @@
 -- shortfall: pay on what was collected, tolerance, automatic top-up, and what happens when nothing can be found.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(24);
 
 update public.ops_config set dispatch_start = '00:00', dispatch_end = '23:59:59', dispatch_wait_minutes = 0, detour_km = 25, pickup_tolerance_pct = 2;
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000005f0f01', 'short-f1@test.local'), ('00000000-0000-0000-0000-0000005f0f02', 'short-f2@test.local'),
   ('00000000-0000-0000-0000-0000005f0f03', 'short-f3@test.local'), ('00000000-0000-0000-0000-0000005f0f04', 'short-f4@test.local'),
-  ('00000000-0000-0000-0000-0000005f0f05', 'short-f5@test.local'), ('00000000-0000-0000-0000-0000005f0f06', 'short-f6-far@test.local'),
+  ('00000000-0000-0000-0000-0000005f0f05', 'short-f5@test.local'), ('00000000-0000-0000-0000-0000005f0f07', 'short-f7-bean@test.local'), ('00000000-0000-0000-0000-0000005f0f06', 'short-f6-far@test.local'),
   ('00000000-0000-0000-0000-0000005f0b01', 'short-buyer@test.local'), ('00000000-0000-0000-0000-0000005f0d01', 'short-driver@test.local');
 update public.profiles set role = 'driver' where id = '00000000-0000-0000-0000-0000005f0d01';
 insert into public.buyers (id) values ('00000000-0000-0000-0000-0000005f0b01');
 insert into public.farmers (id, address, latitude, longitude) values
   ('00000000-0000-0000-0000-0000005f0f01', 'F1 tomato', 5.600, -0.200), ('00000000-0000-0000-0000-0000005f0f02', 'F2 tomato', 5.630, -0.200),
   ('00000000-0000-0000-0000-0000005f0f03', 'F3 yam', 5.610, -0.200), ('00000000-0000-0000-0000-0000005f0f04', 'F4 okra', 5.605, -0.200),
-  ('00000000-0000-0000-0000-0000005f0f05', 'F5 okra', 5.640, -0.200), ('00000000-0000-0000-0000-0000005f0f06', 'F6 yam, far', 8.600, -0.200);
+  ('00000000-0000-0000-0000-0000005f0f05', 'F5 okra', 5.640, -0.200), ('00000000-0000-0000-0000-0000005f0f07', 'F7 bean, next door', 5.601, -0.200), ('00000000-0000-0000-0000-0000005f0f06', 'F6 yam, far', 8.600, -0.200);
 insert into public.drivers (id) values ('00000000-0000-0000-0000-0000005f0d01');
 insert into public.trucks (plate, capacity_kg, driver_id) values ('SHORT-1', 1000, '00000000-0000-0000-0000-0000005f0d01');
 insert into public.driver_locations (driver_id, lat, lng) values ('00000000-0000-0000-0000-0000005f0d01', 5.600, -0.200);
@@ -24,9 +24,10 @@ insert into public.categories (id, name) values ('00000000-0000-0000-0000-000000
 insert into public.products (id, name, unit, active, category_id) values
   ('00000000-0000-0000-0000-0000005f0a01', 'Short Tomato', 'kg', true, '00000000-0000-0000-0000-0000005f0c01'),
   ('00000000-0000-0000-0000-0000005f0a02', 'Short Yam', 'kg', true, '00000000-0000-0000-0000-0000005f0c01'),
-  ('00000000-0000-0000-0000-0000005f0a03', 'Short Okra', 'kg', true, '00000000-0000-0000-0000-0000005f0c01');
+  ('00000000-0000-0000-0000-0000005f0a03', 'Short Okra', 'kg', true, '00000000-0000-0000-0000-0000005f0c01'),
+  ('00000000-0000-0000-0000-0000005f0a04', 'Short Bean', 'kg', true, '00000000-0000-0000-0000-0000005f0c01');
 insert into public.product_prices (product_id, price) values
-  ('00000000-0000-0000-0000-0000005f0a01', 10), ('00000000-0000-0000-0000-0000005f0a02', 10), ('00000000-0000-0000-0000-0000005f0a03', 10);
+  ('00000000-0000-0000-0000-0000005f0a01', 10), ('00000000-0000-0000-0000-0000005f0a02', 10), ('00000000-0000-0000-0000-0000005f0a03', 10), ('00000000-0000-0000-0000-0000005f0a04', 10);
 
 create function pg_temp.list(p_farmer uuid, p_product text, p_kg numeric) returns void language plpgsql as $$
 begin
@@ -41,6 +42,7 @@ select pg_temp.list('00000000-0000-0000-0000-0000005f0f03', 'Short Yam', 100);
 select pg_temp.list('00000000-0000-0000-0000-0000005f0f06', 'Short Yam', 500);
 select pg_temp.list('00000000-0000-0000-0000-0000005f0f04', 'Short Okra', 50);
 select pg_temp.list('00000000-0000-0000-0000-0000005f0f05', 'Short Okra', 500);
+select pg_temp.list('00000000-0000-0000-0000-0000005f0f07', 'Short Bean', 50);
 
 create function pg_temp.pay(p_order uuid, p_product uuid, p_kg numeric) returns void language plpgsql as $$
 begin
@@ -64,7 +66,13 @@ select pg_temp.pay('00000000-0000-0000-0000-0000005f0e01', '00000000-0000-0000-0
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000005f0d01"}', true);
 select throws_like($$select public.record_delivery_handover(pg_temp.stop_of('00000000-0000-0000-0000-0000005f0e01', '00000000-0000-0000-0000-0000005f0f01'), 150, 4, null, '00000000-0000-0000-0000-0000005f0d01/p.jpg', 'photo')$$,
   '%more than reserved%', 'the driver cannot record more than was reserved');
+-- Another order on the same truck, its farm nearer than any top-up farm.
+select pg_temp.pay('00000000-0000-0000-0000-0000005f0e09', '00000000-0000-0000-0000-0000005f0a04', 10);
+update public.orders set stops_changed_at = null where id = '00000000-0000-0000-0000-0000005f0e01';
 select pg_temp.collect('00000000-0000-0000-0000-0000005f0e01', '00000000-0000-0000-0000-0000005f0f01', 80);
+select is((select seq from public.delivery_stops where id = pg_temp.stop_of('00000000-0000-0000-0000-0000005f0e01', '00000000-0000-0000-0000-0000005f0f02')),
+  1, 'the top-up pickup is the driver''s next stop, ahead of nearer stops and every drop-off');
+select is((select stops_changed_at from public.orders where id = '00000000-0000-0000-0000-0000005f0e01'), now(), 'the collection and top-up stamp the order so the buyer app reloads');
 select results_eq($$select kg from public.order_allocations where order_id = '00000000-0000-0000-0000-0000005f0e01' and farmer_id = '00000000-0000-0000-0000-0000005f0f01' and status = 'collected' order by kg desc$$,
   $$values (60::numeric), (20::numeric)$$, 'the 80 collected fills the older listing first: 60 then 20');
 select is((select sum(amount) from public.order_allocations where order_id = '00000000-0000-0000-0000-0000005f0e01' and farmer_id = '00000000-0000-0000-0000-0000005f0f01' and status = 'collected'),
@@ -75,6 +83,12 @@ select results_eq($$select kg, status from public.order_allocations where order_
 select is((select driver_id from public.delivery_stops where id = pg_temp.stop_of('00000000-0000-0000-0000-0000005f0e01', '00000000-0000-0000-0000-0000005f0f02')),
   '00000000-0000-0000-0000-0000005f0d01'::uuid, 'and the top-up pickup is on the same truck');
 select is((select short_kg + tolerated_kg from public.order_items where order_id = '00000000-0000-0000-0000-0000005f0e01'), 0::numeric, 'nothing is short on the order');
+select pg_temp.collect('00000000-0000-0000-0000-0000005f0e01', '00000000-0000-0000-0000-0000005f0f02', 20);
+update public.orders set stops_changed_at = null where id = '00000000-0000-0000-0000-0000005f0e01';
+select public.record_delivery_handover(id, null, 4, null, '00000000-0000-0000-0000-0000005f0d01/d.jpg', 'photo'),
+       public.complete_delivery_stop(id)
+  from public.delivery_stops where order_id = '00000000-0000-0000-0000-0000005f0e01' and kind = 'dropoff';
+select is((select stops_changed_at from public.orders where id = '00000000-0000-0000-0000-0000005f0e01'), now(), 'the drop-off stamps the order so the buyer sees it delivered at once');
 
 -- ── 99 of 100 is inside the 2 % tolerance ───────────────────────────────────
 select pg_temp.pay('00000000-0000-0000-0000-0000005f0e02', '00000000-0000-0000-0000-0000005f0a01', 100);
