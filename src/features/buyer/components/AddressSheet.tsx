@@ -26,17 +26,20 @@ export function AddressSheet({
   onRefresh,
   onPick,
   onClose,
+  startAdding = false,
 }: {
   addresses: BuyerAddress[];
   onRefresh: () => Promise<void>;
   /** Fires on tap; the parent closes the sheet and saves in the background so the pick feels instant. */
   onPick: (id: string) => void;
   onClose: () => void;
+  /** Open straight on the new-address form (the cart's "Add new address"). */
+  startAdding?: boolean;
 }) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const { busy, error, run } = useAction(async () => {});
-  const [adding, setAdding] = useState(addresses.length === 0);
+  const [adding, setAdding] = useState(startAdding || addresses.length === 0);
   const [label, setLabel] = useState('');
   const [address, setAddress] = useState<AddressValue>(emptyAddress);
   const valid = label.trim().length >= 2 && addressReady(address);

@@ -249,7 +249,8 @@ function BuyerShell({
               onRefresh={load}
               onOrdered={setPaying}
               onShop={() => setTab('shop')}
-              onAddAddress={() => setTab('account')}
+              profileComplete={buyerProfileComplete(data.details)}
+              onCompleteProfile={() => setTab('account')}
             />
           ) : null}
           {tab === 'orders' ? (

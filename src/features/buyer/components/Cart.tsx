@@ -3,6 +3,7 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { Badge, Button, Card, Icon } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import {
+  ADDRESS_MAX,
   checkoutCart,
   type BuyerAddress,
   type CartLine,
@@ -15,6 +16,7 @@ import { fmtQty, ghs } from '../../../utils/format';
 import { posthog } from '../../../config/posthog';
 import { useAction } from '../../ops/components/useAction';
 import { useCart } from '../cart/CartProvider';
+import { AddressSheet } from './AddressSheet';
 import { QtyStepper } from './QtyStepper';
 
 /** Review the cart, pick where it goes, then check supply and pay. Stock is only held once every line fits. */
@@ -23,7 +25,8 @@ export function Cart({
   addresses,
   onOrdered,
   onRefresh,
-  onAddAddress,
+  profileComplete,
+  onCompleteProfile,
   onShop,
 }: {
   items: CatalogueItem[];
@@ -31,7 +34,9 @@ export function Cart({
   /** Called with the new order's id once stock is held; the payment page takes over from here. */
   onOrdered: (orderId: string) => void;
   onRefresh: () => Promise<void>;
-  onAddAddress: () => void;
+  /** Orders need business name, contact name and an address; false sends the buyer to the Account tab. */
+  profileComplete: boolean;
+  onCompleteProfile: () => void;
   onShop: () => void;
 }) {
   const s = useThemedStyles(styles);
@@ -41,6 +46,7 @@ export function Cart({
   const { busy, error, run } = useAction(onRefresh);
   const pinned = addresses.filter((a) => a.latitude != null);
   const [addressId, setAddressId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const address =
     pinned.find((a) => a.id === addressId) ?? pinned.find((a) => a.isDefault) ?? pinned[0];
@@ -61,6 +67,7 @@ export function Cart({
 
   const submit = (cartLines: CartLine[]) =>
     run(async () => {
+      if (!profileComplete) throw new Error('Complete your profile first.');
       if (!address) throw new Error('Add a delivery address first.');
       const res = await checkoutCart(cartLines, address.id);
       if (!res.ok) {
@@ -206,7 +213,6 @@ export function Cart({
             <Text style={s.meta}>
               Add a delivery address and pin it on the map so we can find the nearest farms.
             </Text>
-            <Button size="sm" variant="tonal" label="Add address" onPress={onAddAddress} />
           </>
         ) : (
           pinned.map((a) => {
@@ -232,6 +238,15 @@ export function Cart({
             );
           })
         )}
+        {addresses.length < ADDRESS_MAX ? (
+          <Button
+            size="sm"
+            variant="tonal"
+            icon="edit"
+            label="Add new address"
+            onPress={() => setAdding(true)}
+          />
+        ) : null}
       </Card>
 
       <Card tone="tint" style={s.box}>
@@ -251,11 +266,18 @@ export function Cart({
           size="lg"
           label="Check availability & pay"
           loading={busy}
-          disabled={blocked || !address || total <= 0}
+          disabled={blocked || !profileComplete || !address || total <= 0}
           onPress={() => submit(lines)}
         />
         {blocked ? (
           <Text style={s.warn}>Fix the highlighted items to continue.</Text>
+        ) : !profileComplete ? (
+          <>
+            <Text style={s.warn}>
+              Add your business name, contact name and a delivery address to place an order.
+            </Text>
+            <Button size="sm" variant="tonal" label="Complete profile" onPress={onCompleteProfile} />
+          </>
         ) : !address ? (
           <Text style={s.warn}>Add a pinned delivery address to continue.</Text>
         ) : null}
@@ -299,6 +321,20 @@ export function Cart({
           ) : null}
           <Button variant="ghost" label="Review my cart" onPress={() => setShortfalls([])} />
         </Card>
+      ) : null}
+
+      {adding ? (
+        <AddressSheet
+          startAdding
+          addresses={addresses}
+          // The new place becomes the default; drop any earlier pick so it is the one selected.
+          onRefresh={async () => {
+            setAddressId(null);
+            await onRefresh();
+          }}
+          onPick={() => {}}
+          onClose={() => setAdding(false)}
+        />
       ) : null}
 
       {split ? (
