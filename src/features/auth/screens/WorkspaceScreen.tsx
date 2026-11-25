@@ -11,6 +11,7 @@ const LABEL: Record<Role, string> = {
   buyer: 'Buyer',
   driver: 'Driver',
   ops: 'Operations',
+  govt: 'Government',
 };
 
 /** Lists only roles the server assigned; picking one never grants anything new. */

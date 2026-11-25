@@ -104,7 +104,10 @@ export function StatGrid({ children }: { children: React.ReactNode }) {
 }
 
 /** A Card that rises in as it mounts. */
-export function RevealCard({ index, ...rest }: React.ComponentProps<typeof Card> & { index?: number }) {
+export function RevealCard({
+  index,
+  ...rest
+}: React.ComponentProps<typeof Card> & { index?: number }) {
   return (
     <Reveal index={index}>
       <Card {...rest} />
@@ -152,7 +155,7 @@ export function Segmented<K extends string>({
           >
             <Text style={[s.segText, on && s.segTextOn]} numberOfLines={1}>
               {o.label}
-              {o.count != null ? <Text style={s.segCount}>  {o.count}</Text> : null}
+              {o.count != null ? <Text style={s.segCount}> {o.count}</Text> : null}
             </Text>
           </Pressable>
         );

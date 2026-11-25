@@ -43,10 +43,7 @@ export function orderTrack(o: BoardOrder): OrderTrack {
   const collectedKg =
     stopKg > 0
       ? stopKg
-      : o.allocations.reduce(
-          (n, a) => n + (a.takenKg ?? (a.status === 'collected' ? a.kg : 0)),
-          0,
-        );
+      : o.allocations.reduce((n, a) => n + (a.takenKg ?? (a.status === 'collected' ? a.kg : 0)), 0);
   const dropDone = o.stops.some((s) => s.kind === 'dropoff' && s.state === 'done');
   const pickups = o.stops.filter((s) => s.kind === 'pickup');
   const pickupsDone = pickups.filter((s) => s.state === 'done').length;

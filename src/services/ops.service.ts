@@ -453,7 +453,10 @@ export async function fetchTeam(): Promise<TeamMember[]> {
       )
       .in('role', ['driver', 'ops'])
       .order('created_at', { ascending: false }),
-    supabase.from('trucks').select('driver_id, name, plate, capacity_kg').not('driver_id', 'is', null),
+    supabase
+      .from('trucks')
+      .select('driver_id, name, plate, capacity_kg')
+      .not('driver_id', 'is', null),
   ]);
   fail('Could not load the team.')(people.error);
   const truckOf = new Map((trucks.data ?? []).map((t: any) => [t.driver_id, t]));
@@ -476,10 +479,7 @@ export async function fetchTeam(): Promise<TeamMember[]> {
   });
 }
 
-export async function updateStaff(
-  id: string,
-  v: { name: string; licence: string },
-): Promise<void> {
+export async function updateStaff(id: string, v: { name: string; licence: string }): Promise<void> {
   const { error } = await supabase.rpc('ops_update_staff', {
     p_id: id,
     p_name: v.name,

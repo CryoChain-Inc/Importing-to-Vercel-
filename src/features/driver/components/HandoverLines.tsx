@@ -23,7 +23,8 @@ export interface FinishedStop {
 const QUALITY = ['Good', 'Fair', 'Poor'] as const;
 type Quality = (typeof QUALITY)[number];
 
-const qty = (n: number | null, unit: string) => `${Math.round((n ?? 0) * 100) / 100} ${unit}`.trim();
+const qty = (n: number | null, unit: string) =>
+  `${Math.round((n ?? 0) * 100) / 100} ${unit}`.trim();
 
 export function MediaPreview({ uri, kind }: { uri: string; kind: HandoverMediaKind }) {
   const s = useThemedStyles(styles);
@@ -131,7 +132,9 @@ function LineCard({
   const { colors } = useTheme();
   const pickup = stop.kind === 'pickup';
   const saved = line.pickup ?? line.dropoff;
-  const [kg, setKg] = useState(line.pickup?.recordedKg == null ? '' : String(line.pickup.recordedKg));
+  const [kg, setKg] = useState(
+    line.pickup?.recordedKg == null ? '' : String(line.pickup.recordedKg),
+  );
   const [ticked, setTicked] = useState<Record<number, boolean>>({});
   const [quality, setQuality] = useState<Quality>('Good');
   const [note, setNote] = useState('');
@@ -189,7 +192,11 @@ function LineCard({
             path: saved?.mediaPath as string,
             kind: (saved?.mediaKind ?? 'photo') as HandoverMediaKind,
           };
-      await recordHandover(line.stopId, { ...r.value, mediaPath: media.path, mediaKind: media.kind });
+      await recordHandover(line.stopId, {
+        ...r.value,
+        mediaPath: media.path,
+        mediaKind: media.kind,
+      });
       await completeStop(line.stopId);
       posthog?.capture(pickup ? 'pickup_completed' : 'delivery_completed', {
         handover_media_kind: media.kind,
@@ -234,7 +241,9 @@ function LineCard({
               <Text style={s.fillText}>{`Full · ${qty(line.qty, line.unit)}`}</Text>
             </Pressable>
             {short ? (
-              <Text style={s.shortText}>{`${qty((line.qty ?? 0) - Number(kg), line.unit)} short`}</Text>
+              <Text
+                style={s.shortText}
+              >{`${qty((line.qty ?? 0) - Number(kg), line.unit)} short`}</Text>
             ) : null}
           </View>
         </>
@@ -249,10 +258,16 @@ function LineCard({
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: on }}
                 onPress={() => setTicked((t) => ({ ...t, [i]: !t[i] }))}
-                style={({ pressed }) => [s.check, on ? s.checkOn : null, pressed ? s.pressed : null]}
+                style={({ pressed }) => [
+                  s.check,
+                  on ? s.checkOn : null,
+                  pressed ? s.pressed : null,
+                ]}
               >
                 <View style={[s.box, on ? s.boxOn : null]}>
-                  {on ? <Icon name="check" size={16} color={colors.onBrand} strokeWidth={3} /> : null}
+                  {on ? (
+                    <Icon name="check" size={16} color={colors.onBrand} strokeWidth={3} />
+                  ) : null}
                 </View>
                 <Text style={s.checkName}>{it.product}</Text>
                 <Text style={s.checkQty}>{qty(it.qty, it.unit)}</Text>
@@ -278,7 +293,10 @@ function LineCard({
 
       {error ? <Banner text={error} /> : null}
       {line.blocked ? (
-        <Banner tone="info" text="Collect this order's produce from the farms before delivering it." />
+        <Banner
+          tone="info"
+          text="Collect this order's produce from the farms before delivering it."
+        />
       ) : !r.ok && (temp !== '' || kg !== '') ? (
         <Banner tone="info" text={r.error} />
       ) : null}
@@ -413,7 +431,12 @@ const styles = (c: Record<ColorToken, string>) => ({
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   progress: { gap: 8 },
   progressText: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink },
-  bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' as const },
+  bar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: c.surfaceSunken,
+    overflow: 'hidden' as const,
+  },
   barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand600 },
   tempCard: { padding: 16 },
   active: { gap: 14, padding: 20, borderWidth: 2, borderColor: c.brand600 },
@@ -550,5 +573,10 @@ const styles = (c: Record<ColorToken, string>) => ({
   miniText: { flex: 1, gap: 2 },
   miniTitle: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   miniMeta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  nextHint: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.inkMuted, textAlign: 'center' as const },
+  nextHint: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+  },
 });

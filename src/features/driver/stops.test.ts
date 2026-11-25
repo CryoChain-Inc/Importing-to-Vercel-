@@ -67,7 +67,7 @@ describe('buildStops', () => {
     expect(buildStops(orders).todo[2].waiting).toBe(2);
   });
 
-  it('lists each order\'s produce on its drop-off line and blocks it until picked up', () => {
+  it("lists each order's produce on its drop-off line and blocks it until picked up", () => {
     const drop = buildStops(orders).todo[2];
     expect(drop.lines.map((l) => [l.orderCode, l.items.map((i) => i.product), l.blocked])).toEqual([
       ['A1', ['Tomato', 'Tomato'], true],

@@ -159,9 +159,7 @@ export function OrderDetail({
                   <Stat label="From buyer" value={`${a.kmToBuyer} km`} />
                 ) : null}
               </View>
-              {a.takenKg != null && a.kg > 0 ? (
-                <Meter pct={(a.takenKg / a.kg) * 100} />
-              ) : null}
+              {a.takenKg != null && a.kg > 0 ? <Meter pct={(a.takenKg / a.kg) * 100} /> : null}
               {a.status === 'offered' ? (
                 <Text style={s.meta}>Farmer must answer by {when(a.expiresAt)}.</Text>
               ) : null}
@@ -446,8 +444,19 @@ const styles = (c: Record<ColorToken, string>) => ({
   grow: { flex: 1, gap: 2 },
   section: { gap: 12, padding: 18 },
   sectionHead: { gap: 2 },
-  headRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, flexWrap: 'wrap' as const },
-  big: { fontFamily: fonts.heading, fontSize: 28, letterSpacing: -0.4, color: c.brandInk, fontVariant: ['tabular-nums' as const] },
+  headRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    flexWrap: 'wrap' as const,
+  },
+  big: {
+    fontFamily: fonts.heading,
+    fontSize: 28,
+    letterSpacing: -0.4,
+    color: c.brandInk,
+    fontVariant: ['tabular-nums' as const],
+  },
   h: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   block: { gap: 10 },
   divider: { paddingTop: 12, borderTopWidth: 1, borderTopColor: c.borderSubtle },

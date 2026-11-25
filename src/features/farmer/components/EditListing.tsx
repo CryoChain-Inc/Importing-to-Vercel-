@@ -219,7 +219,11 @@ export function EditListing({
               <Text style={[s.heading, s.flex, { color: colors.dangerInk }]}>
                 Cannot supply everything reserved?
               </Text>
-              <Icon name={shortOpen ? 'chevronUp' : 'chevronDown'} size={20} color={colors.inkMuted} />
+              <Icon
+                name={shortOpen ? 'chevronUp' : 'chevronDown'}
+                size={20}
+                color={colors.inkMuted}
+              />
             </Pressable>
             {shortOpen ? (
               <>

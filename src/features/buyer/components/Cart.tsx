@@ -276,7 +276,12 @@ export function Cart({
             <Text style={s.warn}>
               Add your business name, contact name and a delivery address to place an order.
             </Text>
-            <Button size="sm" variant="tonal" label="Complete profile" onPress={onCompleteProfile} />
+            <Button
+              size="sm"
+              variant="tonal"
+              label="Complete profile"
+              onPress={onCompleteProfile}
+            />
           </>
         ) : !address ? (
           <Text style={s.warn}>Add a pinned delivery address to continue.</Text>

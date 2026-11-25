@@ -7,6 +7,7 @@ const DriverHome = lazy(() =>
   import('../driver/screens/DriverHome').then((m) => ({ default: m.DriverHome })),
 );
 const OpsHome = lazy(() => import('../ops/screens/OpsHome').then((m) => ({ default: m.OpsHome })));
+const GovtHome = lazy(() => import('../govt/GovtHome').then((m) => ({ default: m.GovtHome })));
 const BuyerHome = lazy(() =>
   import('../buyer/screens/BuyerHome').then((m) => ({ default: m.BuyerHome })),
 );
@@ -34,6 +35,8 @@ export function HomeScreen({
         <BuyerHome account={account} tab={tab} order={order} />
       ) : role === 'ops' ? (
         <OpsHome account={account} />
+      ) : role === 'govt' ? (
+        <GovtHome account={account} />
       ) : (
         <DriverHome account={account} />
       )}

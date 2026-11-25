@@ -34,21 +34,19 @@ beforeEach(() => {
 });
 
 test('listings carry reserved and collected quantities from listing_stock', async () => {
-  const order = jest
-    .fn()
-    .mockResolvedValue({
-      data: [
-        {
-          id: 'l1',
-          product: 'Tomato',
-          weight_kg: 100,
-          created_at: 'x',
-          unit: 'kg',
-          image_paths: ['a'],
-        },
-      ],
-      error: null,
-    });
+  const order = jest.fn().mockResolvedValue({
+    data: [
+      {
+        id: 'l1',
+        product: 'Tomato',
+        weight_kg: 100,
+        created_at: 'x',
+        unit: 'kg',
+        image_paths: ['a'],
+      },
+    ],
+    error: null,
+  });
   (supabase.from as jest.Mock).mockImplementation((t: string) => ({
     select: () =>
       t === 'produce_listings'

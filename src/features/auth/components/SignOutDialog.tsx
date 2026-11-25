@@ -5,7 +5,13 @@ import { Dialog } from '../../../components/feedback';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
 /** "Sign out?" confirmation shared by the buyer and farmer account screens; mount it only while open. */
-export function SignOutDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+export function SignOutDialog({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
   const s = useThemedStyles(styles);
   return (
     <Dialog

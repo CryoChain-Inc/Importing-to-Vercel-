@@ -67,7 +67,13 @@ function Timeline({ items }: { items: Place[] }) {
       {items.map((p, i) => (
         <View key={p.key} style={s.railRow}>
           <View style={s.rail}>
-            <View style={[s.node, p.kind === 'dropoff' ? s.nodeDrop : s.nodePick, p.done ? s.nodeDone : null]}>
+            <View
+              style={[
+                s.node,
+                p.kind === 'dropoff' ? s.nodeDrop : s.nodePick,
+                p.done ? s.nodeDone : null,
+              ]}
+            >
               <Text style={s.nodeN}>{p.done ? '✓' : (p.seq ?? i + 1)}</Text>
             </View>
             {i < items.length - 1 ? <View style={[s.rule, p.done ? s.ruleDone : null]} /> : null}
@@ -83,7 +89,9 @@ function Timeline({ items }: { items: Place[] }) {
               />
             </View>
             <Text style={s.meta}>
-              {[`Order ${p.orders.join(', ')}`, !p.done && p.eta ? `~${clock(p.eta)}` : ''].filter(Boolean).join(' · ')}
+              {[`Order ${p.orders.join(', ')}`, !p.done && p.eta ? `~${clock(p.eta)}` : '']
+                .filter(Boolean)
+                .join(' · ')}
             </Text>
             {p.readings.map((r, j) => (
               <Text key={j} style={s.meta}>
@@ -223,180 +231,183 @@ export function RoutesPanel({
         />
       </View>
       <View style={s.grid}>
-      {drivers.map((d, di) => {
-        const todo = d.stops.filter((x) => x.state === 'pending');
-        // A day's route is what is pending plus what was finished today; older stops are history.
-        const today = d.stops.filter((x) => x.state === 'pending' || sameDay(x.doneAt));
-        const earlier = d.stops.filter((x) => !today.includes(x));
-        const todayDone = today.filter((x) => x.state === 'done').length;
-        return (
-          <Reveal key={d.id} index={di} style={s.cell}>
-          <Card style={s.item}>
-            <View style={s.top}>
-              <View style={s.avatarBox}>
-                <View style={s.avatar}>
-                  <Text style={s.avatarText}>{(d.name || '?').slice(0, 1).toUpperCase()}</Text>
-                </View>
-                {online(d) && !noSignal(d) ? (
-                  <View style={s.dotBox}>
-                    <Pulse color={colors.brand500} size={12} />
-                    <View style={s.dot} />
+        {drivers.map((d, di) => {
+          const todo = d.stops.filter((x) => x.state === 'pending');
+          // A day's route is what is pending plus what was finished today; older stops are history.
+          const today = d.stops.filter((x) => x.state === 'pending' || sameDay(x.doneAt));
+          const earlier = d.stops.filter((x) => !today.includes(x));
+          const todayDone = today.filter((x) => x.state === 'done').length;
+          return (
+            <Reveal key={d.id} index={di} style={s.cell}>
+              <Card style={s.item}>
+                <View style={s.top}>
+                  <View style={s.avatarBox}>
+                    <View style={s.avatar}>
+                      <Text style={s.avatarText}>{(d.name || '?').slice(0, 1).toUpperCase()}</Text>
+                    </View>
+                    {online(d) && !noSignal(d) ? (
+                      <View style={s.dotBox}>
+                        <Pulse color={colors.brand500} size={12} />
+                        <View style={s.dot} />
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
-              </View>
-              <View style={s.grow}>
-                <Text style={s.name}>{d.name}</Text>
-                <Text style={s.meta}>
-                  {[d.vehicle, d.phone].filter(Boolean).join(' · ') || 'No vehicle details'}
-                </Text>
-              </View>
-              <Badge
-                label={
-                  noSignal(d)
-                    ? 'No signal'
-                    : online(d)
-                      ? 'Reporting'
-                      : d.seenAt
-                        ? 'Offline'
-                        : 'Never seen'
-                }
-                tone={noSignal(d) ? 'warning' : online(d) ? 'success' : 'neutral'}
-              />
-            </View>
-            <View style={s.seen}>
-              <Icon name="pin" size={14} color={colors.inkMuted} />
-              <Text style={[s.meta, s.grow]}>
-                {d.lat != null
-                  ? `Last seen ${when(d.seenAt)} · ${d.lat.toFixed(4)}, ${d.lng!.toFixed(4)}`
-                  : 'Has not shared a location.'}
-              </Text>
-            </View>
-            <SectionTitle
-              title="Route"
-              note={`${todo.length} pending${d.routeLocked ? ' · order set by ops' : ''}`}
-            />
-            {editing?.driver === d.id ? (
-              <View style={s.edit}>
-                {editing.ids.map((id, i) => {
-                  const x = todo.find((t) => t.id === id)!;
-                  return (
-                    <View key={id} style={s.row}>
-                      <Text style={s.stop} numberOfLines={2}>
-                        {i + 1}. {x.label} · {x.order}
-                      </Text>
+                  <View style={s.grow}>
+                    <Text style={s.name}>{d.name}</Text>
+                    <Text style={s.meta}>
+                      {[d.vehicle, d.phone].filter(Boolean).join(' · ') || 'No vehicle details'}
+                    </Text>
+                  </View>
+                  <Badge
+                    label={
+                      noSignal(d)
+                        ? 'No signal'
+                        : online(d)
+                          ? 'Reporting'
+                          : d.seenAt
+                            ? 'Offline'
+                            : 'Never seen'
+                    }
+                    tone={noSignal(d) ? 'warning' : online(d) ? 'success' : 'neutral'}
+                  />
+                </View>
+                <View style={s.seen}>
+                  <Icon name="pin" size={14} color={colors.inkMuted} />
+                  <Text style={[s.meta, s.grow]}>
+                    {d.lat != null
+                      ? `Last seen ${when(d.seenAt)} · ${d.lat.toFixed(4)}, ${d.lng!.toFixed(4)}`
+                      : 'Has not shared a location.'}
+                  </Text>
+                </View>
+                <SectionTitle
+                  title="Route"
+                  note={`${todo.length} pending${d.routeLocked ? ' · order set by ops' : ''}`}
+                />
+                {editing?.driver === d.id ? (
+                  <View style={s.edit}>
+                    {editing.ids.map((id, i) => {
+                      const x = todo.find((t) => t.id === id)!;
+                      return (
+                        <View key={id} style={s.row}>
+                          <Text style={s.stop} numberOfLines={2}>
+                            {i + 1}. {x.label} · {x.order}
+                          </Text>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            label="Up"
+                            disabled={i === 0}
+                            onPress={() => move(i, -1)}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            label="Down"
+                            disabled={i === editing.ids.length - 1}
+                            onPress={() => move(i, 1)}
+                          />
+                        </View>
+                      );
+                    })}
+                    <Input
+                      label="Reason"
+                      value={reason}
+                      onChangeText={setReason}
+                      maxLength={280}
+                      placeholder="e.g. Buyer closes at noon"
+                    />
+                    <View style={s.row}>
                       <Button
                         size="sm"
-                        variant="ghost"
-                        label="Up"
-                        disabled={i === 0}
-                        onPress={() => move(i, -1)}
+                        label="Save this order"
+                        loading={busy}
+                        disabled={!reason.trim()}
+                        onPress={() =>
+                          run(async () => {
+                            await reorderStops(d.id, editing.ids, reason);
+                            setEditing(null);
+                            setReason('');
+                          })
+                        }
                       />
                       <Button
                         size="sm"
                         variant="ghost"
-                        label="Down"
-                        disabled={i === editing.ids.length - 1}
-                        onPress={() => move(i, 1)}
+                        label="Cancel"
+                        onPress={() => setEditing(null)}
                       />
                     </View>
-                  );
-                })}
-                <Input
-                  label="Reason"
-                  value={reason}
-                  onChangeText={setReason}
-                  maxLength={280}
-                  placeholder="e.g. Buyer closes at noon"
-                />
-                <View style={s.row}>
-                  <Button
-                    size="sm"
-                    label="Save this order"
-                    loading={busy}
-                    disabled={!reason.trim()}
-                    onPress={() =>
-                      run(async () => {
-                        await reorderStops(d.id, editing.ids, reason);
-                        setEditing(null);
-                        setReason('');
-                      })
-                    }
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    label="Cancel"
-                    onPress={() => setEditing(null)}
-                  />
-                </View>
-                <Text style={s.meta}>
-                  The system keeps this order until the trip ends. New orders are added at the end.
-                </Text>
-              </View>
-            ) : todo.length > 1 || d.routeLocked ? (
-              <View style={s.actionsRow}>
-                {todo.length > 1 ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    label="Change stop order"
-                    onPress={() =>
-                      setEditing({
-                        driver: d.id,
-                        ids: [...todo].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)).map((t) => t.id),
-                      })
-                    }
-                  />
+                    <Text style={s.meta}>
+                      The system keeps this order until the trip ends. New orders are added at the
+                      end.
+                    </Text>
+                  </View>
+                ) : todo.length > 1 || d.routeLocked ? (
+                  <View style={s.actionsRow}>
+                    {todo.length > 1 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        label="Change stop order"
+                        onPress={() =>
+                          setEditing({
+                            driver: d.id,
+                            ids: [...todo]
+                              .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+                              .map((t) => t.id),
+                          })
+                        }
+                      />
+                    ) : null}
+                    {d.routeLocked ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        label="Let the system order it"
+                        loading={busy}
+                        onPress={() =>
+                          run(() => unlockRoute(d.id, 'Handed back to automatic planning'))
+                        }
+                      />
+                    ) : null}
+                  </View>
                 ) : null}
-                {d.routeLocked ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    label="Let the system order it"
-                    loading={busy}
-                    onPress={() =>
-                      run(() => unlockRoute(d.id, 'Handed back to automatic planning'))
-                    }
-                  />
-                ) : null}
-              </View>
-            ) : null}
-            {d.stops.length === 0 ? (
-              <Text style={s.meta}>No stops. New orders are assigned automatically.</Text>
-            ) : (
-              <>
-                <Meter pct={(todayDone / Math.max(today.length, 1)) * 100} />
-                <Text style={s.meta}>
-                  {`${todayDone} of ${today.length} stops done today · ${new Set(today.map((x) => x.order)).size} orders`}
-                </Text>
-                <Timeline items={places(today)} />
-                {earlier.length > 0 ? (
+                {d.stops.length === 0 ? (
+                  <Text style={s.meta}>No stops. New orders are assigned automatically.</Text>
+                ) : (
                   <>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      label={
-                        open.has(d.id)
-                          ? 'Hide earlier stops'
-                          : `Show earlier stops · ${earlier.length}`
-                      }
-                      onPress={() =>
-                        setOpen((o) => {
-                          const n = new Set(o);
-                          if (!n.delete(d.id)) n.add(d.id);
-                          return n;
-                        })
-                      }
-                    />
-                    {open.has(d.id) ? <Timeline items={places(earlier)} /> : null}
+                    <Meter pct={(todayDone / Math.max(today.length, 1)) * 100} />
+                    <Text style={s.meta}>
+                      {`${todayDone} of ${today.length} stops done today · ${new Set(today.map((x) => x.order)).size} orders`}
+                    </Text>
+                    <Timeline items={places(today)} />
+                    {earlier.length > 0 ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          label={
+                            open.has(d.id)
+                              ? 'Hide earlier stops'
+                              : `Show earlier stops · ${earlier.length}`
+                          }
+                          onPress={() =>
+                            setOpen((o) => {
+                              const n = new Set(o);
+                              if (!n.delete(d.id)) n.add(d.id);
+                              return n;
+                            })
+                          }
+                        />
+                        {open.has(d.id) ? <Timeline items={places(earlier)} /> : null}
+                      </>
+                    ) : null}
                   </>
-                ) : null}
-              </>
-            )}
-          </Card>
-          </Reveal>
-        );
-      })}
+                )}
+              </Card>
+            </Reveal>
+          );
+        })}
       </View>
     </View>
   );
@@ -404,7 +415,12 @@ export function RoutesPanel({
 
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 16 },
-  grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 16, alignItems: 'flex-start' as const },
+  grid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 16,
+    alignItems: 'flex-start' as const,
+  },
   cell: { flexGrow: 1, flexBasis: 420, minWidth: 280 },
   item: { gap: 10, padding: 18 },
   avatarBox: { width: 44, height: 44 },
@@ -453,7 +469,12 @@ const styles = (c: Record<ColorToken, string>) => ({
   done: { color: c.inkMuted, textDecorationLine: 'line-through' as const },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   edit: { gap: 8 },
-  bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' as const },
+  bar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: c.surfaceSunken,
+    overflow: 'hidden' as const,
+  },
   barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand600 },
   railRow: { flexDirection: 'row' as const, gap: 12 },
   rail: { width: 28, alignItems: 'center' as const },

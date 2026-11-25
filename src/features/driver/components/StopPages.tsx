@@ -6,14 +6,7 @@ import { Empty } from '../../ops/components/OpsBits';
 import { legText, type DrivePath } from '../drivePath';
 import { totalText, type Stop, type StopLine } from '../stops';
 import { MediaPreview, StopFlow, type FinishedStop } from './HandoverLines';
-import {
-  BackButton,
-  openMaps,
-  openPhone,
-  placed,
-  QuickActions,
-  SectionLabel,
-} from './bits';
+import { BackButton, openMaps, openPhone, placed, QuickActions, SectionLabel } from './bits';
 
 export type { FinishedStop };
 
@@ -71,8 +64,14 @@ export function StopRow({
         <View style={s.stopTop}>
           <Text style={s.kind}>{kindLabel(stop)}</Text>
           {fresh ? <Badge label="New" tone="warning" /> : null}
-          {done ? <Badge label="Done" tone="success" /> : now ? <Badge label="Next" tone="info" /> : null}
-          {!done && stop.eta ? <Text style={s.when}>{clock(stop.eta).replace('around ', '')}</Text> : null}
+          {done ? (
+            <Badge label="Done" tone="success" />
+          ) : now ? (
+            <Badge label="Next" tone="info" />
+          ) : null}
+          {!done && stop.eta ? (
+            <Text style={s.when}>{clock(stop.eta).replace('around ', '')}</Text>
+          ) : null}
         </View>
         <Text style={[s.rowTitle, done ? s.muted : null]} numberOfLines={1}>
           {stop.name}
@@ -111,7 +110,9 @@ export function RouteHeader({
   const all = [...doneLive, ...todo];
   const orders = new Set(all.flatMap((x) => x.lines.map((l) => l.orderId))).size;
   const load = totalText(
-    all.filter((x) => x.kind === 'pickup').flatMap((x) => x.lines.map((l) => ({ qty: l.qty, unit: l.unit }))),
+    all
+      .filter((x) => x.kind === 'pickup')
+      .flatMap((x) => x.lines.map((l) => ({ qty: l.qty, unit: l.unit }))),
   );
   const pct = all.length ? (doneLive.length / all.length) * 100 : 0;
   return (
@@ -125,7 +126,9 @@ export function RouteHeader({
         <View style={[s.barFill, { width: `${pct}%` }]} />
       </View>
       <Text style={s.meta}>
-        {[`${orders} order${orders === 1 ? '' : 's'}`, load ? `${load} to collect` : ''].filter(Boolean).join(' · ')}
+        {[`${orders} order${orders === 1 ? '' : 's'}`, load ? `${load} to collect` : '']
+          .filter(Boolean)
+          .join(' · ')}
       </Text>
     </Card>
   );
@@ -157,7 +160,11 @@ export function StopList({
         />
       ) : (
         <>
-          <RouteHeader todo={todo} doneLive={doneLive} fresh={todo.filter((x) => fresh.has(x.key)).length} />
+          <RouteHeader
+            todo={todo}
+            doneLive={doneLive}
+            fresh={todo.filter((x) => fresh.has(x.key)).length}
+          />
           <View>
             {route.map((x, i) => (
               <StopRow
@@ -211,7 +218,9 @@ export function NextStop({
           <Text style={s.nextNum}>{index}</Text>
         </View>
         <View style={s.rowText}>
-          <Text style={s.eyebrow}>{`${kindLabel(stop)} · stop ${index} of ${total}${orderCount > 1 ? ` · ${orderCount} orders` : ''}`}</Text>
+          <Text
+            style={s.eyebrow}
+          >{`${kindLabel(stop)} · stop ${index} of ${total}${orderCount > 1 ? ` · ${orderCount} orders` : ''}`}</Text>
           <Text style={s.nextTitle} numberOfLines={2}>
             {stop.name}
           </Text>
@@ -334,7 +343,13 @@ export function StopPage({
       {done ? (
         <StopSummary stop={stop} onBack={onBack} backLabel={backLabel} />
       ) : (
-        <StopFlow stop={stop} next={next} range={range} onChange={onChange} onFinished={onFinished} />
+        <StopFlow
+          stop={stop}
+          next={next}
+          range={range}
+          onChange={onChange}
+          onFinished={onFinished}
+        />
       )}
     </View>
   );
@@ -508,7 +523,12 @@ const styles = (c: Record<ColorToken, string>) => ({
   route: { gap: 8, padding: 18 },
   routeTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: c.brandInk },
   routeBig: { fontFamily: fonts.heading, fontSize: 24, lineHeight: 30, color: c.ink },
-  bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' as const },
+  bar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: c.surfaceSunken,
+    overflow: 'hidden' as const,
+  },
   barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand600 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   rowText: { flex: 1, gap: 2 },

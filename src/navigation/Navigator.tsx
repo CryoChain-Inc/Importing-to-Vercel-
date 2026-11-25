@@ -7,6 +7,7 @@ import { verifyLinkStatus } from '../utils/verifyLink';
 export type Route =
   | { name: 'landing' }
   | { name: 'ops' }
+  | { name: 'govt' }
   | { name: 'emailVerified'; ok: boolean }
   | { name: 'paymentResult'; reference: string }
   | { name: 'verify'; identifier: string; kind: 'otp' }
@@ -31,17 +32,20 @@ const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 // Params live in memory, so a deep link never lands signed in: /ops and /ops/* go to the ops login, anything else to the landing page.
 const START: Route = !isWeb
   ? { name: 'landing' }
-  : /^\/ops(\/|$)/.test(window.location.pathname) || window.location.hostname.startsWith('ops.')
-    ? { name: 'ops' }
-    : window.location.pathname === '/email-verified' && verifyLinkStatus(window.location.href)
-      ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
-      : window.location.pathname === '/payment/verify' &&
-          paymentReturnReference(window.location.href)
-        ? { name: 'paymentResult', reference: paymentReturnReference(window.location.href)! }
-        : { name: 'landing' };
+  : /^\/govt(\/|$)/.test(window.location.pathname)
+    ? { name: 'govt' }
+    : /^\/ops(\/|$)/.test(window.location.pathname) || window.location.hostname.startsWith('ops.')
+      ? { name: 'ops' }
+      : window.location.pathname === '/email-verified' && verifyLinkStatus(window.location.href)
+        ? { name: 'emailVerified', ok: verifyLinkStatus(window.location.href) === 'ok' }
+        : window.location.pathname === '/payment/verify' &&
+            paymentReturnReference(window.location.href)
+          ? { name: 'paymentResult', reference: paymentReturnReference(window.location.href)! }
+          : { name: 'landing' };
 const PATH: Record<Route['name'], string> = {
   landing: '/',
   ops: '/ops',
+  govt: '/govt',
   emailVerified: '/email-verified',
   paymentResult: '/payment/verify',
   verify: '/verify',
@@ -52,7 +56,7 @@ const PATH: Record<Route['name'], string> = {
 };
 /** The ops console owns its URL (/ops/<section>?page=2), so entering it, or reloading on a deep link, keeps the address as is. */
 const pathFor = (r: Route) =>
-  r.name === 'home' && r.role === 'ops'
+  r.name === 'home' && (r.role === 'ops' || r.role === 'govt')
     ? window.location.pathname + window.location.search
     : r.name === 'home' && r.role === 'farmer'
       ? `/farmer/${r.tab ?? 'listings'}`
@@ -75,7 +79,9 @@ export function NavigatorProvider({ children }: { children: React.ReactNode }) {
       window.history.replaceState(
         { idx: 0 },
         '',
-        START.name === 'ops' ? window.location.pathname + window.location.search : PATH[START.name],
+        START.name === 'ops' || START.name === 'govt'
+          ? window.location.pathname + window.location.search
+          : PATH[START.name],
       );
   }, []);
 

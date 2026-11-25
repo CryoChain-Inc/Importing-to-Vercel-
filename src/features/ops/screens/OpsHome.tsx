@@ -16,6 +16,7 @@ import type { Account } from '../../../types/auth';
 import { BuyersPanel } from '../components/BuyersPanel';
 import { ConfigPanel } from '../components/ConfigPanel';
 import { DashboardPanel } from '../components/DashboardPanel';
+import { FarmerReport } from '../../report/FarmerReport';
 import { FarmersPanel } from '../components/FarmersPanel';
 import { PaymentsPanel } from '../components/PaymentsPanel';
 import { PayoutsPanel } from '../components/PayoutsPanel';
@@ -37,6 +38,10 @@ const TITLES: Record<string, [string, string]> = {
   dashboard: ['Dashboard', 'Supply, money and what needs doing today.'],
   supply: ['Supply', 'What farmers have listed.'],
   farmers: ['Farmers', 'Contact details, wallets and listings.'],
+  report: [
+    'Farmer report',
+    'Every farmer, their stock and where they farm. Filter, map and export to CSV.',
+  ],
   buyers: ['Buyers', 'Who is buying, where it goes and what they have ordered.'],
   orders: [
     'Orders',
@@ -167,6 +172,7 @@ export function OpsHome({ account }: { account: Account }) {
       items: [
         { key: 'supply', label: 'Supply', icon: 'leaf' },
         { key: 'farmers', label: 'Farmers', icon: 'users' },
+        { key: 'report', label: 'Farmer report', icon: 'clipboard' },
       ],
     },
     {
@@ -249,6 +255,7 @@ export function OpsHome({ account }: { account: Account }) {
         <Reveal key={tab}>
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
+          {tab === 'report' ? <FarmerReport /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
           {tab === 'orders' ? (
             <OrdersBoard drivers={data.drivers} board={data.board} onChange={load} {...page} />
@@ -295,7 +302,12 @@ export function OpsHome({ account }: { account: Account }) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, marginBottom: 4 },
+  header: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 14,
+    marginBottom: 4,
+  },
   headIcon: {
     width: 48,
     height: 48,
@@ -314,7 +326,12 @@ const styles = (c: Record<ColorToken, string>) => ({
     borderRadius: 14,
     backgroundColor: c.surfaceSunken,
   },
-  liveDotBox: { width: 10, height: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  liveDotBox: {
+    width: 10,
+    height: 10,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.brand500 },
   liveText: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.inkMuted },
   title: {

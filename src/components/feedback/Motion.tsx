@@ -115,7 +115,13 @@ export function GrowBar({
       <Animated.View
         style={[
           fillStyle,
-          { width: v.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'], extrapolate: 'clamp' }) },
+          {
+            width: v.interpolate({
+              inputRange: [0, 100],
+              outputRange: ['0%', '100%'],
+              extrapolate: 'clamp',
+            }),
+          },
         ]}
       />
     </Animated.View>

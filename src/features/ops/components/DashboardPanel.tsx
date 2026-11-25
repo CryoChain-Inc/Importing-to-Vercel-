@@ -42,7 +42,13 @@ export function DashboardPanel({
   const trucksOut = drivers?.filter((d) => d.stops.some((x) => x.state === 'pending')).length;
   const noListings = data.supply.length === 0;
 
-  const todo: { tab: string; params?: Record<string, string>; icon: IconName; label: string; n: number }[] = [
+  const todo: {
+    tab: string;
+    params?: Record<string, string>;
+    icon: IconName;
+    label: string;
+    n: number;
+  }[] = [
     {
       tab: 'payments',
       params: { state: 'awaiting_payment' },
@@ -50,7 +56,13 @@ export function DashboardPanel({
       label: 'Orders awaiting payment',
       n: awaiting.length,
     },
-    { tab: 'orders', params: { stage: 'moving' }, icon: 'truck', label: 'Orders on the road', n: moving.length },
+    {
+      tab: 'orders',
+      params: { stage: 'moving' },
+      icon: 'truck',
+      label: 'Orders on the road',
+      n: moving.length,
+    },
     {
       tab: 'orders',
       params: { stage: 'farmers' },
@@ -229,7 +241,12 @@ export function DashboardPanel({
 
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 16 },
-  cols: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 20, alignItems: 'flex-start' as const },
+  cols: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 20,
+    alignItems: 'flex-start' as const,
+  },
   main: { flexGrow: 3, flexBasis: 420, gap: 12, minWidth: 280 },
   side: { flexGrow: 2, flexBasis: 320, gap: 12, minWidth: 280 },
   grow: { flex: 1, gap: 2 },

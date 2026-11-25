@@ -168,7 +168,9 @@ export function OrderControls({
           placeholder="e.g. Driver's phone is dead, confirmed by call"
         />
         <Text style={s.meta}>
-          {why ? 'Choose a fix below.' : 'Write a reason first. The buttons below stay off until you do.'}
+          {why
+            ? 'Choose a fix below.'
+            : 'Write a reason first. The buttons below stay off until you do.'}
         </Text>
       </View>
       {error ? <Banner text={error} /> : null}

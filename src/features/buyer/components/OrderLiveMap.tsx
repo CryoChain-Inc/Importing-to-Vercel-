@@ -104,7 +104,13 @@ export function OrderLiveMap({ t, preparing }: { t: OrderTracking | null; prepar
         </View>
       </View>
       <View style={s.map}>
-        <LiveMap truck={t.truck} truckName={t.driver?.name} places={places} route={route} height={MAP_H} />
+        <LiveMap
+          truck={t.truck}
+          truckName={t.driver?.name}
+          places={places}
+          route={route}
+          height={MAP_H}
+        />
       </View>
       {t.state === 'on_the_way' ? (
         <Text style={s.meta}>

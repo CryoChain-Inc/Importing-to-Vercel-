@@ -14,15 +14,7 @@ import { ghs } from '../../../utils/format';
 import { boardFilter, orderTrack, TRACK_STEPS, type BoardFilter } from '../orderTrack';
 import type { PageProps } from '../useOpsLocation';
 import { OrderDetail } from './OrderDetail';
-import {
-  Empty,
-  PanelSkeleton,
-  Pager,
-  Segmented,
-  useServerPage,
-  usePaged,
-  when,
-} from './OpsBits';
+import { Empty, PanelSkeleton, Pager, Segmented, useServerPage, usePaged, when } from './OpsBits';
 
 const STAGES: { key: BoardFilter; label: string }[] = [
   { key: 'moving', label: 'On the road' },
@@ -128,7 +120,10 @@ function OrderRow({ o, index, onOpen }: { o: BoardOrder; index: number; onOpen: 
           </View>
           <Text style={s.amount}>{ghs(o.amount)}</Text>
         </View>
-        <View style={s.steps} accessibilityLabel={`Step ${track.index + 1} of ${TRACK_STEPS.length}`}>
+        <View
+          style={s.steps}
+          accessibilityLabel={`Step ${track.index + 1} of ${TRACK_STEPS.length}`}
+        >
           {TRACK_STEPS.map((step, i) => (
             <View key={step.key} style={[s.seg, !track.cancelled && i <= track.index && s.segOn]} />
           ))}
@@ -183,24 +178,26 @@ function StageOrders({
         />
       ) : (
         rows.map((o, i) => (
-          <OrderRow key={o.id} o={o} index={i} onOpen={() => setParams({ stage, q: params.q ?? '', order: o.id })} />
+          <OrderRow
+            key={o.id}
+            o={o}
+            index={i}
+            onOpen={() => setParams({ stage, q: params.q ?? '', order: o.id })}
+          />
         ))
       )}
       {more}
       {board.length >= 100 ? (
-        <Text style={s.meta}>Showing the latest 100 orders. Use All orders to search older ones.</Text>
+        <Text style={s.meta}>
+          Showing the latest 100 orders. Use All orders to search older ones.
+        </Text>
       ) : null}
       <Button variant="ghost" size="sm" label="All orders" onPress={() => setParams({})} />
     </View>
   );
 }
 
-function ServerOrders({
-  board,
-  params,
-  setParams,
-  rev,
-}: { board: BoardOrder[] } & PageProps) {
+function ServerOrders({ board, params, setParams, rev }: { board: BoardOrder[] } & PageProps) {
   const s = useThemedStyles(styles);
   const state = (params.state ?? 'all') as BoardState;
   const { rows, total, q, text, setText, page, goPage, loading, firstLoad, error } = useServerPage(
@@ -360,5 +357,10 @@ const styles = (c: Record<ColorToken, string>) => ({
   chipOn: { backgroundColor: c.brandTint },
   chipText: { fontFamily: fonts.sansSemiBold, fontSize: 13, color: c.inkMuted },
   chipTextOn: { color: c.brandInk },
-  chipCount: { fontFamily: fonts.sansBold, fontSize: 12, color: c.inkMuted, fontVariant: ['tabular-nums' as const] },
+  chipCount: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    color: c.inkMuted,
+    fontVariant: ['tabular-nums' as const],
+  },
 });

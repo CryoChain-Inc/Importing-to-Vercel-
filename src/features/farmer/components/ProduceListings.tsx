@@ -64,7 +64,8 @@ export function ProduceListings({
   // One card per crop; crops with stock come first, sold-out ones sink below.
   const groups = useMemo<Group[]>(() => {
     const m = new Map<string, ProduceListing[]>();
-    for (const l of dq && found ? found : listings) m.set(l.product, [...(m.get(l.product) ?? []), l]);
+    for (const l of dq && found ? found : listings)
+      m.set(l.product, [...(m.get(l.product) ?? []), l]);
     const g = [...m].map(([product, ls]) => ({
       product,
       category: cats[product],

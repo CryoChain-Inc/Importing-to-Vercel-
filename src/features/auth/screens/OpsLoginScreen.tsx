@@ -5,11 +5,12 @@ import { Banner } from '../../../components/feedback';
 import { toAccount } from '../../../data/demoAuth';
 import { useNav } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
+import { GOVT_EMAIL } from '../../../services/report.service';
 import { isEmail } from '../../../utils/format';
 import { afterSignIn } from './VerifyScreen';
 
-/** Staff-only door at /ops: email and password, and only an ops account gets through. */
-export function OpsLoginScreen() {
+/** Staff-only door at /ops (ops accounts) and /govt (the single government account): email and password. */
+export function OpsLoginScreen({ govt = false }: { govt?: boolean }) {
   const { reset } = useNav();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,11 +22,17 @@ export function OpsLoginScreen() {
     setBusy(true);
     setError(null);
     try {
+      if (govt && email.trim().toLowerCase() !== GOVT_EMAIL)
+        return setError('This sign in is for government officials only.');
       await authService.signInWithPassword(email, password);
       const profile = await authService.getProfile();
-      if (profile?.role !== 'ops') {
+      if (profile?.role !== (govt ? 'govt' : 'ops')) {
         await authService.signOut();
-        return setError('That account does not have operations access.');
+        return setError(
+          govt
+            ? 'That account does not have government access.'
+            : 'That account does not have operations access.',
+        );
       }
       reset(afterSignIn(toAccount(profile)));
     } catch {
@@ -37,8 +44,12 @@ export function OpsLoginScreen() {
 
   return (
     <AuthLayout
-      title="Operations sign in"
-      subtitle="For CryoChain staff. Farmers and buyers sign in from the home page."
+      title={govt ? 'Government sign in' : 'Operations sign in'}
+      subtitle={
+        govt
+          ? 'For government officials. Farmer and stock reports for CryoChain.'
+          : 'For CryoChain staff. Farmers and buyers sign in from the home page.'
+      }
     >
       {error ? <Banner text={error} /> : null}
       <Input
@@ -48,7 +59,7 @@ export function OpsLoginScreen() {
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
-        placeholder="you@cryochain.com"
+        placeholder={govt ? GOVT_EMAIL : 'you@cryochain.com'}
       />
       <Input
         label="Password"

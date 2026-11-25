@@ -226,7 +226,8 @@ function MemberSheet({
             </>
           ) : null}
           <Text style={s.meta}>
-            Phone and email are how this person signs in, so they can’t be changed here. Vehicle and plate come from the assigned truck in Fleet.
+            Phone and email are how this person signs in, so they can’t be changed here. Vehicle and
+            plate come from the assigned truck in Fleet.
           </Text>
         </>
       ) : (

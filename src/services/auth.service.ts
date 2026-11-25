@@ -3,7 +3,7 @@ import { isEmail, normalizePhone } from '../utils/format';
 import { clearOfflineCache } from './offlineCache';
 import { supabase } from './supabase';
 
-export type UserRole = 'pending' | 'farmer' | 'buyer' | 'agent' | 'driver' | 'ops';
+export type UserRole = 'pending' | 'farmer' | 'buyer' | 'agent' | 'driver' | 'ops' | 'govt';
 
 export interface UserProfile {
   id: string;

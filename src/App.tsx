@@ -37,6 +37,8 @@ function Routes() {
       return <LandingScreen />;
     case 'ops':
       return <OpsLoginScreen />;
+    case 'govt':
+      return <OpsLoginScreen govt />;
     case 'emailVerified':
       return <EmailVerifiedScreen ok={route.ok} />;
     case 'paymentResult':

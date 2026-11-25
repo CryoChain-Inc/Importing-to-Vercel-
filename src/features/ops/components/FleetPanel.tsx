@@ -111,97 +111,97 @@ export function FleetPanel({
       </View>
 
       {adding || form.id ? (
-      <Reveal>
-      <Card style={s.form}>
-        <Text style={s.title}>{form.id ? `Edit ${form.plate}` : 'Add a truck'}</Text>
-        <Input
-          label="Plate number"
-          value={form.plate}
-          onChangeText={(plate) => setForm({ ...form, plate })}
-          autoCapitalize="characters"
-          maxLength={20}
-        />
-        <Input
-          label="Name or type (optional)"
-          value={form.name}
-          onChangeText={(name) => setForm({ ...form, name })}
-          maxLength={60}
-          placeholder="Cold van"
-        />
-        <Input
-          label="Capacity (kg)"
-          value={form.capacity}
-          onChangeText={(capacity) => setForm({ ...form, capacity })}
-          keyboardType="decimal-pad"
-          error={
-            form.capacity && !(capacity > 0 && capacity <= 50000)
-              ? 'Between 1 and 50,000 kg'
-              : undefined
-          }
-        />
-        {form.active ? (
-          <ChoiceChips
-            label="Driver"
-            options={[NONE, ...drivers.map(label)]}
-            value={
-              drivers.find((m) => m.id === form.driverId)
-                ? label(drivers.find((m) => m.id === form.driverId)!)
-                : NONE
-            }
-            onChange={(v) =>
-              setForm({ ...form, driverId: drivers.find((m) => label(m) === v)?.id ?? null })
-            }
-          />
-        ) : null}
-        {form.id ? (
-          <View style={s.row}>
-            <Text style={s.meta}>
-              {form.active
-                ? 'In service'
-                : 'Out of service: it is taken off its driver and gets no orders.'}
-            </Text>
-            <Switch
-              value={form.active}
-              onValueChange={(active) => setForm({ ...form, active })}
-              accessibilityLabel="In service"
-              trackColor={{ false: colors.borderStrong, true: colors.brand600 }}
-              thumbColor="#ffffff"
+        <Reveal>
+          <Card style={s.form}>
+            <Text style={s.title}>{form.id ? `Edit ${form.plate}` : 'Add a truck'}</Text>
+            <Input
+              label="Plate number"
+              value={form.plate}
+              onChangeText={(plate) => setForm({ ...form, plate })}
+              autoCapitalize="characters"
+              maxLength={20}
             />
-          </View>
-        ) : null}
-        <View style={s.actions}>
-          <Button
-            label="Cancel"
-            variant="outline"
-            onPress={() => {
-              setForm(BLANK);
-              setAdding(false);
-            }}
-            style={s.action}
-          />
-          <Button
-            label={form.id ? 'Save truck' : 'Add truck'}
-            loading={busy}
-            disabled={!valid}
-            style={s.action}
-            onPress={() =>
-              run(async () => {
-                await saveTruck({
-                  id: form.id,
-                  plate,
-                  name: form.name,
-                  capacityKg: capacity,
-                  driverId: form.driverId,
-                  active: form.active,
-                });
-                setForm(BLANK);
-                setAdding(false);
-              })
-            }
-          />
-        </View>
-      </Card>
-      </Reveal>
+            <Input
+              label="Name or type (optional)"
+              value={form.name}
+              onChangeText={(name) => setForm({ ...form, name })}
+              maxLength={60}
+              placeholder="Cold van"
+            />
+            <Input
+              label="Capacity (kg)"
+              value={form.capacity}
+              onChangeText={(capacity) => setForm({ ...form, capacity })}
+              keyboardType="decimal-pad"
+              error={
+                form.capacity && !(capacity > 0 && capacity <= 50000)
+                  ? 'Between 1 and 50,000 kg'
+                  : undefined
+              }
+            />
+            {form.active ? (
+              <ChoiceChips
+                label="Driver"
+                options={[NONE, ...drivers.map(label)]}
+                value={
+                  drivers.find((m) => m.id === form.driverId)
+                    ? label(drivers.find((m) => m.id === form.driverId)!)
+                    : NONE
+                }
+                onChange={(v) =>
+                  setForm({ ...form, driverId: drivers.find((m) => label(m) === v)?.id ?? null })
+                }
+              />
+            ) : null}
+            {form.id ? (
+              <View style={s.row}>
+                <Text style={s.meta}>
+                  {form.active
+                    ? 'In service'
+                    : 'Out of service: it is taken off its driver and gets no orders.'}
+                </Text>
+                <Switch
+                  value={form.active}
+                  onValueChange={(active) => setForm({ ...form, active })}
+                  accessibilityLabel="In service"
+                  trackColor={{ false: colors.borderStrong, true: colors.brand600 }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            ) : null}
+            <View style={s.actions}>
+              <Button
+                label="Cancel"
+                variant="outline"
+                onPress={() => {
+                  setForm(BLANK);
+                  setAdding(false);
+                }}
+                style={s.action}
+              />
+              <Button
+                label={form.id ? 'Save truck' : 'Add truck'}
+                loading={busy}
+                disabled={!valid}
+                style={s.action}
+                onPress={() =>
+                  run(async () => {
+                    await saveTruck({
+                      id: form.id,
+                      plate,
+                      name: form.name,
+                      capacityKg: capacity,
+                      driverId: form.driverId,
+                      active: form.active,
+                    });
+                    setForm(BLANK);
+                    setAdding(false);
+                  })
+                }
+              />
+            </View>
+          </Card>
+        </Reveal>
       ) : null}
 
       {trucks.length === 0 ? (
@@ -267,7 +267,12 @@ export function FleetPanel({
 const styles = (c: Record<ColorToken, string>) => ({
   list: { gap: 16 },
   form: { gap: 12 },
-  grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 14, alignItems: 'stretch' as const },
+  grid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 14,
+    alignItems: 'stretch' as const,
+  },
   cell: { flexGrow: 1, flexBasis: 300 },
   off: { opacity: 0.7 },
   truckIcon: {
@@ -281,7 +286,12 @@ const styles = (c: Record<ColorToken, string>) => ({
   facts: { flexDirection: 'row' as const, gap: 8 },
   fact: { flex: 1, gap: 2, padding: 10, borderRadius: 12, backgroundColor: c.surfaceSunken },
   factLabel: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted },
-  factValue: { fontFamily: fonts.sansBold, fontSize: 15, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  factValue: {
+    fontFamily: fonts.sansBold,
+    fontSize: 15,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
