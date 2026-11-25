@@ -1,8 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, type IconName } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { Banner, Dialog } from '../../../components/feedback';
 import { TabShell, useIsWide } from '../../../components/layout';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
@@ -33,6 +34,7 @@ import { useDriverLocation } from '../useDriverLocation';
 import { startTripTracking, stopTripTracking, type TrackingResult } from '../backgroundLocation';
 
 const PING_MS = 30000;
+const BG_CONSENT_KEY = 'cryochain.bgLocationConsent';
 const LIVE_TABLES = ['delivery_stops', 'truck_bookings'] as const;
 type Tab = 'home' | 'stops' | 'truck' | 'account';
 const TABS: Tab[] = ['home', 'stops', 'truck', 'account'];
@@ -135,10 +137,16 @@ export function DriverHome({ account }: { account: Account }) {
   // Background GPS runs only while there is a delivery on the road.
   const [tracking, setTracking] = useState<TrackingResult | null>(null);
   const onTrip = (book?.orders ?? []).some((o) => o.ongoing);
+  // Play policy: show a prominent disclosure and get a yes before asking for background location.
+  const [consent, setConsent] = useState<boolean | null>(null);
+  const [declined, setDeclined] = useState(false);
   useEffect(() => {
-    if (book == null) return;
+    AsyncStorage.getItem(BG_CONSENT_KEY).then((v) => setConsent(v === '1'));
+  }, []);
+  useEffect(() => {
+    if (book == null || consent == null) return;
     let live = true;
-    if (onTrip)
+    if (onTrip && consent)
       startTripTracking().then(
         (r) => {
           if (live) setTracking(r);
@@ -154,7 +162,7 @@ export function DriverHome({ account }: { account: Account }) {
     return () => {
       live = false;
     };
-  }, [onTrip, book]);
+  }, [onTrip, book, consent]);
 
   const orders = book?.orders ?? [];
   const { todo, done } = useMemo(() => buildStops(orders), [book]); // eslint-disable-line react-hooks/exhaustive-deps -- orders derives from book
@@ -201,12 +209,38 @@ export function DriverHome({ account }: { account: Account }) {
 
   return (
     <TabShell tabs={bar} tab={active} onSelect={(t) => go(t)} refresh={live}>
+      {onTrip && consent === false && !declined ? (
+        <Dialog
+          title="Share your location during trips"
+          onClose={() => setDeclined(true)}
+          footer={
+            <>
+              <Button
+                label="Allow"
+                onPress={() => {
+                  AsyncStorage.setItem(BG_CONSENT_KEY, '1');
+                  setConsent(true);
+                }}
+              />
+              <Button label="Not now" variant="ghost" onPress={() => setDeclined(true)} />
+            </>
+          }
+        >
+          <Text style={s.sub}>
+            CryoChain collects your precise location, including in the background when the app is
+            closed or your screen is off, from when you start a delivery trip until your last stop
+            is complete. It is shared with CryoChain operations and with buyers whose order is on
+            its way, so they can follow the truck and see arrival times. It is not collected outside
+            a trip. On the next screen, choose “Allow all the time”.
+          </Text>
+        </Dialog>
+      ) : null}
       <View style={s.header}>
         <Text style={s.title}>{active === 'home' ? `Hello, ${first}` : title}</Text>
         {sub ? <Text style={s.sub}>{sub}</Text> : null}
       </View>
       {locationError && !params.view ? <Banner text={locationError} /> : null}
-      {tracking === 'foreground_only' && !params.view ? (
+      {(tracking === 'foreground_only' || (onTrip && consent === false)) && !params.view ? (
         <Banner
           tone="info"
           text="Allow location “all the time” in your phone settings so buyers can follow the truck while your screen is off. Until then, keep CryoChain open while you drive."
@@ -232,7 +266,11 @@ export function DriverHome({ account }: { account: Account }) {
             height={wide ? 360 : 280}
           />
           {todo.length + liveDone.length > 0 ? (
-            <RouteHeader todo={todo} doneLive={liveDone} fresh={todo.filter((x) => fresh.has(x.key)).length} />
+            <RouteHeader
+              todo={todo}
+              doneLive={liveDone}
+              fresh={todo.filter((x) => fresh.has(x.key)).length}
+            />
           ) : null}
           {todo[0] ? (
             <NextStop
