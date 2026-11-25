@@ -4,7 +4,12 @@ import { Button } from '../../../components/common';
 import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
 
 /** Multi-select chips; selected ones are filled. */
-export function MultiChips<T extends string | number>({ label, options, value, onChange }: {
+export function MultiChips<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
   label: string;
   options: { key: T; label: string }[];
   value: T[];
@@ -18,8 +23,13 @@ export function MultiChips<T extends string | number>({ label, options, value, o
         {options.map((o) => {
           const on = value.includes(o.key);
           return (
-            <Button key={String(o.key)} size="sm" label={o.label} variant={on ? 'primary' : 'outline'}
-              onPress={() => onChange(on ? value.filter((k) => k !== o.key) : [...value, o.key])} />
+            <Button
+              key={String(o.key)}
+              size="sm"
+              label={o.label}
+              variant={on ? 'primary' : 'outline'}
+              onPress={() => onChange(on ? value.filter((k) => k !== o.key) : [...value, o.key])}
+            />
           );
         })}
       </View>

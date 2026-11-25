@@ -31,20 +31,44 @@ export function AccountFooter({ onDeleted }: { onDeleted: () => void }) {
   return (
     <View style={s.wrap}>
       <View style={s.links}>
-        <Text accessibilityRole="link" style={s.link} onPress={() => Linking.openURL(`${SITE}/privacy.html`)}>Privacy Policy</Text>
-        <Text accessibilityRole="link" style={s.link} onPress={() => Linking.openURL(`${SITE}/terms.html`)}>Terms of Use</Text>
+        <Text
+          accessibilityRole="link"
+          style={s.link}
+          onPress={() => Linking.openURL(`${SITE}/privacy.html`)}
+        >
+          Privacy Policy
+        </Text>
+        <Text
+          accessibilityRole="link"
+          style={s.link}
+          onPress={() => Linking.openURL(`${SITE}/terms.html`)}
+        >
+          Terms of Use
+        </Text>
       </View>
       {error ? <Banner text={error} /> : null}
       {confirming ? (
         <View style={s.confirm}>
           <Text style={s.warn}>
-            This permanently removes your name, phone, email, addresses and payout wallet and signs you out. Payment records are kept without your personal details. This cannot be undone.
+            This permanently removes your name, phone, email, addresses and payout wallet and signs
+            you out. Payment records are kept without your personal details. This cannot be undone.
           </Text>
           <Button label="Yes, delete my account" variant="danger" loading={busy} onPress={erase} />
-          <Button label="Cancel" variant="ghost" disabled={busy} onPress={() => setConfirming(false)} />
+          <Button
+            label="Cancel"
+            variant="ghost"
+            disabled={busy}
+            onPress={() => setConfirming(false)}
+          />
         </View>
       ) : (
-        <Button label="Delete account" variant="ghost" size="sm" onPress={() => setConfirming(true)} style={s.delete} />
+        <Button
+          label="Delete account"
+          variant="ghost"
+          size="sm"
+          onPress={() => setConfirming(true)}
+          style={s.delete}
+        />
       )}
     </View>
   );
@@ -53,7 +77,12 @@ export function AccountFooter({ onDeleted }: { onDeleted: () => void }) {
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 12, marginTop: 8 },
   links: { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: 20 },
-  link: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted, textDecorationLine: 'underline' as const },
+  link: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: c.inkMuted,
+    textDecorationLine: 'underline' as const,
+  },
   confirm: { gap: 8 },
   warn: { fontFamily: fonts.sansMedium, fontSize: 13, lineHeight: 18, color: c.dangerInk },
   delete: { alignSelf: 'center' as const },

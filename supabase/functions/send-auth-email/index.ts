@@ -7,7 +7,14 @@ const hookSecret = (Deno.env.get('SEND_EMAIL_HOOK_SECRET') ?? '').replace('v1,wh
 
 type HookPayload = {
   user: { email?: string; new_email?: string; email_change?: string };
-  email_data: { token: string; token_new?: string; token_hash?: string; redirect_to?: string; email_action_type?: string; new_email?: string };
+  email_data: {
+    token: string;
+    token_new?: string;
+    token_hash?: string;
+    redirect_to?: string;
+    email_action_type?: string;
+    new_email?: string;
+  };
 };
 
 Deno.serve(async (req) => {
@@ -31,15 +38,22 @@ Deno.serve(async (req) => {
   const to = change ? newEmail || user.email : user.email;
   const code = email_data.token;
   // With secure email change off, token_hash pairs with the new address (Supabase names the hashes the other way round).
-  const link = change && email_data.token_hash
-    ? `${Deno.env.get('PUBLIC_API_URL') ?? Deno.env.get('SUPABASE_URL')}/auth/v1/verify?${new URLSearchParams({
-        token: email_data.token_hash,
-        type: 'email_change',
-        ...(email_data.redirect_to ? { redirect_to: email_data.redirect_to } : {}),
-      })}`
-    : null;
+  const link =
+    change && email_data.token_hash
+      ? `${Deno.env.get('PUBLIC_API_URL') ?? Deno.env.get('SUPABASE_URL')}/auth/v1/verify?${new URLSearchParams(
+          {
+            token: email_data.token_hash,
+            type: 'email_change',
+            ...(email_data.redirect_to ? { redirect_to: email_data.redirect_to } : {}),
+          },
+        )}`
+      : null;
   if (!to) {
-    console.error('no recipient', { user: Object.keys(user), email_data: Object.keys(email_data), type: email_data.email_action_type });
+    console.error('no recipient', {
+      user: Object.keys(user),
+      email_data: Object.keys(email_data),
+      type: email_data.email_action_type,
+    });
     return Response.json({ error: { http_code: 400, message: 'No email address to send to' } });
   }
   const auth = btoa(`${Deno.env.get('TWILIO_ACCOUNT_SID')}:${Deno.env.get('TWILIO_AUTH_TOKEN')}`);
@@ -57,7 +71,10 @@ Deno.serve(async (req) => {
 
   if (!res.ok) {
     console.error('twilio email failed', res.status, await res.text());
-    return Response.json({ error: { http_code: 502, message: 'Could not send email' } }, { status: 200 });
+    return Response.json(
+      { error: { http_code: 502, message: 'Could not send email' } },
+      { status: 200 },
+    );
   }
   return Response.json({});
 });

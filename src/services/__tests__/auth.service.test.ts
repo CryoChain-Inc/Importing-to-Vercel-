@@ -2,10 +2,24 @@ import { authService } from '../auth.service';
 import { supabase } from '../supabase';
 
 jest.mock('../supabase', () => ({
-  supabase: { auth: { signInWithOtp: jest.fn(), updateUser: jest.fn(), verifyOtp: jest.fn(), getSession: jest.fn() }, rpc: jest.fn(), from: jest.fn(), functions: { invoke: jest.fn() } },
+  supabase: {
+    auth: {
+      signInWithOtp: jest.fn(),
+      updateUser: jest.fn(),
+      verifyOtp: jest.fn(),
+      getSession: jest.fn(),
+    },
+    rpc: jest.fn(),
+    from: jest.fn(),
+    functions: { invoke: jest.fn() },
+  },
 }));
 
-const auth = supabase.auth as unknown as { signInWithOtp: jest.Mock; updateUser: jest.Mock; verifyOtp: jest.Mock };
+const auth = supabase.auth as unknown as {
+  signInWithOtp: jest.Mock;
+  updateUser: jest.Mock;
+  verifyOtp: jest.Mock;
+};
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -18,13 +32,21 @@ test('local Ghana phone is sent as +233 E.164', async () => {
 test('email is lower-cased and verified as an email code', async () => {
   auth.verifyOtp.mockResolvedValue({ error: null });
   expect(await authService.verifyOtp(' Ops@Cryo.co ', '123456')).toBe(true);
-  expect(auth.verifyOtp).toHaveBeenCalledWith({ email: 'ops@cryo.co', token: '123456', type: 'email' });
+  expect(auth.verifyOtp).toHaveBeenCalledWith({
+    email: 'ops@cryo.co',
+    token: '123456',
+    type: 'email',
+  });
 });
 
 test('wrong phone code returns false', async () => {
   auth.verifyOtp.mockResolvedValue({ error: new Error('bad') });
   expect(await authService.verifyOtp('233244000001', '000000')).toBe(false);
-  expect(auth.verifyOtp).toHaveBeenCalledWith({ phone: '+233244000001', token: '000000', type: 'sms' });
+  expect(auth.verifyOtp).toHaveBeenCalledWith({
+    phone: '+233244000001',
+    token: '000000',
+    type: 'sms',
+  });
 });
 
 test('adding an email asks auth to change it, then confirms with an email_change code', async () => {
@@ -33,23 +55,35 @@ test('adding an email asks auth to change it, then confirms with an email_change
   await authService.requestContactChange('New@Cryo.co');
   expect(auth.updateUser).toHaveBeenCalledWith({ email: 'new@cryo.co' });
   expect(await authService.confirmContactChange('New@Cryo.co', '123456')).toBe(true);
-  expect(auth.verifyOtp).toHaveBeenCalledWith({ email: 'new@cryo.co', token: '123456', type: 'email_change' });
+  expect(auth.verifyOtp).toHaveBeenCalledWith({
+    email: 'new@cryo.co',
+    token: '123456',
+    type: 'email_change',
+  });
 });
 
 test('phone change confirms with a phone_change code', async () => {
   auth.verifyOtp.mockResolvedValue({ error: null });
   await authService.confirmContactChange('0244000001', '123456');
-  expect(auth.verifyOtp).toHaveBeenCalledWith({ phone: '+233244000001', token: '123456', type: 'phone_change' });
+  expect(auth.verifyOtp).toHaveBeenCalledWith({
+    phone: '+233244000001',
+    token: '123456',
+    type: 'phone_change',
+  });
 });
 
 test('a contact owned by another account is rejected with a clear message', async () => {
   auth.updateUser.mockResolvedValue({ error: { code: 'phone_exists', message: 'x' } });
-  await expect(authService.requestContactChange('0244000001')).rejects.toThrow('belongs to another account');
+  await expect(authService.requestContactChange('0244000001')).rejects.toThrow(
+    'belongs to another account',
+  );
 });
 
 test('delete account surfaces the server reason when it is refused', async () => {
   const invoke = (supabase as unknown as { functions: { invoke: jest.Mock } }).functions.invoke;
-  invoke.mockResolvedValue({ error: { context: { json: async () => ({ error: 'Payout in progress.' }) } } });
+  invoke.mockResolvedValue({
+    error: { context: { json: async () => ({ error: 'Payout in progress.' }) } },
+  });
   await expect(authService.deleteAccount()).rejects.toThrow('Payout in progress.');
   invoke.mockResolvedValue({ error: null });
   await expect(authService.deleteAccount()).resolves.toBeUndefined();

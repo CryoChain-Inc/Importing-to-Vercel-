@@ -3,8 +3,20 @@ import { enqueueListing, flushOutbox, queuedCount } from '../listingOutbox';
 import { supabase } from '../supabase';
 
 jest.mock('expo-file-system', () => {
-  class File { uri: string; constructor(...p: any[]) { this.uri = p.map((x) => x.uri ?? x).join('/'); } copy = jest.fn(async () => undefined); arrayBuffer = async () => new ArrayBuffer(1); }
-  class Directory { uri = 'dir'; exists = false; create = jest.fn(); delete = jest.fn(); }
+  class File {
+    uri: string;
+    constructor(...p: any[]) {
+      this.uri = p.map((x) => x.uri ?? x).join('/');
+    }
+    copy = jest.fn(async () => undefined);
+    arrayBuffer = async () => new ArrayBuffer(1);
+  }
+  class Directory {
+    uri = 'dir';
+    exists = false;
+    create = jest.fn();
+    delete = jest.fn();
+  }
   return { File, Directory, Paths: { document: { uri: 'doc' } } };
 });
 jest.mock('../supabase', () => ({
@@ -18,18 +30,27 @@ beforeEach(() => {
   jest.clearAllMocks();
   (supabase.storage.from as jest.Mock).mockReturnValue({ upload, remove: jest.fn() });
   (supabase.from as jest.Mock).mockReturnValue({ insert });
-  (globalThis as any).fetch = jest.fn(async () => ({ arrayBuffer: async () => new ArrayBuffer(1) }));
+  (globalThis as any).fetch = jest.fn(async () => ({
+    arrayBuffer: async () => new ArrayBuffer(1),
+  }));
   upload.mockResolvedValue({ error: null });
 });
 
-const photos = ['a', 'b', 'c'].map((n) => ({ uri: `file:///${n}.jpg`, mimeType: 'image/jpeg', fingerprint: n }));
+const photos = ['a', 'b', 'c'].map((n) => ({
+  uri: `file:///${n}.jpg`,
+  mimeType: 'image/jpeg',
+  fingerprint: n,
+}));
 
 test('listing is kept while offline and sent once with the same id when the network returns', async () => {
   await AsyncStorage.clear();
   await enqueueListing('Tomato', 50, 'A', photos);
   expect(queuedCount()).toBe(1);
 
-  insert.mockResolvedValueOnce({ error: { message: 'TypeError: Network request failed', code: '' }, status: 0 });
+  insert.mockResolvedValueOnce({
+    error: { message: 'TypeError: Network request failed', code: '' },
+    status: 0,
+  });
   expect(await flushOutbox()).toBe(0);
   expect(queuedCount()).toBe(1);
 

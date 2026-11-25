@@ -8,10 +8,7 @@ export interface LoadingScreenProps {
   detail?: string;
 }
 
-export function LoadingScreen({
-  message = 'Loading CryoChain...',
-  detail,
-}: LoadingScreenProps) {
+export function LoadingScreen({ message = 'Loading CryoChain...', detail }: LoadingScreenProps) {
   return (
     <View style={styles.container}>
       <View style={styles.brandGroup}>

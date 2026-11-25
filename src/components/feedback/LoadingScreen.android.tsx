@@ -103,7 +103,9 @@ export function LoadingScreen({ message = 'Loading CryoChain...', detail }: Load
           style={[
             styles.logo,
             {
-              transform: [{ translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) }],
+              transform: [
+                { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) },
+              ],
             },
           ]}
         />
@@ -143,13 +145,20 @@ const styles = StyleSheet.create({
   },
   logo: { width: 324, height: 112 },
   glow: {
-    position: 'absolute', width: 250, height: 250, borderRadius: 125,
-    backgroundColor: '#E8F1E5', opacity: 0.72,
+    position: 'absolute',
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: '#E8F1E5',
+    opacity: 0.72,
   },
   orbit: {
     position: 'absolute',
-    width: 210, height: 210, borderRadius: 105,
-    borderWidth: 1.5, borderColor: '#A9CDA0',
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    borderWidth: 1.5,
+    borderColor: '#A9CDA0',
   },
   specks: { position: 'absolute', width: 284, height: 284 },
   speck: { position: 'absolute', width: 7, height: 7, borderRadius: 4, backgroundColor: '#2B7DB8' },

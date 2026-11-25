@@ -12,7 +12,9 @@ type VerifyRoute = Extract<Route, { name: 'verify' }>;
 const NEUTRAL = "That code didn't work. Check the 6 digits, or request a new code.";
 
 export const afterSignIn = (account: Account): Route =>
-  account.roles.length > 1 ? { name: 'workspace', account } : { name: 'home', account, role: account.roles[0] };
+  account.roles.length > 1
+    ? { name: 'workspace', account }
+    : { name: 'home', account, role: account.roles[0] };
 
 export function VerifyScreen({ route }: { route: VerifyRoute }) {
   const { identifier } = route;

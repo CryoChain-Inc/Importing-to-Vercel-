@@ -13,7 +13,23 @@ const ROLES = {
   farmer: { phone: '200000001', tabs: ['Listings', 'Messages', 'Payments', 'Profile'] },
   buyer: { phone: '200000006', tabs: ['Shop', 'Cart', 'Orders', 'Truck', 'Account'] },
   driver: { phone: '200000004', tabs: ['Home', 'Cold truck', 'Delivery'] },
-  ops: { tabs: ['Dashboard', 'Supply', 'Farmers', 'Buyers', 'Orders', 'Decisions', 'Payments in', 'Farmer payouts', 'Routes', 'Cold trucks', 'Prices and products', 'Team', 'Settings'] },
+  ops: {
+    tabs: [
+      'Dashboard',
+      'Supply',
+      'Farmers',
+      'Buyers',
+      'Orders',
+      'Decisions',
+      'Payments in',
+      'Farmer payouts',
+      'Routes',
+      'Cold trucks',
+      'Prices and products',
+      'Team',
+      'Settings',
+    ],
+  },
 };
 
 const server = spawn('npx', ['serve', '-s', 'dist', '-l', '4175'], { stdio: 'ignore' });
@@ -22,8 +38,17 @@ mkdirSync('.lighthouseci/roles', { recursive: true });
 const rows = [];
 
 for (const [role, { phone, tabs }] of Object.entries(ROLES)) {
-  const browser = await chromium.launch({ channel: 'chrome', args: [`--remote-debugging-port=${PORT}`] });
-  const page = await (await browser.newContext(role === 'ops' ? { viewport: { width: 1360, height: 860 } } : { viewport: { width: 412, height: 915 } })).newPage();
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    args: [`--remote-debugging-port=${PORT}`],
+  });
+  const page = await (
+    await browser.newContext(
+      role === 'ops'
+        ? { viewport: { width: 1360, height: 860 } }
+        : { viewport: { width: 412, height: 915 } },
+    )
+  ).newPage();
   if (role === 'ops') {
     await page.goto(`${BASE}/ops`);
     await page.getByLabel('Work email').fill('tech@cryochain.co');
@@ -37,13 +62,27 @@ for (const [role, { phone, tabs }] of Object.entries(ROLES)) {
     await page.keyboard.type(CODE);
     await page.getByRole('button', { name: 'Confirm' }).click();
   }
-  await page.getByRole('button', { name: 'Get started' }).click({ timeout: 8000 }).catch(() => undefined);
+  await page
+    .getByRole('button', { name: 'Get started' })
+    .click({ timeout: 8000 })
+    .catch(() => undefined);
 
-  const pp = await puppeteer.connect({ browserURL: `http://127.0.0.1:${PORT}`, defaultViewport: null });
+  const pp = await puppeteer.connect({
+    browserURL: `http://127.0.0.1:${PORT}`,
+    defaultViewport: null,
+  });
   const target = (await pp.pages()).find((p) => p.url().startsWith(BASE));
-  const flow = await startFlow(target, { config: { extends: 'lighthouse:default', settings: { onlyCategories: ['accessibility', 'best-practices'] } } });
+  const flow = await startFlow(target, {
+    config: {
+      extends: 'lighthouse:default',
+      settings: { onlyCategories: ['accessibility', 'best-practices'] },
+    },
+  });
   for (const name of tabs) {
-    await page.getByRole('tab', { name: new RegExp(`^${name}`) }).first().click();
+    await page
+      .getByRole('tab', { name: new RegExp(`^${name}`) })
+      .first()
+      .click();
     await page.waitForLoadState('networkidle');
     await flow.snapshot({ name: `${role} / ${name}` });
   }
@@ -51,7 +90,12 @@ for (const [role, { phone, tabs }] of Object.entries(ROLES)) {
   writeFileSync(`.lighthouseci/roles/${role}.json`, JSON.stringify(flowResult));
   writeFileSync(`.lighthouseci/roles/${role}.html`, await flow.generateReport());
   for (const s of flowResult.steps) {
-    const sc = Object.fromEntries(Object.entries(s.lhr.categories).map(([k, v]) => [k.replace('best-practices', 'bp').replace('accessibility', 'a11y'), Math.round(v.score * 100)]));
+    const sc = Object.fromEntries(
+      Object.entries(s.lhr.categories).map(([k, v]) => [
+        k.replace('best-practices', 'bp').replace('accessibility', 'a11y'),
+        Math.round(v.score * 100),
+      ]),
+    );
     rows.push(`${s.name.padEnd(32)} a11y ${sc.a11y}  best-practices ${sc.bp}`);
   }
   await pp.disconnect();

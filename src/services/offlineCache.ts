@@ -4,8 +4,12 @@ const PREFIX = 'cache:';
 
 /** Network failures only. A server that answered with an error is a real error and must not be hidden by old data. */
 export function isNetworkError(e: unknown): boolean {
-  const msg = e instanceof Error ? e.message : String((e as { message?: string } | null)?.message ?? e ?? '');
-  return e instanceof TypeError || /network|failed to fetch|timed? ?out|offline|econn|abort|load failed/i.test(msg);
+  const msg =
+    e instanceof Error ? e.message : String((e as { message?: string } | null)?.message ?? e ?? '');
+  return (
+    e instanceof TypeError ||
+    /network|failed to fetch|timed? ?out|offline|econn|abort|load failed/i.test(msg)
+  );
 }
 
 /** Runs `load`, saves what it returned, and serves the last saved copy when the device cannot reach the server. */

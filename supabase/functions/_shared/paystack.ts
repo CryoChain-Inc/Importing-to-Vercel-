@@ -8,9 +8,13 @@ export const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 export const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  });
 
-export const admin = () => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+export const admin = () =>
+  createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 /** Client acting as the calling user (their JWT), so RLS applies. */
 export const asCaller = (req: Request) =>
@@ -21,9 +25,14 @@ export const asCaller = (req: Request) =>
 export async function paystack(path: string, init?: RequestInit) {
   const res = await fetch(`https://api.paystack.co${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${Deno.env.get('PAYSTACK_SECRET_KEY')}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${Deno.env.get('PAYSTACK_SECRET_KEY')}`,
+      'Content-Type': 'application/json',
+    },
   });
-  return (await res.json().catch(() => ({ status: false, message: 'Bad response from Paystack.' }))) as {
+  return (await res
+    .json()
+    .catch(() => ({ status: false, message: 'Bad response from Paystack.' }))) as {
     status: boolean;
     message: string;
     data?: any;
@@ -31,24 +40,42 @@ export async function paystack(path: string, init?: RequestInit) {
 }
 
 /** Applies a Paystack result to a lot payment, or to a truck booking when the reference starts with TRK. */
-export async function applyTransaction(tx: { reference: string; status: string; amount: number; currency: string; channel?: string; gateway_response?: string }) {
+export async function applyTransaction(tx: {
+  reference: string;
+  status: string;
+  amount: number;
+  currency: string;
+  channel?: string;
+  gateway_response?: string;
+}) {
   const db = admin();
   const truck = tx.reference.startsWith('TRK');
   const settle = truck ? 'settle_truck_payment' : 'settle_paystack_payment';
   const fail = truck ? 'fail_truck_payment' : 'fail_paystack_payment';
   if (tx.status === 'success') {
     const { error } = await db.rpc(settle, {
-      p_reference: tx.reference, p_paid_pesewas: tx.amount, p_currency: tx.currency, p_channel: tx.channel ?? null,
+      p_reference: tx.reference,
+      p_paid_pesewas: tx.amount,
+      p_currency: tx.currency,
+      p_channel: tx.channel ?? null,
     });
     if (error) throw new Error(error.message);
     // A paid cart order is allocated to farmers inside settle_*; tell them by SMS now. A failure here is retried later.
     if (!truck) await flushSms().catch((e) => console.error('sms flush failed', e));
   } else if (tx.status === 'failed' || tx.status === 'abandoned') {
-    await db.rpc(fail, { p_reference: tx.reference, p_status: tx.status, p_message: tx.gateway_response ?? '' });
+    await db.rpc(fail, {
+      p_reference: tx.reference,
+      p_status: tx.status,
+      p_message: tx.gateway_response ?? '',
+    });
   }
 }
 
-export const MOMO_BANK: Record<string, string> = { 'MTN MoMo': 'MTN', 'Telecel Cash': 'VOD', 'AirtelTigo Money': 'ATL' };
+export const MOMO_BANK: Record<string, string> = {
+  'MTN MoMo': 'MTN',
+  'Telecel Cash': 'VOD',
+  'AirtelTigo Money': 'ATL',
+};
 
 /** 233XXXXXXXXX / 0XXXXXXXXX / XXXXXXXXX -> 0XXXXXXXXX, the form Paystack wants for Ghana MoMo. */
 export function localMsisdn(number: unknown) {
@@ -56,15 +83,65 @@ export function localMsisdn(number: unknown) {
   return d.startsWith('233') ? `0${d.slice(3)}` : d.startsWith('0') ? d : `0${d}`;
 }
 
+/**
+ * Applies a refund.* webhook to the refund we sent for that payment. The event carries the original transaction's
+ * reference, which leads to the one refund in flight for its order.
+ */
+export async function applyRefundEvent(
+  event: string,
+  data: { transaction_reference?: string; refund_reference?: string; status?: string },
+) {
+  const status =
+    event === 'refund.processed'
+      ? 'refunded'
+      : event === 'refund.failed' || event === 'refund.needs-attention'
+        ? 'failed'
+        : null;
+  if (!status || !data.transaction_reference) return;
+  const db = admin();
+  const { data: pay } = await db
+    .from('payments')
+    .select('id')
+    .eq('reference', data.transaction_reference)
+    .maybeSingle();
+  if (!pay) return;
+  const { data: r } = await db
+    .from('refunds')
+    .select('id')
+    .eq('payment_id', pay.id)
+    .in('status', ['sending', 'sent'])
+    .maybeSingle();
+  if (!r) return;
+  const { error } = await db.rpc('apply_refund_result', {
+    p_id: r.id,
+    p_status: status,
+    p_provider_ref: data.refund_reference ?? null,
+    p_error: status === 'failed' ? `Paystack reported ${data.status ?? event}.` : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Applies a transfer.success / transfer.failed / transfer.reversed webhook to our transfer row (matched by reference). */
-export async function applyTransferEvent(event: string, data: { reference: string; transfer_code?: string; reason?: string }) {
+export async function applyTransferEvent(
+  event: string,
+  data: { reference: string; transfer_code?: string; reason?: string },
+) {
   const status = event === 'transfer.success' ? 'succeeded' : 'failed';
   const db = admin();
-  const { data: t } = await db.from('payout_transfers').select('id').eq('reference', data.reference).maybeSingle();
+  const { data: t } = await db
+    .from('payout_transfers')
+    .select('id')
+    .eq('reference', data.reference)
+    .maybeSingle();
   if (!t) return;
   const { error } = await db.rpc('apply_transfer_result', {
-    p_transfer: t.id, p_status: status, p_provider_ref: data.transfer_code ?? null,
-    p_error: status === 'failed' ? `Paystack: ${event.replace('transfer.', '')}${data.reason ? ` (${data.reason})` : ''}` : null,
+    p_transfer: t.id,
+    p_status: status,
+    p_provider_ref: data.transfer_code ?? null,
+    p_error:
+      status === 'failed'
+        ? `Paystack: ${event.replace('transfer.', '')}${data.reason ? ` (${data.reason})` : ''}`
+        : null,
   });
   if (error) throw new Error(error.message);
 }

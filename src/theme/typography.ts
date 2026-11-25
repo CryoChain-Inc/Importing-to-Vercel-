@@ -6,7 +6,6 @@ import { PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans/70
 import { PlusJakartaSans_800ExtraBold } from '@expo-google-fonts/plus-jakarta-sans/800ExtraBold';
 import { FontDisplay } from 'expo-font';
 
-
 // Plus Jakarta Sans per docs/Agri-Market-UI-Design-System.pdf.
 // font-display: swap on web, so text paints in the fallback face instead of waiting on ~475 KB of fonts.
 const swap = (uri: number) => ({ uri, display: FontDisplay.SWAP });
@@ -41,5 +40,10 @@ export const textStyles = {
     letterSpacing: 0.8,
     textTransform: 'uppercase' as const,
   },
-  price: { fontFamily: fonts.sansBold, fontSize: 24, lineHeight: 28, fontVariant: ['tabular-nums' as const] },
+  price: {
+    fontFamily: fonts.sansBold,
+    fontSize: 24,
+    lineHeight: 28,
+    fontVariant: ['tabular-nums' as const],
+  },
 } as const;

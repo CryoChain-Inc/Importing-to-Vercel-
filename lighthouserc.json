@@ -1,10 +1,7 @@
 {
   "ci": {
     "collect": {
-      "url": [
-        "http://localhost:4174/",
-        "http://localhost:4174/ops"
-      ],
+      "url": ["http://localhost:4174/", "http://localhost:4174/ops"],
       "numberOfRuns": 1,
       "settings": {
         "chromePath": "/usr/bin/google-chrome",

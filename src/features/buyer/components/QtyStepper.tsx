@@ -8,7 +8,21 @@ import { stepFor } from '../cart/cart';
  * Quantity picker in one pill: step with − / +, or type an exact quantity. At the smallest step the − turns into a bin
  * that removes the line (onChange(0)), so a buyer always sees what the next tap does.
  */
-export function QtyStepper({ value, max, unit, onChange, compact = false, removable = true }: { value: number; max: number; unit: string; onChange: (kg: number) => void; compact?: boolean; removable?: boolean }) {
+export function QtyStepper({
+  value,
+  max,
+  unit,
+  onChange,
+  compact = false,
+  removable = true,
+}: {
+  value: number;
+  max: number;
+  unit: string;
+  onChange: (kg: number) => void;
+  compact?: boolean;
+  removable?: boolean;
+}) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const STEP = stepFor(unit);
@@ -32,9 +46,24 @@ export function QtyStepper({ value, max, unit, onChange, compact = false, remova
 
   return (
     <View style={[s.pill, compact && s.pillCompact]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={removing ? 'Remove from cart' : 'Less'} disabled={atMin} onPress={() => step(-1)} hitSlop={6}
-        style={({ pressed }) => [s.btn, { width: size, height: size }, atMin && s.off, pressed && s.pressed]}>
-        {removing ? <Icon name="trash" size={compact ? 16 : 18} color={colors.dangerInk} /> : <Text style={s.sign}>−</Text>}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={removing ? 'Remove from cart' : 'Less'}
+        disabled={atMin}
+        onPress={() => step(-1)}
+        hitSlop={6}
+        style={({ pressed }) => [
+          s.btn,
+          { width: size, height: size },
+          atMin && s.off,
+          pressed && s.pressed,
+        ]}
+      >
+        {removing ? (
+          <Icon name="trash" size={compact ? 16 : 18} color={colors.dangerInk} />
+        ) : (
+          <Text style={s.sign}>−</Text>
+        )}
       </Pressable>
       <TextInput
         accessibilityLabel={`Quantity in ${unit}`}
@@ -48,8 +77,19 @@ export function QtyStepper({ value, max, unit, onChange, compact = false, remova
         style={[s.input, compact && s.inputCompact, { outlineStyle: 'none' } as object]}
       />
       <Text style={s.unit}>{unit}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="More" disabled={value >= max} onPress={() => step(1)} hitSlop={6}
-        style={({ pressed }) => [s.btn, { width: size, height: size }, value >= max && s.off, pressed && s.pressed]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="More"
+        disabled={value >= max}
+        onPress={() => step(1)}
+        hitSlop={6}
+        style={({ pressed }) => [
+          s.btn,
+          { width: size, height: size },
+          value >= max && s.off,
+          pressed && s.pressed,
+        ]}
+      >
         <Text style={s.sign}>+</Text>
       </Pressable>
     </View>
@@ -57,13 +97,45 @@ export function QtyStepper({ value, max, unit, onChange, compact = false, remova
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  pill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, padding: 4, borderRadius: 16, backgroundColor: c.surfaceSunken, alignSelf: 'flex-start' as const },
-  pillCompact: { padding: 2, borderRadius: 14, alignSelf: 'stretch' as const, justifyContent: 'space-between' as const },
-  btn: { borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.surfaceCard },
+  pill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: c.surfaceSunken,
+    alignSelf: 'flex-start' as const,
+  },
+  pillCompact: {
+    padding: 2,
+    borderRadius: 14,
+    alignSelf: 'stretch' as const,
+    justifyContent: 'space-between' as const,
+  },
+  btn: {
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.surfaceCard,
+  },
   pressed: { opacity: 0.6 },
   off: { opacity: 0.35 },
   sign: { fontFamily: fonts.sansBold, fontSize: 22, lineHeight: 26, color: c.brandInk },
-  input: { minWidth: 52, textAlign: 'center' as const, fontFamily: fonts.sansBold, fontSize: 17, color: c.ink, paddingVertical: 6, fontVariant: ['tabular-nums' as const] },
+  input: {
+    minWidth: 52,
+    textAlign: 'center' as const,
+    fontFamily: fonts.sansBold,
+    fontSize: 17,
+    color: c.ink,
+    paddingVertical: 6,
+    fontVariant: ['tabular-nums' as const],
+  },
   inputCompact: { minWidth: 0, flex: 1, fontSize: 15 },
-  unit: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted, marginLeft: -4, marginRight: 4 },
+  unit: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: c.inkMuted,
+    marginLeft: -4,
+    marginRight: 4,
+  },
 });

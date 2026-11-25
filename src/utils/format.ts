@@ -1,7 +1,8 @@
 export const ghs = (n: number) => `GH₵${n.toLocaleString('en-GH', { minimumFractionDigits: 2 })}`;
 
 /** A quantity in its product's unit, e.g. "12 crate" or "2.5 kg". */
-export const fmtQty = (n: number, unit: string) => `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} ${unit}`;
+export const fmtQty = (n: number, unit: string) =>
+  `${n.toLocaleString('en-GH', { maximumFractionDigits: 2 })} ${unit}`;
 
 /** Ghana-style numbers: 024… and +233 24… compare equal. */
 export function normalizePhone(raw: string): string {
@@ -24,7 +25,12 @@ export const isEmail = (raw: string) => {
 
 /** Today's calendar service date in Ghana (YYYY-MM-DD), matching route service_date in Africa/Accra timezone. */
 export function getTodayServiceDate(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Accra', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Accra',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 /** @deprecated Use getTodayServiceDate() */
@@ -44,7 +50,8 @@ export function localPhone(raw: string | null | undefined): string {
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const d = normalizePhone(raw);
-  if (d.startsWith('233') && d.length === 12) return `+233 ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
+  if (d.startsWith('233') && d.length === 12)
+    return `+233 ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
   return d ? `+${d}` : '';
 }
 
@@ -53,10 +60,14 @@ export const maskPhone = (raw: string) => {
   return d.length < 4 ? d : `••• ••• ${d.slice(-3)}`;
 };
 
-const accra = (iso: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Accra', ...opts }).format(new Date(iso));
+const accra = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Accra', ...opts }).format(new Date(iso));
 
 /** "Fri 16 Oct, 06:00–10:00" in Ghana time. */
-export function fmtWindow(startIso: string | null | undefined, endIso: string | null | undefined): string {
+export function fmtWindow(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+): string {
   if (!startIso || !endIso) return '';
   const hm = { hour: '2-digit', minute: '2-digit', hour12: false } as const;
   return `${accra(startIso, { weekday: 'short', day: 'numeric', month: 'short' })}, ${accra(startIso, hm)}–${accra(endIso, hm)}`;

@@ -11,13 +11,16 @@ import { errorMessage } from '../errors';
 import { useCountdown } from '../hooks/useCountdown';
 import { OTP_LENGTH, OtpInput } from './OtpInput';
 import { PhoneField } from './PhoneField';
-import { SmsConsent } from './SmsConsent';
 
 const EXPIRY_S = 120;
 const COOLDOWN_S = 30;
 
 /** Adds or changes the signed-in user's phone: enter the number, then confirm the SMS code on a full-screen page. Saved only once confirmed. */
-export function PhoneChange({ current, onDone, onCancel }: {
+export function PhoneChange({
+  current,
+  onDone,
+  onCancel,
+}: {
   current: string;
   onDone: () => void | Promise<void>;
   onCancel?: () => void;
@@ -30,7 +33,6 @@ export function PhoneChange({ current, onDone, onCancel }: {
   const [verifying, setVerifying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [smsOk, setSmsOk] = useState(false);
   const ready = isNationalNumber(country, value);
 
   const send = async () => {
@@ -40,7 +42,9 @@ export function PhoneChange({ current, onDone, onCancel }: {
       await authService.requestContactChange(phone);
       setVerifying(true);
     } catch (e) {
-      setError(e instanceof Error && e.message.startsWith('That phone') ? e.message : errorMessage(e));
+      setError(
+        e instanceof Error && e.message.startsWith('That phone') ? e.message : errorMessage(e),
+      );
     } finally {
       setBusy(false);
     }
@@ -49,22 +53,49 @@ export function PhoneChange({ current, onDone, onCancel }: {
   return (
     <View style={s.form}>
       {error ? <Banner text={error} /> : null}
-      <PhoneField country={country} onCountry={setCountry} value={value} onChangeText={setValue} onSubmitEditing={() => ready && send()} />
-      <SmsConsent checked={smsOk} onChange={setSmsOk} />
-      <Text style={s.note}>{current ? `You sign in with ${formatPhone(current)} today. We'll text a code to the new number.` : "We'll text a 6-digit code to confirm it."}</Text>
+      <PhoneField
+        country={country}
+        onCountry={setCountry}
+        value={value}
+        onChangeText={setValue}
+        onSubmitEditing={() => ready && send()}
+      />
+      <Text style={s.note}>
+        {current
+          ? `You sign in with ${formatPhone(current)} today. We'll text a code to the new number.`
+          : "We'll text a 6-digit code to confirm it."}
+      </Text>
       <View style={s.actions}>
-        {onCancel ? <Button label="Cancel" variant="outline" onPress={onCancel} style={s.action} /> : null}
-        <Button label="Send code" onPress={send} loading={busy} disabled={!ready} style={s.action} />
+        {onCancel ? (
+          <Button label="Cancel" variant="outline" onPress={onCancel} style={s.action} />
+        ) : null}
+        <Button
+          label="Send code"
+          onPress={send}
+          loading={busy}
+          disabled={!ready}
+          style={s.action}
+        />
       </View>
       <Modal visible={verifying} animationType="slide" onRequestClose={() => setVerifying(false)}>
-        <PhoneVerifyPage phone={phone} onResend={() => authService.requestContactChange(phone)} onBack={() => setVerifying(false)} onDone={onDone} />
+        <PhoneVerifyPage
+          phone={phone}
+          onResend={() => authService.requestContactChange(phone)}
+          onBack={() => setVerifying(false)}
+          onDone={onDone}
+        />
       </Modal>
     </View>
   );
 }
 
 /** Full-screen code entry. Submits on the sixth digit, so there is no button to hunt for under the keyboard. */
-function PhoneVerifyPage({ phone, onResend, onBack, onDone }: {
+function PhoneVerifyPage({
+  phone,
+  onResend,
+  onBack,
+  onDone,
+}: {
   phone: string;
   onResend: () => Promise<void>;
   onBack: () => void;
@@ -122,14 +153,23 @@ function PhoneVerifyPage({ phone, onResend, onBack, onDone }: {
 
   return (
     <SafeAreaView style={s.page}>
-      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Use a different number" style={s.close}>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Use a different number"
+        style={s.close}
+      >
         <Icon name="arrowLeft" size={20} color={colors.ink} />
       </Pressable>
       <View style={s.body}>
-        <View style={s.badge}><Icon name={verified ? 'check' : 'message'} size={28} color={colors.brandInk} /></View>
+        <View style={s.badge}>
+          <Icon name={verified ? 'check' : 'message'} size={28} color={colors.brandInk} />
+        </View>
         <Text style={s.title}>{verified ? 'Number verified' : 'Verify your number'}</Text>
         <Text style={s.copy}>
-          {verified ? `${formatPhone(phone)} is now your sign-in number.` : `Enter the 6-digit code we texted to ${formatPhone(phone)}.`}
+          {verified
+            ? `${formatPhone(phone)} is now your sign-in number.`
+            : `Enter the 6-digit code we texted to ${formatPhone(phone)}.`}
         </Text>
         {verified ? null : (
           <>
@@ -137,10 +177,24 @@ function PhoneVerifyPage({ phone, onResend, onBack, onDone }: {
             {expired ? <Banner text="That code has expired. Request a new one." /> : null}
             <OtpInput value={code} onChange={change} hasError={!!error} />
             <Text style={s.hint}>
-              {busy ? 'Checking…' : expired ? ' ' : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, '0')}`}
+              {busy
+                ? 'Checking…'
+                : expired
+                  ? ' '
+                  : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, '0')}`}
             </Text>
-            <Button label={cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'} variant="tonal" onPress={resend} disabled={cooldown > 0 || busy} />
-            <Button label="Wrong number? Change it" variant="ghost" onPress={onBack} disabled={busy} />
+            <Button
+              label={cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+              variant="tonal"
+              onPress={resend}
+              disabled={cooldown > 0 || busy}
+            />
+            <Button
+              label="Wrong number? Change it"
+              variant="ghost"
+              onPress={onBack}
+              disabled={busy}
+            />
           </>
         )}
       </View>
@@ -153,11 +207,47 @@ const styles = (c: Record<ColorToken, string>) => ({
   actions: { flexDirection: 'row' as const, gap: 12 },
   action: { flex: 1 },
   page: { flex: 1, backgroundColor: c.bgApp, paddingHorizontal: 20 },
-  close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const, marginTop: 8, backgroundColor: c.surfaceCard },
-  body: { flex: 1, width: '100%' as const, maxWidth: 420, alignSelf: 'center' as const, justifyContent: 'center' as const, gap: 16, paddingBottom: 48 },
-  badge: { width: 64, height: 64, borderRadius: 20, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: c.brandTint, alignSelf: 'flex-start' as const },
-  title: { fontFamily: fonts.heading, fontSize: 28, lineHeight: 34, letterSpacing: -0.4, color: c.ink },
+  close: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginTop: 8,
+    backgroundColor: c.surfaceCard,
+  },
+  body: {
+    flex: 1,
+    width: '100%' as const,
+    maxWidth: 420,
+    alignSelf: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 16,
+    paddingBottom: 48,
+  },
+  badge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+    alignSelf: 'flex-start' as const,
+  },
+  title: {
+    fontFamily: fonts.heading,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    color: c.ink,
+  },
   copy: { fontFamily: fonts.sansRegular, fontSize: 15, lineHeight: 22, color: c.inkMuted },
   note: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
-  hint: { fontFamily: fonts.sansMedium, fontSize: 13, lineHeight: 18, color: c.inkMuted, textAlign: 'center' as const },
+  hint: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: c.inkMuted,
+    textAlign: 'center' as const,
+  },
 });

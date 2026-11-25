@@ -8,10 +8,12 @@ import { authService } from '../../../services/auth.service';
 import * as buyer from '../../../services/buyer.service';
 import { verifyTruckPayment } from '../../../services/truck.service';
 import { useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { AccountFooter } from '../../auth/components/AccountFooter';
 import { CartProvider, useCart } from '../cart/CartProvider';
 import { BuyerAccount, buyerProfileComplete } from '../components/BuyerAccount';
+import { ActiveOrderPill } from '../components/ActiveOrderPill';
 import { Cart } from '../components/Cart';
 import { Orders } from '../components/Orders';
 import { Payment } from '../components/Payment';
@@ -30,7 +32,8 @@ const TABS: TabDef<Tab>[] = [
 
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 const TAB_KEYS = TABS.map((t) => t.key);
-const tabFromUrl = (): Tab | undefined => TAB_KEYS.find((k) => k === window.location.pathname.split('/')[2]);
+const tabFromUrl = (): Tab | undefined =>
+  TAB_KEYS.find((k) => k === window.location.pathname.split('/')[2]);
 
 /** Current tab, mirrored into the URL as /buyer/<tab> on web so the address bar and Back/Forward follow the screen. Native keeps it in memory. */
 function useTabRoute(first: Tab): [Tab, (t: Tab) => void] {
@@ -39,12 +42,16 @@ function useTabRoute(first: Tab): [Tab, (t: Tab) => void] {
   useEffect(() => {
     if (!isWeb) return;
     window.history.replaceState(window.history.state, '', `/buyer/${first}`);
-    const onPop = () => { current.current = tabFromUrl() ?? first; setTabState(current.current); };
+    const onPop = () => {
+      current.current = tabFromUrl() ?? first;
+      setTabState(current.current);
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [first]);
   const setTab = useCallback((t: Tab) => {
-    if (isWeb && current.current !== t) window.history.pushState(window.history.state, '', `/buyer/${t}`);
+    if (isWeb && current.current !== t)
+      window.history.pushState(window.history.state, '', `/buyer/${t}`);
     current.current = t;
     setTabState(t);
   }, []);
@@ -58,25 +65,62 @@ interface Data {
   details: buyer.BuyerDetails;
 }
 
-export function BuyerHome({ account, tab }: { account: Account; tab?: string }) {
-  return <CartProvider><BuyerShell account={account} firstTab={TABS.find((t) => t.key === tab)?.key} /></CartProvider>;
+const LIVE_TABLES = ['orders', 'payments', 'truck_bookings', 'refunds'] as const;
+
+export function BuyerHome({
+  account,
+  tab,
+  order,
+}: {
+  account: Account;
+  tab?: string;
+  order?: string;
+}) {
+  return (
+    <CartProvider>
+      <BuyerShell
+        account={account}
+        firstTab={TABS.find((t) => t.key === tab)?.key}
+        firstOrder={order}
+      />
+    </CartProvider>
+  );
 }
 
-function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab }) {
+function BuyerShell({
+  account,
+  firstTab,
+  firstOrder,
+}: {
+  account: Account;
+  firstTab?: Tab;
+  firstOrder?: string;
+}) {
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
   const [tab, setTab] = useTabRoute(firstTab ?? 'shop');
   // The order being paid. While set, the payment page replaces the tabs' content.
   const [paying, setPaying] = useState<string | null>(null);
+  const [openOrder, setOpenOrder] = useState<string | null>(firstOrder ?? null);
   const [data, setData] = useState<Data | null>(null);
+  // Orders loaded so far; reloads refetch that many so live updates don't drop later pages.
+  const loaded = useRef(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const want = Math.max(buyer.ORDERS_PAGE, loaded.current);
     try {
       const [catalogue, orders, transfer, details] = await Promise.all([
-        buyer.fetchCatalogue(), buyer.fetchOrders(), buyer.fetchTransferDetails(), buyer.fetchBuyerDetails(),
+        buyer.fetchCatalogue(),
+        buyer.fetchOrders(want),
+        buyer.fetchTransferDetails(),
+        buyer.fetchBuyerDetails(),
       ]);
+      loaded.current = orders.length;
+      setHasMore(orders.length >= want);
       setData({ catalogue, orders, transfer, details });
       setError(null);
       await refreshAccount();
@@ -88,6 +132,26 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await buyer.fetchOrders(buyer.ORDERS_PAGE, loaded.current);
+      setHasMore(next.length === buyer.ORDERS_PAGE);
+      loaded.current += next.length;
+      setData((d) => {
+        if (!d) return d;
+        const seen = new Set(d.orders.map((o) => o.id));
+        return { ...d, orders: [...d.orders, ...next.filter((o) => !seen.has(o.id))] };
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load more orders.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore]);
+  const live = useLiveReload(load, LIVE_TABLES);
 
   // Paystack sends the buyer back with ?reference=...; confirm it (the webhook may be slower) and refresh.
   useEffect(() => {
@@ -105,44 +169,116 @@ function BuyerShell({ account, firstTab }: { account: Account; firstTab?: Tab })
   }, [load, setTab]);
 
   const { lines } = useCart();
-  const donePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load, setTab]);
-  const leavePaying = useCallback(() => { setPaying(null); setTab('orders'); load(); }, [load, setTab]);
+  const donePaying = useCallback(() => {
+    setPaying(null);
+    setTab('orders');
+    load();
+  }, [load, setTab]);
+  const leavePaying = useCallback(() => {
+    setPaying(null);
+    setTab('orders');
+    load();
+  }, [load, setTab]);
   const toPay = data?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0;
 
   // Paying takes over the whole screen: no side rail or bottom bar.
   if (paying) {
     return (
-      <ScrollView style={s.full} contentContainerStyle={s.fullContent} keyboardShouldPersistTaps="handled">
-        <View style={s.fullInner}><Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} /></View>
+      <ScrollView
+        style={s.full}
+        contentContainerStyle={s.fullContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={s.fullInner}>
+          <Payment orderId={paying} onPaid={donePaying} onLeave={leavePaying} />
+        </View>
       </ScrollView>
     );
   }
 
   return (
-    <TabShell tabs={TABS.map((t) => ((t.key === 'account' && data && !buyerProfileComplete(data.details)) || (t.key === 'cart' && lines.length > 0) ? { ...t, alert: true } : t))} tab={tab} onSelect={setTab}>
+    <TabShell
+      refresh={live}
+      tabs={TABS.map((t) =>
+        (t.key === 'account' && data && !buyerProfileComplete(data.details)) ||
+        (t.key === 'cart' && lines.length > 0)
+          ? { ...t, alert: true }
+          : t,
+      )}
+      tab={tab}
+      onSelect={(k) => {
+        setOpenOrder(null);
+        setTab(k);
+      }}
+      floating={
+        tab === 'shop' && data ? (
+          <ActiveOrderPill
+            orders={data.orders}
+            onOpen={(id) => {
+              setOpenOrder(id);
+              setTab('orders');
+            }}
+          />
+        ) : null
+      }
+    >
       <View style={s.header}>
-        {toPay ? <Badge label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`} tone="warning" /> : null}
+        {toPay ? (
+          <Badge
+            label={`${toPay} order${toPay === 1 ? '' : 's'} awaiting payment`}
+            tone="warning"
+          />
+        ) : null}
       </View>
       {error ? <Banner text={error} /> : null}
       {data ? (
         <>
           {tab === 'shop' ? (
-            <Shop name={data.details.name || account.name || ''} items={data.catalogue} address={data.details.addresses.find((a) => a.isDefault)?.label ?? ''} onOpenCart={() => setTab('cart')} onPickAddress={() => setTab('account')} />
+            <Shop
+              name={data.details.name || account.name || ''}
+              items={data.catalogue}
+              addresses={data.details.addresses}
+              onOpenCart={() => setTab('cart')}
+              onRefresh={load}
+            />
           ) : null}
           {tab === 'cart' ? (
-            <Cart items={data.catalogue} addresses={data.details.addresses} onRefresh={load} onOrdered={setPaying} onShop={() => setTab('shop')} onAddAddress={() => setTab('account')} />
+            <Cart
+              items={data.catalogue}
+              addresses={data.details.addresses}
+              onRefresh={load}
+              onOrdered={setPaying}
+              onShop={() => setTab('shop')}
+              onAddAddress={() => setTab('account')}
+            />
           ) : null}
-          {tab === 'orders' ? <Orders orders={data.orders} onPay={setPaying} onRefresh={load} /> : null}
+          {tab === 'orders' ? (
+            <Orders
+              orders={data.orders}
+              openId={openOrder}
+              onOpen={setOpenOrder}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={loadMore}
+              onPay={setPaying}
+              onRefresh={load}
+            />
+          ) : null}
           {tab === 'truck' ? <TruckBooking transfer={data.transfer} /> : null}
           {tab === 'account' ? (
             <>
-              <BuyerAccount details={data.details} onRefresh={load} />
-              <Button label="Sign out" variant="ghost" icon="logOut" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} style={{ alignSelf: 'center' }} />
+              <BuyerAccount
+                details={data.details}
+                onRefresh={load}
+                onSignOut={() => authService.signOut().finally(() => reset({ name: 'landing' }))}
+              />
               <AccountFooter onDeleted={() => reset({ name: 'landing' })} />
             </>
           ) : null}
         </>
-      ) : tab === 'shop' || tab === 'cart' ? <ShopSkeleton /> : null}
+      ) : tab === 'shop' || tab === 'cart' ? (
+        <ShopSkeleton />
+      ) : null}
     </TabShell>
   );
 }
@@ -151,5 +287,10 @@ const styles = (c: Record<ColorToken, string>) => ({
   full: { flex: 1, backgroundColor: c.bgApp },
   fullContent: { flexGrow: 1, padding: 16, paddingBottom: 32 },
   fullInner: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const },
-  header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
+  header: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12,
+  },
 });

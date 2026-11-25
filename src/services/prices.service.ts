@@ -1,5 +1,6 @@
 import type { CropPrice } from '../types/auth';
 import { imageUrl } from './catalogueImage';
+import { shared } from './shared';
 import { supabase } from './supabase';
 
 export interface PriceBoardData {
@@ -7,9 +8,13 @@ export interface PriceBoardData {
   updatedAt: string | null;
 }
 
+/** One price_board request serves every caller for a minute (the farmer screens read it from several places). */
+export const sharedPriceBoard = () =>
+  shared('price_board', 60_000, async () => supabase.rpc('price_board'));
+
 /** Farm-gate prices per product unit (buyer prices are never part of this). Open to signed-out visitors. */
 export async function fetchPrices(): Promise<PriceBoardData> {
-  const { data, error } = await supabase.rpc('price_board');
+  const { data, error } = await sharedPriceBoard();
   if (error) throw new Error('Could not load prices.');
   const rows = data ?? [];
   const prices: CropPrice[] = rows.map((r: any): CropPrice => ({
@@ -17,11 +22,16 @@ export async function fetchPrices(): Promise<PriceBoardData> {
     crop: r.product_name,
     unit: r.unit,
     price: Number(r.price),
-    changePct: r.prev_price ? ((Number(r.price) - Number(r.prev_price)) / Number(r.prev_price)) * 100 : 0,
+    changePct: r.prev_price
+      ? ((Number(r.price) - Number(r.prev_price)) / Number(r.prev_price)) * 100
+      : 0,
     category: r.category_name ?? '',
-    imageUrl: imageUrl(r.image_path),
+    imageUrl: imageUrl(r.image_path, 200),
   }));
   prices.sort((a, b) => a.crop.localeCompare(b.crop));
-  const updatedAt = rows.reduce((m: string | null, r: any) => (!m || r.updated_at > m ? r.updated_at : m), null);
+  const updatedAt = rows.reduce(
+    (m: string | null, r: any) => (!m || r.updated_at > m ? r.updated_at : m),
+    null,
+  );
   return { prices, updatedAt };
 }

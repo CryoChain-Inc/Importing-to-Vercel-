@@ -2,7 +2,11 @@
 // Actions: autocomplete {query, latitude?, longitude?}, place {placeId}, reverse {latitude, longitude}.
 import { asCaller, cors, json } from '../_shared/paystack.ts';
 
-interface Component { longText?: string; long_name?: string; types: string[] }
+interface Component {
+  longText?: string;
+  long_name?: string;
+  types: string[];
+}
 
 const KEY = () => Deno.env.get('GOOGLE_MAPS_SERVER_KEY') ?? '';
 const part = (cs: Component[], ...types: string[]) => {
@@ -34,10 +38,19 @@ Deno.serve(async (req) => {
   const headers = { 'X-Goog-Api-Key': KEY(), 'Content-Type': 'application/json' };
 
   if (body.action === 'autocomplete') {
-    const input = String(body.query ?? '').trim().slice(0, 120);
+    const input = String(body.query ?? '')
+      .trim()
+      .slice(0, 120);
     if (input.length < 2) return json({ suggestions: [] });
     const bias = inRange(body.latitude, body.longitude)
-      ? { locationBias: { circle: { center: { latitude: body.latitude, longitude: body.longitude }, radius: 50000 } } }
+      ? {
+          locationBias: {
+            circle: {
+              center: { latitude: body.latitude, longitude: body.longitude },
+              radius: 50000,
+            },
+          },
+        }
       : {};
     const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
       method: 'POST',
@@ -50,7 +63,8 @@ Deno.serve(async (req) => {
       .filter((s: any) => s.placePrediction)
       .map((s: any) => ({
         placeId: s.placePrediction.placeId,
-        title: s.placePrediction.structuredFormat?.mainText?.text ?? s.placePrediction.text?.text ?? '',
+        title:
+          s.placePrediction.structuredFormat?.mainText?.text ?? s.placePrediction.text?.text ?? '',
         subtitle: s.placePrediction.structuredFormat?.secondaryText?.text ?? '',
       }));
     return json({ suggestions });
@@ -64,7 +78,14 @@ Deno.serve(async (req) => {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok || !d.location) return json({ error: 'Could not load that place.' }, 502);
-    return json(shape(d.formattedAddress ?? '', d.addressComponents ?? [], d.location.latitude, d.location.longitude));
+    return json(
+      shape(
+        d.formattedAddress ?? '',
+        d.addressComponents ?? [],
+        d.location.latitude,
+        d.location.longitude,
+      ),
+    );
   }
 
   if (body.action === 'reverse') {
@@ -75,7 +96,9 @@ Deno.serve(async (req) => {
     const d = await res.json().catch(() => ({}));
     const hit = d.results?.[0];
     if (!hit) return json({ error: 'No address found at this spot.' }, 200);
-    return json(shape(hit.formatted_address, hit.address_components ?? [], body.latitude, body.longitude));
+    return json(
+      shape(hit.formatted_address, hit.address_components ?? [], body.latitude, body.longitude),
+    );
   }
 
   return json({ error: 'Unknown action.' }, 400);

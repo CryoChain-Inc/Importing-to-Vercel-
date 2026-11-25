@@ -4,12 +4,21 @@ import { Button } from '../../../components/common';
 import { Banner } from '../../../components/feedback';
 import { supabase } from '../../../services/supabase';
 import {
-  callPhone, dialable, fetchTruckMessages, sendTruckMessage, type TruckMessage,
+  callPhone,
+  dialable,
+  fetchTruckMessages,
+  sendTruckMessage,
+  type TruckMessage,
 } from '../../../services/truck.chat.service';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
 
 /** Messages and a phone call between the buyer and the driver assigned to one trip. */
-export function TripChat({ bookingId, peerName, peerPhone, peerRole }: {
+export function TripChat({
+  bookingId,
+  peerName,
+  peerPhone,
+  peerRole,
+}: {
   bookingId: string;
   peerName: string;
   peerPhone: string;
@@ -34,15 +43,36 @@ export function TripChat({ bookingId, peerName, peerPhone, peerRole }: {
 
   useEffect(() => {
     let live = true;
-    load().catch((e) => { if (live) setError(e instanceof Error ? e.message : 'Could not load messages.'); });
+    load().catch((e) => {
+      if (live) setError(e instanceof Error ? e.message : 'Could not load messages.');
+    });
     const timer = setInterval(() => {
-      fetchTruckMessages(bookingId).then((rows) => { if (live) setMessages(rows); }, () => undefined);
+      fetchTruckMessages(bookingId).then(
+        (rows) => {
+          if (live) setMessages(rows);
+        },
+        () => undefined,
+      );
     }, 4000);
     const channel = supabase
       .channel(`truck-messages-${bookingId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'truck_messages', filter: `booking_id=eq.${bookingId}` }, () => {
-        fetchTruckMessages(bookingId).then((rows) => { if (live) setMessages(rows); }, () => undefined);
-      })
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'truck_messages',
+          filter: `booking_id=eq.${bookingId}`,
+        },
+        () => {
+          fetchTruckMessages(bookingId).then(
+            (rows) => {
+              if (live) setMessages(rows);
+            },
+            () => undefined,
+          );
+        },
+      )
       .subscribe();
     return () => {
       live = false;
@@ -97,14 +127,27 @@ export function TripChat({ bookingId, peerName, peerPhone, peerRole }: {
       {!number ? <Text style={s.meta}>No phone number is saved for {peerName} yet.</Text> : null}
       <Text style={s.k}>Messages with {peerName}</Text>
       {error ? <Banner text={error} /> : null}
-      <ScrollView ref={scroller} style={s.thread} contentContainerStyle={s.threadContent} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-        {messages.length === 0 ? <Text style={s.meta}>No messages yet. Say where you are, or ask about the pickup.</Text> : null}
+      <ScrollView
+        ref={scroller}
+        style={s.thread}
+        contentContainerStyle={s.threadContent}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
+        {messages.length === 0 ? (
+          <Text style={s.meta}>No messages yet. Say where you are, or ask about the pickup.</Text>
+        ) : null}
         {messages.map((m) => {
           const own = m.senderId === mine;
           return (
             <View key={m.id} style={[s.bubble, own ? s.mine : s.theirs]}>
               <Text style={[s.body, own && s.bodyMine]}>{m.body}</Text>
-              <Text style={[s.time, own && s.timeMine]}>{new Date(m.createdAt).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text style={[s.time, own && s.timeMine]}>
+                {new Date(m.createdAt).toLocaleTimeString('en-GH', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
             </View>
           );
         })}
@@ -131,7 +174,13 @@ const styles = (c: Record<ColorToken, string>) => ({
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, lineHeight: 18, color: c.inkMuted },
   thread: { maxHeight: 240, borderRadius: 14, backgroundColor: c.surfaceSunken },
   threadContent: { gap: 8, padding: 10 },
-  bubble: { maxWidth: '85%' as const, gap: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
+  bubble: {
+    maxWidth: '85%' as const,
+    gap: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+  },
   mine: { alignSelf: 'flex-end' as const, backgroundColor: c.brand600 },
   theirs: { alignSelf: 'flex-start' as const, backgroundColor: c.surfaceCard },
   body: { fontFamily: fonts.sansRegular, fontSize: 14, lineHeight: 20, color: c.ink },
@@ -140,7 +189,15 @@ const styles = (c: Record<ColorToken, string>) => ({
   timeMine: { color: 'rgba(255,255,255,0.8)' },
   composer: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
   input: {
-    flex: 1, minHeight: 44, borderRadius: 12, borderWidth: 1.5, borderColor: c.borderStrong,
-    backgroundColor: c.surfaceCard, paddingHorizontal: 12, fontFamily: fonts.sansMedium, fontSize: 14, color: c.ink,
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surfaceCard,
+    paddingHorizontal: 12,
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: c.ink,
   },
 });

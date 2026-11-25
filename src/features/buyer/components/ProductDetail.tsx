@@ -10,46 +10,95 @@ import { useCart } from '../cart/CartProvider';
 import { QtyStepper } from './QtyStepper';
 
 /** One product: swipeable photos, details, a unit picker and one quantity panel, ready to add to the cart. */
-export function ProductDetail({ units, onBack, onOpenCart }: { units: CatalogueItem[]; onBack: () => void; onOpenCart: () => void }) {
+export function ProductDetail({
+  units,
+  onBack,
+  onOpenCart,
+}: {
+  units: CatalogueItem[];
+  onBack: () => void;
+  onOpenCart: () => void;
+}) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const { lines, dispatch } = useCart();
   const [page, setPage] = useState(0);
   const [width, setWidth] = useState(0);
   const p = units[0];
-  const cheapest = (units.filter((g) => g.availableKg > 0).sort((a, b) => a.price - b.price)[0] ?? units[0]).unit;
+  const cheapest = (
+    units.filter((g) => g.availableKg > 0).sort((a, b) => a.price - b.price)[0] ?? units[0]
+  ).unit;
   const [unit, setUnit] = useState<string>(cheapest);
   const photos = [p.image, ...p.images].map(imageUrl).filter((u): u is string => Boolean(u));
   const split = width >= 640;
   const size = split ? Math.min(440, Math.floor((width - 24) / 2)) : Math.min(width, 520);
   const sel = units.find((g) => g.unit === unit) ?? units[0];
-  const inCart = (g: CatalogueItem) => lines.find((l) => l.productId === g.productId && l.unit === g.unit)?.kg ?? 0;
+  const inCart = (g: CatalogueItem) =>
+    lines.find((l) => l.productId === g.productId && l.unit === g.unit)?.kg ?? 0;
   const cartCount = lines.length;
 
   return (
     <View style={s.wrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <View style={s.bar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back to shop" onPress={onBack} hitSlop={8} style={s.back}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to shop"
+          onPress={onBack}
+          hitSlop={8}
+          style={s.back}
+        >
           <Icon name="arrowLeft" size={20} color={colors.ink} />
           <Text style={s.backText}>Shop</Text>
         </Pressable>
-        {cartCount > 0 ? <Button size="sm" variant="tonal" icon="cart" label={`Cart · ${cartCount}`} onPress={onOpenCart} /> : null}
+        {cartCount > 0 ? (
+          <Button
+            size="sm"
+            variant="tonal"
+            icon="cart"
+            label={`Cart · ${cartCount}`}
+            onPress={onOpenCart}
+          />
+        ) : null}
       </View>
 
       {size > 0 ? (
         <View style={[s.layout, split && s.layoutSplit]}>
           <View style={[s.gallery, { width: size, height: size }]}>
             {photos.length > 0 ? (
-              <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / size))}>
-                {photos.map((uri) => <Image key={uri} source={{ uri }} style={{ width: size, height: size }} resizeMode="cover" accessibilityLabel={p.name} />)}
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) =>
+                  setPage(Math.round(e.nativeEvent.contentOffset.x / size))
+                }
+              >
+                {photos.map((uri) => (
+                  <Image
+                    key={uri}
+                    source={{ uri }}
+                    style={{ width: size, height: size }}
+                    resizeMode="cover"
+                    accessibilityLabel={p.name}
+                  />
+                ))}
               </ScrollView>
-            ) : <View style={s.noPhoto}><Icon name="leaf" size={48} color={colors.inkMuted} /></View>}
+            ) : (
+              <View style={s.noPhoto}>
+                <Icon name="leaf" size={48} color={colors.inkMuted} />
+              </View>
+            )}
             {photos.length > 1 ? (
               <>
-                <View style={s.counter}><Text style={s.counterText}>{page + 1} / {photos.length}</Text></View>
+                <View style={s.counter}>
+                  <Text style={s.counterText}>
+                    {page + 1} / {photos.length}
+                  </Text>
+                </View>
                 <View style={s.dots} accessibilityLabel={`Photo ${page + 1} of ${photos.length}`}>
-                  {photos.map((u, i) => <View key={u} style={[s.dot, i === page && s.dotOn]} />)}
+                  {photos.map((u, i) => (
+                    <View key={u} style={[s.dot, i === page && s.dotOn]} />
+                  ))}
                 </View>
               </>
             ) : null}
@@ -69,26 +118,54 @@ export function ProductDetail({ units, onBack, onOpenCart }: { units: CatalogueI
                     const on = g.unit === sel.unit;
                     const n = inCart(g);
                     return (
-                      <Pressable key={g.unit} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: out }} accessibilityLabel={`${g.unit}, ${ghs(g.price)} per ${g.unit}, ${out ? 'sold out' : `${fmtQty(g.availableKg, g.unit)} left`}`}
-                        disabled={out} onPress={() => setUnit(g.unit)} style={[s.tile, on && s.tileOn, out && s.tileOff]}>
+                      <Pressable
+                        key={g.unit}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on, disabled: out }}
+                        accessibilityLabel={`${g.unit}, ${ghs(g.price)} per ${g.unit}, ${out ? 'sold out' : `${fmtQty(g.availableKg, g.unit)} left`}`}
+                        disabled={out}
+                        onPress={() => setUnit(g.unit)}
+                        style={[s.tile, on && s.tileOn, out && s.tileOff]}
+                      >
                         <View style={s.tileTop}>
                           <Text style={[s.tileName, on && s.tileNameOn]}>{g.unit}</Text>
                           {on ? <Icon name="check" size={16} color={colors.brandInk} /> : null}
                         </View>
-                        <Text style={s.tilePrice}>{ghs(g.price)}<Text style={s.unit}> / {g.unit}</Text></Text>
-                        <Text style={[s.tileMeta, out && s.dangerText]}>{out ? 'Sold out' : n > 0 ? `${fmtQty(n, g.unit)} in cart` : `${fmtQty(g.availableKg, g.unit)} left`}</Text>
+                        <Text style={s.tilePrice}>
+                          {ghs(g.price)}
+                          <Text style={s.unit}> / {g.unit}</Text>
+                        </Text>
+                        <Text style={[s.tileMeta, out && s.dangerText]}>
+                          {out
+                            ? 'Sold out'
+                            : n > 0
+                              ? `${fmtQty(n, g.unit)} in cart`
+                              : `${fmtQty(g.availableKg, g.unit)} left`}
+                        </Text>
                       </Pressable>
                     );
                   })}
                 </View>
               </>
             ) : (
-              <Text style={s.meta}>{ghs(sel.price)} per {sel.unit}</Text>
+              <Text style={s.meta}>
+                {ghs(sel.price)} per {sel.unit}
+              </Text>
             )}
 
             {sel.availableKg > 0 ? (
-              <AddToCart key={sel.unit} item={sel} inCart={inCart(sel)} onOpenCart={onOpenCart}
-                onSet={(next) => dispatch({ type: 'set', line: { productId: sel.productId, unit: sel.unit, kg: next } })} />
+              <AddToCart
+                key={sel.unit}
+                item={sel}
+                inCart={inCart(sel)}
+                onOpenCart={onOpenCart}
+                onSet={(next) =>
+                  dispatch({
+                    type: 'set',
+                    line: { productId: sel.productId, unit: sel.unit, kg: next },
+                  })
+                }
+              />
             ) : null}
           </View>
         </View>
@@ -101,12 +178,25 @@ const PRESETS = [10, 25, 50, 100, 200];
 const COUNT_PRESETS = [1, 2, 5, 10, 20];
 
 /** Pick an exact quantity (type it, step it, or tap a preset), see the price, then add, update or remove. */
-function AddToCart({ item, inCart, onSet, onOpenCart }: { item: CatalogueItem; inCart: number; onSet: (kg: number) => void; onOpenCart: () => void }) {
+function AddToCart({
+  item,
+  inCart,
+  onSet,
+  onOpenCart,
+}: {
+  item: CatalogueItem;
+  inCart: number;
+  onSet: (kg: number) => void;
+  onOpenCart: () => void;
+}) {
   const s = useThemedStyles(styles);
   const { colors } = useTheme();
   const start = Math.min(stepFor(item.unit), item.availableKg);
   const [qty, setQty] = useState(inCart || start);
-  const chips = [...(item.unit === 'kg' ? PRESETS : COUNT_PRESETS).filter((n) => n < item.availableKg), item.availableKg];
+  const chips = [
+    ...(item.unit === 'kg' ? PRESETS : COUNT_PRESETS).filter((n) => n < item.availableKg),
+    item.availableKg,
+  ];
   const total = qty * item.price;
   const changed = qty !== inCart;
 
@@ -118,30 +208,76 @@ function AddToCart({ item, inCart, onSet, onOpenCart }: { item: CatalogueItem; i
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
         {chips.map((n, i) => (
-          <Pressable key={n} accessibilityRole="button" accessibilityState={{ selected: qty === n }} onPress={() => setQty(n)} style={[s.chip, qty === n && s.chipOn]}>
-            <Text style={[s.chipText, qty === n && s.chipTextOn]}>{i === chips.length - 1 && chips.length > 1 ? `All ${fmtQty(n, item.unit)}` : `${n} ${item.unit}`}</Text>
+          <Pressable
+            key={n}
+            accessibilityRole="button"
+            accessibilityState={{ selected: qty === n }}
+            onPress={() => setQty(n)}
+            style={[s.chip, qty === n && s.chipOn]}
+          >
+            <Text style={[s.chipText, qty === n && s.chipTextOn]}>
+              {i === chips.length - 1 && chips.length > 1
+                ? `All ${fmtQty(n, item.unit)}`
+                : `${n} ${item.unit}`}
+            </Text>
           </Pressable>
         ))}
       </ScrollView>
       <View style={s.qtyRow}>
-        <QtyStepper unit={item.unit} removable={false} value={qty} max={item.availableKg} onChange={setQty} />
+        <QtyStepper
+          unit={item.unit}
+          removable={false}
+          value={qty}
+          max={item.availableKg}
+          onChange={setQty}
+        />
         <View style={s.totalBox}>
-          <Text style={s.meta}>{fmtQty(qty, item.unit)} × {ghs(item.price)}</Text>
+          <Text style={s.meta}>
+            {fmtQty(qty, item.unit)} × {ghs(item.price)}
+          </Text>
           <Text style={s.total}>{ghs(total)}</Text>
         </View>
       </View>
-      <Button icon="cart" size="lg" label={`${inCart ? 'Update cart' : 'Add to cart'} · ${ghs(total)}`} disabled={!changed} onPress={() => onSet(qty)} />
-      {inCart > 0 ? (
+      {inCart > 0 && !changed ? (
         <View style={s.inCart}>
-          <View style={s.inCartText}>
-            <Icon name="check" size={16} color={colors.brandInk} />
-            <Text style={s.inCartLabel}>{fmtQty(inCart, item.unit)} in your cart</Text>
+          <View style={s.inCartBadge}>
+            <Icon name="check" size={16} color="#ffffff" />
           </View>
-          <View style={s.inCartActions}>
-            <Button size="sm" variant="ghost" label="View cart" onPress={onOpenCart} />
-            <Button size="sm" variant="outline" icon="trash" label="Remove" onPress={() => { onSet(0); setQty(start); }} />
+          <View style={s.inCartBody}>
+            <Text style={s.inCartLabel}>In your cart</Text>
+            <Text style={s.meta}>
+              {fmtQty(inCart, item.unit)} · {ghs(inCart * item.price)}
+            </Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remove from cart"
+            hitSlop={6}
+            onPress={() => {
+              onSet(0);
+              setQty(start);
+            }}
+            style={({ pressed }) => [s.removeBtn, pressed && s.pressed]}
+          >
+            <Icon name="trash" size={18} color={colors.dangerInk} />
+          </Pressable>
         </View>
+      ) : (
+        <Button
+          icon="cart"
+          size="lg"
+          label={`${inCart ? 'Update cart' : 'Add to cart'} · ${ghs(total)}`}
+          disabled={!changed}
+          onPress={() => onSet(qty)}
+        />
+      )}
+      {inCart > 0 ? (
+        <Button
+          variant={changed ? 'ghost' : 'tonal'}
+          label={changed ? 'Keep current quantity' : 'View cart'}
+          icon={changed ? undefined : 'cart'}
+          onPress={changed ? () => setQty(inCart) : onOpenCart}
+        />
       ) : null}
     </Card>
   );
@@ -149,47 +285,143 @@ function AddToCart({ item, inCart, onSet, onOpenCart }: { item: CatalogueItem; i
 
 const styles = (c: Record<ColorToken, string>) => ({
   wrap: { gap: 14 },
-  bar: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, minHeight: 44 },
+  bar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    minHeight: 44,
+  },
   back: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, minHeight: 44 },
   backText: { fontFamily: fonts.sansMedium, fontSize: 15, color: c.ink },
   layout: { gap: 18 },
   layoutSplit: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 24 },
   gallery: { borderRadius: 22, overflow: 'hidden' as const, backgroundColor: c.surfaceSunken },
   noPhoto: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
-  counter: { position: 'absolute' as const, top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.55)' },
+  counter: {
+    position: 'absolute' as const,
+    top: 12,
+    right: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
   counterText: { fontFamily: fonts.sansBold, fontSize: 12, color: '#ffffff' },
-  dots: { position: 'absolute' as const, bottom: 12, alignSelf: 'center' as const, flexDirection: 'row' as const, gap: 6 },
+  dots: {
+    position: 'absolute' as const,
+    bottom: 12,
+    alignSelf: 'center' as const,
+    flexDirection: 'row' as const,
+    gap: 6,
+  },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.55)' },
   dotOn: { backgroundColor: '#ffffff', width: 18 },
   info: { flex: 1, gap: 12 },
-  name: { fontFamily: fonts.heading, fontSize: 28, lineHeight: 34, letterSpacing: -0.4, color: c.ink },
-  desc: { fontFamily: fonts.sansRegular, fontSize: 15, lineHeight: 23, color: c.inkMuted, maxWidth: 560 },
+  name: {
+    fontFamily: fonts.heading,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    color: c.ink,
+  },
+  desc: {
+    fontFamily: fonts.sansRegular,
+    fontSize: 15,
+    lineHeight: 23,
+    color: c.inkMuted,
+    maxWidth: 560,
+  },
   section: { fontFamily: fonts.sansBold, fontSize: 14, color: c.ink, marginTop: 6 },
   tiles: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 10 },
-  tile: { flexGrow: 1, flexBasis: 104, gap: 3, padding: 12, borderRadius: 16, backgroundColor: c.surfaceCard, borderWidth: 1.5, borderColor: c.cardEdge },
+  tile: {
+    flexGrow: 1,
+    flexBasis: 104,
+    gap: 3,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: c.surfaceCard,
+    borderWidth: 1.5,
+    borderColor: c.cardEdge,
+  },
   tileOn: { borderColor: c.brand600, backgroundColor: c.brandTint },
   tileOff: { opacity: 0.5 },
-  tileTop: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+  tileTop: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
   tileName: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
   tileNameOn: { fontFamily: fonts.sansBold, color: c.brandInk },
-  tilePrice: { fontFamily: fonts.heading, fontSize: 19, color: c.ink, fontVariant: ['tabular-nums' as const] },
+  tilePrice: {
+    fontFamily: fonts.heading,
+    fontSize: 19,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
   tileMeta: { fontFamily: fonts.sansRegular, fontSize: 12, color: c.inkMuted },
   dangerText: { color: c.dangerInk },
   unit: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.inkMuted },
   add: { gap: 14, padding: 16 },
-  addHead: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const, gap: 8 },
+  addHead: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    justifyContent: 'space-between' as const,
+    gap: 8,
+  },
   addTitle: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted },
   chips: { gap: 8 },
-  chip: { minHeight: 38, paddingHorizontal: 14, borderRadius: 19, justifyContent: 'center' as const, backgroundColor: c.surfaceSunken, borderWidth: 1.5, borderColor: 'transparent' },
+  chip: {
+    minHeight: 38,
+    paddingHorizontal: 14,
+    borderRadius: 19,
+    justifyContent: 'center' as const,
+    backgroundColor: c.surfaceSunken,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
   chipOn: { borderColor: c.brand600, backgroundColor: c.brandTint },
   chipText: { fontFamily: fonts.sansMedium, fontSize: 13, color: c.inkMuted },
   chipTextOn: { color: c.ink, fontFamily: fonts.sansBold },
-  qtyRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, flexWrap: 'wrap' as const, gap: 12 },
+  qtyRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    flexWrap: 'wrap' as const,
+    gap: 12,
+  },
   totalBox: { alignItems: 'flex-end' as const, gap: 2 },
-  total: { fontFamily: fonts.heading, fontSize: 24, color: c.ink, fontVariant: ['tabular-nums' as const] },
-  inCart: { gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.borderSubtle },
-  inCartText: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  inCartLabel: { fontFamily: fonts.sansBold, fontSize: 14, color: c.brandInk },
-  inCartActions: { flexDirection: 'row' as const, gap: 8, flexWrap: 'wrap' as const },
+  total: {
+    fontFamily: fonts.heading,
+    fontSize: 24,
+    color: c.ink,
+    fontVariant: ['tabular-nums' as const],
+  },
+  inCart: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: c.brandTint,
+  },
+  inCartBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brand600,
+  },
+  inCartBody: { flex: 1, gap: 1 },
+  inCartLabel: { fontFamily: fonts.sansBold, fontSize: 15, color: c.brandInk },
+  removeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.surfaceCard,
+  },
+  pressed: { opacity: 0.6 },
 });

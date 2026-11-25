@@ -16,7 +16,18 @@ const POINTS: { icon: IconName; text: string }[] = [
 ];
 
 /** Auth steps: brand panel beside the form on desktop, form only on phones. */
-export function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+export function AuthLayout({
+  title,
+  subtitle,
+  lead,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  /** Status graphic shown above the title; also centres the heading (result screens). */
+  lead?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const wide = useWindowDimensions().width >= WIDE;
   const { colors } = useTheme();
   const { canGoBack, back } = useNav();
@@ -27,16 +38,26 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
       <View style={s.formCol}>
         <View style={s.bar}>
           {canGoBack ? (
-            <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={s.back}>
+            <Pressable
+              onPress={back}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              style={s.back}
+            >
               <Icon name="arrowLeft" size={20} color={colors.ink} />
             </Pressable>
-          ) : <View />}
+          ) : (
+            <View />
+          )}
           <ThemeToggle />
         </View>
         {wide ? null : <Brand />}
-        <View style={s.head}>
-          <Text style={s.title}>{title}</Text>
-          {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
+        {lead ? <View style={s.lead}>{lead}</View> : null}
+        <View style={[s.head, lead ? s.headCentered : null]}>
+          <Text style={[s.title, lead ? s.centerText : null]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[s.subtitle, lead ? s.centerText : null]}>{subtitle}</Text>
+          ) : null}
         </View>
         {children}
       </View>
@@ -54,7 +75,9 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
                 <Text style={s.panelTitle}>Cold from the farm gate to your door.</Text>
                 {POINTS.map((p) => (
                   <View key={p.text} style={s.point}>
-                    <View style={s.pointIcon}><Icon name={p.icon} size={18} color={'#ffffff'} /></View>
+                    <View style={s.pointIcon}>
+                      <Icon name={p.icon} size={18} color={'#ffffff'} />
+                    </View>
                     <Text style={s.pointText}>{p.text}</Text>
                   </View>
                 ))}
@@ -76,16 +99,54 @@ const styles = (c: Record<ColorToken, string>) => ({
   panel: { flex: 1 },
   panelInner: { flex: 1, padding: 48, justifyContent: 'space-between' as const },
   panelBody: { gap: 24, maxWidth: 480 },
-  panelTitle: { fontFamily: fonts.heading, fontSize: 40, lineHeight: 46, letterSpacing: -1, color: '#ffffff' },
+  panelTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 40,
+    lineHeight: 46,
+    letterSpacing: -1,
+    color: '#ffffff',
+  },
   point: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14 },
-  pointIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255,255,255,0.16)' },
-  pointText: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 15, lineHeight: 22, color: '#ffffff' },
+  pointIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  pointText: {
+    flex: 1,
+    fontFamily: fonts.sansMedium,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#ffffff',
+  },
   formSide: { flex: 1 },
   formScroll: { flexGrow: 1, justifyContent: 'center' as const, padding: 16 },
-  formCol: { width: '100%' as const, maxWidth: 440, alignSelf: 'center' as const, gap: 20, paddingVertical: 8 },
-  bar: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+  formCol: {
+    width: '100%' as const,
+    maxWidth: 440,
+    alignSelf: 'center' as const,
+    gap: 20,
+    paddingVertical: 8,
+  },
+  bar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
   back: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
   head: { gap: 6 },
-  title: { fontFamily: fonts.sansBold, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.ink },
+  headCentered: { alignItems: 'center' as const },
+  centerText: { textAlign: 'center' as const },
+  lead: { alignItems: 'center' as const, paddingVertical: 28 },
+  title: {
+    fontFamily: fonts.sansBold,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: c.ink,
+  },
   subtitle: { fontFamily: fonts.sansRegular, fontSize: 15, lineHeight: 22, color: c.inkMuted },
 });

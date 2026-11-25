@@ -55,9 +55,23 @@ def q(s):
     return "'" + s.replace("'", "''") + "'"
 
 
+# Pack-sized workbook units -> (base unit, how many base units one pack holds). Keep in step with supabase/migrations/20261110090000_base_units.sql.
+BASE = {u: ('piece', n) for u, n in [('1.5 liter bottle', 1), ('625 ml bottle', 1), ('bottle', 1), ('330 ml bottle or can', 1), ('can', 1),
+        ('bag of 30', 30), ('fruit', 1), ('nut', 1), ('cob', 1), ('tuber', 1), ('head', 1), ('egg', 1), ('bird', 1), ('animal', 1),
+        ('large snail', 1), ('medium piece', 1), ('3 fruits', 3), ('5 pieces', 5), ('4 pieces', 4), ('crate of 30', 30)]}
+BASE.update({'500 ml bottle': ('liter', 0.5), '500 ml': ('liter', 0.5), '1 liter tub': ('liter', 1), 'hand': ('bunch', 1),
+             'olonka': ('kg', 2.5), 'mini paint container': ('kg', 2), 'large sack': ('kg', 100), '50 kg bag': ('kg', 50), '250 g': ('kg', 0.25)})
+
+
 def unit_of(price_unit):
-    """'per kg' -> 'kg', 'per 500 ml bottle' -> '500 ml bottle'."""
+    """'per kg' -> 'kg', 'per crate of 30' -> 'piece'. Use base_of to also re-base the price."""
     return re.sub(r'^per\s+', '', price_unit.strip(), flags=re.I)
+
+
+def base_of(unit, price):
+    """(workbook unit, price per that unit) -> (base unit, price per base unit)."""
+    new, per = BASE.get(unit, (unit, 1))
+    return new, round(price / per, 2)
 
 
 def aliases_of(product, other_names, alias_rows):
@@ -81,7 +95,7 @@ def main(path):
         name, cat = p.get('product_name', ''), p.get('category_name', '')
         unit, price = unit_of(p.get('price_unit', '')), p.get('price_mid_ghs', '')
         try:
-            price_n = round(float(price), 2)
+            unit, price_n = base_of(unit, float(price))
         except ValueError:
             price_n = 0
         if not (p.get('product_id', '').startswith('P') and NAME_MIN <= len(name) <= NAME_MAX and cat and unit and len(unit) <= UNIT_MAX and 0 < price_n <= 100000):

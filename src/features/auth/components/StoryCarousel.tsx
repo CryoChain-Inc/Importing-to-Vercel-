@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Image, Pressable, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import {
+  FlatList,
+  Image,
+  Pressable,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { LOGIN_STORIES } from '../../../assets/loginStories';
 
 const AUTO_MS = 4500;
@@ -10,8 +18,12 @@ export function StoryCarousel({ style, dotsBottom = 20 }: { style?: object; dots
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [index, setIndex] = useState(0);
 
-  const onLayout = (e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
-  const goTo = useCallback((i: number) => list.current?.scrollToOffset({ offset: i * box.w, animated: true }), [box.w]);
+  const onLayout = (e: LayoutChangeEvent) =>
+    setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
+  const goTo = useCallback(
+    (i: number) => list.current?.scrollToOffset({ offset: i * box.w, animated: true }),
+    [box.w],
+  );
 
   // Restarts after every change, so a manual swipe or tap gets a full beat before the next slide.
   useEffect(() => {
@@ -44,12 +56,27 @@ export function StoryCarousel({ style, dotsBottom = 20 }: { style?: object; dots
           windowSize={3}
           renderItem={({ item }) => (
             <View style={{ width: box.w, height: box.h, overflow: 'hidden' }}>
-              <Image source={item.image} accessibilityLabel={item.accessibilityLabel} style={{ width: box.w, height: imgH }} />
+              <Image
+                source={item.image}
+                accessibilityLabel={item.accessibilityLabel}
+                style={{ width: box.w, height: imgH }}
+              />
             </View>
           )}
         />
       ) : null}
-      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: dotsBottom, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: dotsBottom,
+          flexDirection: 'row',
+          justifyContent: 'center',
+          gap: 6,
+        }}
+      >
         {LOGIN_STORIES.map((s, i) => (
           <Pressable
             key={s.accessibilityLabel}
@@ -58,7 +85,12 @@ export function StoryCarousel({ style, dotsBottom = 20 }: { style?: object; dots
             accessibilityLabel={`Show story ${i + 1} of ${LOGIN_STORIES.length}`}
             accessibilityState={{ selected: i === index }}
             hitSlop={10}
-            style={{ height: 6, width: i === index ? 22 : 6, borderRadius: 3, backgroundColor: i === index ? '#ffffff' : 'rgba(255,255,255,0.45)' }}
+            style={{
+              height: 6,
+              width: i === index ? 22 : 6,
+              borderRadius: 3,
+              backgroundColor: i === index ? '#ffffff' : 'rgba(255,255,255,0.45)',
+            }}
           />
         ))}
       </View>

@@ -1,5 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Icon } from '../../../components/common';
 import { fieldStyles } from '../../../components/common/Input';
 import { useIsWide } from '../../../components/layout';
@@ -19,7 +27,17 @@ interface Props {
 }
 
 /** Country-code picker (bottom sheet on phones, dialog on wide screens) plus the national number. */
-export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEditing, label = 'Mobile number', error, onFocus, onBlur }: Props) {
+export function PhoneField({
+  country,
+  onCountry,
+  value,
+  onChangeText,
+  onSubmitEditing,
+  label = 'Mobile number',
+  error,
+  onFocus,
+  onBlur,
+}: Props) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   const wide = useIsWide();
@@ -28,7 +46,12 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
   const [query, setQuery] = useState('');
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/^\+/, '');
-    return q ? COUNTRIES.filter((c) => c.name.toLowerCase().includes(q) || c.iso.toLowerCase() === q || c.dial.startsWith(q)) : COUNTRIES;
+    return q
+      ? COUNTRIES.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) || c.iso.toLowerCase() === q || c.dial.startsWith(q),
+        )
+      : COUNTRIES;
   }, [query]);
   const close = () => {
     setOpen(false);
@@ -38,7 +61,9 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
   return (
     <View style={s.container}>
       <View style={[s.field, focused && s.focused, error ? s.errored : null]}>
-        <Text pointerEvents="none" style={[s.label, error ? s.labelErr : null]}>{label}</Text>
+        <Text pointerEvents="none" style={[s.label, error ? s.labelErr : null]}>
+          {label}
+        </Text>
         <Pressable
           onPress={() => setOpen(true)}
           accessibilityRole="button"
@@ -72,7 +97,12 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
       </View>
       {error ? <Text style={s.error}>{error}</Text> : null}
 
-      <Modal visible={open} transparent animationType={wide ? 'fade' : 'slide'} onRequestClose={close}>
+      <Modal
+        visible={open}
+        transparent
+        animationType={wide ? 'fade' : 'slide'}
+        onRequestClose={close}
+      >
         <KeyboardAvoidingView style={[s.overlay, wide && s.overlayWide]} behavior="padding">
           <Pressable style={s.backdrop} onPress={close} accessibilityLabel="Close country list" />
           <View style={[s.sheet, wide && s.sheetWide]}>
@@ -87,7 +117,11 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
               accessibilityLabel="Search countries"
               autoCorrect={false}
             />
-            <ScrollView style={s.list} contentContainerStyle={s.listContent} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={s.list}
+              contentContainerStyle={s.listContent}
+              keyboardShouldPersistTaps="handled"
+            >
               {shown.map((c) => {
                 const on = c.iso === country.iso;
                 return (
@@ -104,7 +138,9 @@ export function PhoneField({ country, onCountry, value, onChangeText, onSubmitEd
                     <Text style={s.rowFlag}>{c.flag}</Text>
                     <Text style={s.rowName}>{c.name}</Text>
                     <Text style={s.rowDial}>+{c.dial}</Text>
-                    <View style={s.tick}>{on ? <Icon name="check" size={18} color={colors.brandInk} /> : null}</View>
+                    <View style={s.tick}>
+                      {on ? <Icon name="check" size={18} color={colors.brandInk} /> : null}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -120,8 +156,16 @@ const styles = (c: Record<ColorToken, string>) => ({
   ...fieldStyles(c),
   field: { ...fieldStyles(c).field, minHeight: 70, paddingTop: 24, paddingBottom: 8 },
   container: { gap: 6, width: '100%' as const },
-  label: { position: 'absolute' as const, top: 9, left: 16, fontFamily: fonts.sansMedium, fontSize: 12, lineHeight: 16, color: c.inkMuted },
-    labelErr: { color: c.dangerInk },
+  label: {
+    position: 'absolute' as const,
+    top: 9,
+    left: 16,
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
+    lineHeight: 16,
+    color: c.inkMuted,
+  },
+  labelErr: { color: c.dangerInk },
   error: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.dangerInk, paddingHorizontal: 4 },
   code: {
     flexDirection: 'row' as const,
@@ -136,10 +180,24 @@ const styles = (c: Record<ColorToken, string>) => ({
   pressed: { opacity: 0.6 },
   flag: { fontSize: 22 },
   dial: { fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },
-  input: { flex: 1, height: 36, padding: 0, fontSize: 17, fontFamily: fonts.sansMedium, color: c.ink },
+  input: {
+    flex: 1,
+    height: 36,
+    padding: 0,
+    fontSize: 17,
+    fontFamily: fonts.sansMedium,
+    color: c.ink,
+  },
   overlay: { flex: 1, justifyContent: 'flex-end' as const },
   overlayWide: { justifyContent: 'center' as const, alignItems: 'center' as const },
-  backdrop: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5,8,6,0.55)' },
+  backdrop: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(5,8,6,0.55)',
+  },
   sheet: {
     maxHeight: '75%' as const,
     backgroundColor: c.surfaceCard,
@@ -149,8 +207,22 @@ const styles = (c: Record<ColorToken, string>) => ({
     paddingBottom: 16,
   },
   sheetWide: { width: 400, borderRadius: 24, paddingTop: 22 },
-  grabber: { alignSelf: 'center' as const, width: 40, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, marginBottom: 14 },
-  title: { fontFamily: fonts.heading, fontSize: 20, letterSpacing: -0.3, color: c.ink, paddingHorizontal: 20, paddingBottom: 8 },
+  grabber: {
+    alignSelf: 'center' as const,
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.borderStrong,
+    marginBottom: 14,
+  },
+  title: {
+    fontFamily: fonts.heading,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    color: c.ink,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
   search: {
     marginHorizontal: 20,
     marginBottom: 8,
@@ -164,7 +236,14 @@ const styles = (c: Record<ColorToken, string>) => ({
   },
   list: { flexGrow: 0 },
   listContent: { paddingHorizontal: 8 },
-  row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, minHeight: 52, paddingHorizontal: 12, borderRadius: 12 },
+  row: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
   rowOn: { backgroundColor: c.brandTint },
   rowFlag: { width: 30, fontSize: 22 },
   rowName: { flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 15, color: c.ink },

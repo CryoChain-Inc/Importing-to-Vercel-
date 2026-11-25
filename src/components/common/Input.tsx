@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+} from 'react-native';
 import { Icon } from './Icon';
 import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
 
@@ -25,7 +34,20 @@ export interface InputProps extends TextInputProps {
   prefix?: string;
 }
 
-export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onChangeText, maxLength, secureTextEntry, placeholder, ...rest }: InputProps) {
+export function Input({
+  label,
+  error,
+  hint,
+  prefix,
+  style,
+  onFocus,
+  onBlur,
+  onChangeText,
+  maxLength,
+  secureTextEntry,
+  placeholder,
+  ...rest
+}: InputProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(styles);
   useAutofillTheme(colors.fieldBg, colors.ink);
@@ -45,7 +67,12 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onCh
   const lifted = focused || autofilled || !!(rest.value ?? rest.defaultValue) || !!rest.multiline;
   const [t] = useState(() => new Animated.Value(lifted ? 1 : 0));
   useEffect(() => {
-    Animated.timing(t, { toValue: lifted ? 1 : 0, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(t, {
+      toValue: lifted ? 1 : 0,
+      duration: 160,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   }, [lifted, t]);
 
   return (
@@ -57,7 +84,12 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onCh
           style={[
             s.label,
             { color: error ? colors.dangerInk : colors.inkMuted },
-            { transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, -13] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0.78] }) }] },
+            {
+              transform: [
+                { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, -13] }) },
+                { scale: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0.78] }) },
+              ],
+            },
           ]}
         >
           {label}
@@ -66,7 +98,12 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onCh
         <TextInput
           ref={inputRef}
           accessibilityLabel={label}
-          style={[s.input, rest.multiline ? s.multiline : null, { outlineStyle: 'none' } as object, style]}
+          style={[
+            s.input,
+            rest.multiline ? s.multiline : null,
+            { outlineStyle: 'none' } as object,
+            style,
+          ]}
           placeholder={lifted ? placeholder : undefined}
           placeholderTextColor={colors.inkMuted}
           onFocus={(e) => {
@@ -79,11 +116,20 @@ export function Input({ label, error, hint, prefix, style, onFocus, onBlur, onCh
           }}
           secureTextEntry={secureTextEntry && !shown}
           maxLength={maxLength}
-          onChangeText={onChangeText ? (text) => onChangeText(maxLength != null ? text.slice(0, maxLength) : text) : undefined}
+          onChangeText={
+            onChangeText
+              ? (text) => onChangeText(maxLength != null ? text.slice(0, maxLength) : text)
+              : undefined
+          }
           {...rest}
         />
         {secureTextEntry ? (
-          <Pressable onPress={() => setShown((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel={shown ? 'Hide password' : 'Show password'}>
+          <Pressable
+            onPress={() => setShown((v) => !v)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={shown ? 'Hide password' : 'Show password'}
+          >
             <Icon name={shown ? 'eyeOff' : 'eye'} size={20} color={colors.inkMuted} />
           </Pressable>
         ) : null}
@@ -110,10 +156,37 @@ export const fieldStyles = (c: Record<ColorToken, string>) => ({
 const styles = (c: Record<ColorToken, string>) => ({
   ...fieldStyles(c),
   container: { gap: 6, width: '100%' as const },
-  label: { position: 'absolute' as const, left: 16, top: 19, fontFamily: fonts.sansMedium, fontSize: 15, lineHeight: 20, transformOrigin: 'left center' },
-  prefix: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: c.inkMuted, marginRight: 8, paddingTop: 16 },
-  input: { flex: 1, minHeight: 60, paddingTop: 22, paddingBottom: 6, fontSize: 16, fontFamily: fonts.sansMedium, color: c.ink },
-  multiline: { minHeight: 96, paddingTop: 28, paddingBottom: 12, textAlignVertical: 'top' as const },
+  label: {
+    position: 'absolute' as const,
+    left: 16,
+    top: 19,
+    fontFamily: fonts.sansMedium,
+    fontSize: 15,
+    lineHeight: 20,
+    transformOrigin: 'left center',
+  },
+  prefix: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 16,
+    color: c.inkMuted,
+    marginRight: 8,
+    paddingTop: 16,
+  },
+  input: {
+    flex: 1,
+    minHeight: 60,
+    paddingTop: 22,
+    paddingBottom: 6,
+    fontSize: 16,
+    fontFamily: fonts.sansMedium,
+    color: c.ink,
+  },
+  multiline: {
+    minHeight: 96,
+    paddingTop: 28,
+    paddingBottom: 12,
+    textAlignVertical: 'top' as const,
+  },
   error: { fontFamily: fonts.sansMedium, fontSize: 12, color: c.dangerInk, paddingHorizontal: 4 },
   hint: { fontFamily: fonts.sansRegular, fontSize: 12, color: c.inkMuted, paddingHorizontal: 4 },
 });

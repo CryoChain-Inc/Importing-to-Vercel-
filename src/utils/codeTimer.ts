@@ -4,7 +4,8 @@ import { isEmail, normalizePhone } from './format';
 // (remounts on navigation, modals closing) and is the same on web and native.
 // shortcut: in memory only, a full web reload or app restart forgets it, persist to storage if that matters.
 const sentAt = new Map<string, number>();
-const key = (identifier: string) => (isEmail(identifier) ? identifier.trim().toLowerCase() : normalizePhone(identifier));
+const key = (identifier: string) =>
+  isEmail(identifier) ? identifier.trim().toLowerCase() : normalizePhone(identifier);
 
 export const markCodeSent = (identifier: string) => void sentAt.set(key(identifier), Date.now());
 

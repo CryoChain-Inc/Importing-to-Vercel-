@@ -7,7 +7,15 @@ import { authService } from '../../services/auth.service';
 import { fonts, useThemedStyles, type ColorToken } from '../../theme';
 
 /** Page frame for the agent and driver apps: greeting, theme toggle, centred column that widens on desktop, sign out. */
-export function FieldShell({ name, role, children }: { name: string; role: string; children: React.ReactNode }) {
+export function FieldShell({
+  name,
+  role,
+  children,
+}: {
+  name: string;
+  role: string;
+  children: React.ReactNode;
+}) {
   const { reset } = useNav();
   const s = useThemedStyles(styles);
   return (
@@ -16,13 +24,20 @@ export function FieldShell({ name, role, children }: { name: string; role: strin
         <View style={s.content}>
           <View style={s.header}>
             <View style={s.headerText}>
-              <Text style={s.hello} numberOfLines={1}>Hello, {name || role.toLowerCase()}</Text>
+              <Text style={s.hello} numberOfLines={1}>
+                Hello, {name || role.toLowerCase()}
+              </Text>
               <Badge label={role} tone="info" />
             </View>
             <ThemeToggle />
           </View>
           {children}
-          <Button label="Sign out" variant="ghost" size="sm" onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))} />
+          <Button
+            label="Sign out"
+            variant="ghost"
+            size="sm"
+            onPress={() => authService.signOut().finally(() => reset({ name: 'landing' }))}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -45,8 +60,19 @@ const styles = (c: Record<ColorToken, string>) => ({
   root: { flex: 1, backgroundColor: c.bgApp },
   scroll: { padding: 16, paddingBottom: 40 },
   content: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const, gap: 16 },
-  header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
+  header: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12,
+  },
   headerText: { gap: 8, alignItems: 'flex-start' as const, flexShrink: 1 },
-  hello: { fontFamily: fonts.heading, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.ink },
+  hello: {
+    fontFamily: fonts.heading,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: c.ink,
+  },
   skel: { gap: 12 },
 });

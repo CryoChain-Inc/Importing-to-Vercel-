@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button } from '../../../components/common';
-import { Banner } from '../../../components/feedback';
+import { Icon } from '../../../components/common/Icon';
+import { Banner, Pulse, Reveal } from '../../../components/feedback';
 import { OpsShell, type NavGroup } from '../../../components/layout/OpsShell';
 import { useNav, useRefreshAccount } from '../../../navigation';
 import { authService } from '../../../services/auth.service';
@@ -9,7 +10,8 @@ import * as buyers from '../../../services/ops.buyers.service';
 import * as fulfil from '../../../services/ops.fulfilment.service';
 import * as payouts from '../../../services/ops.payouts.service';
 import * as ops from '../../../services/ops.service';
-import { fonts, useThemedStyles, type ColorToken } from '../../../theme';
+import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../../theme';
+import { useLiveReload } from '../../../services/liveReload';
 import type { Account } from '../../../types/auth';
 import { BuyersPanel } from '../components/BuyersPanel';
 import { ConfigPanel } from '../components/ConfigPanel';
@@ -18,7 +20,10 @@ import { FarmersPanel } from '../components/FarmersPanel';
 import { PaymentsPanel } from '../components/PaymentsPanel';
 import { PayoutsPanel } from '../components/PayoutsPanel';
 import { PricesPanel } from '../components/PricesPanel';
+import { RefundsPanel } from '../components/RefundsPanel';
 import { DecisionsPanel } from '../components/DecisionsPanel';
+import { FleetPanel } from '../components/FleetPanel';
+import { LogisticsSettings } from '../components/LogisticsSettings';
 import { OrdersBoard } from '../components/OrdersBoard';
 import { RoutesPanel } from '../components/RoutesPanel';
 import { SupplyPanel } from '../components/SupplyPanel';
@@ -33,41 +38,91 @@ const TITLES: Record<string, [string, string]> = {
   supply: ['Supply', 'What farmers have listed.'],
   farmers: ['Farmers', 'Contact details, wallets and listings.'],
   buyers: ['Buyers', 'Who is buying, where it goes and what they have ordered.'],
-  orders: ['Orders', 'Every order, who supplies it and where it is. Allocation and routing run automatically.'],
+  orders: [
+    'Orders',
+    'Every order, who supplies it and where it is. Allocation and routing run automatically.',
+  ],
   routes: ['Routes', 'Where each driver is and the stops planned for them.'],
   decisions: ['Decision register', 'Exceptions the system could not settle by itself.'],
   payments: ['Payments', 'Money received from buyers.'],
+  refunds: [
+    'Buyer refunds',
+    'Money owed back to buyers for produce that could not be supplied. Nothing is sent until you approve it.',
+  ],
   payouts: ['Farmer payouts', 'Delivered orders to pay, payout runs and what has been sent.'],
   trucks: ['Cold trucks', 'Hour packages, bookings, and the driver you allot to each trip.'],
-  prices: ['Catalogue and prices', 'Categories, products, images and the farmer and buyer price for each.'],
+  fleet: ['Fleet', 'Your trucks, how much each carries and which driver has it.'],
+  prices: [
+    'Catalogue and prices',
+    'Categories, products, images and the farmer and buyer price for each.',
+  ],
   team: ['Team', 'Drivers and operations staff.'],
-  settings: ['Settings', 'Temperature limits, buyer and farmer pricing, payout rules and support contact.'],
+  settings: [
+    'Settings',
+    'Temperature limits, pricing, support contact, and how trucks are dispatched and timed.',
+  ],
 };
 
 const TABS = Object.keys(TITLES);
+const LIVE_TABLES = [
+  'orders',
+  'payments',
+  'order_allocations',
+  'delivery_stops',
+  'ops_decisions',
+  'produce_listings',
+  'truck_bookings',
+  'refunds',
+] as const;
 
 export function OpsHome({ account }: { account: Account }) {
   const { reset } = useNav();
   const refreshAccount = useRefreshAccount();
   const s = useThemedStyles(styles);
+  const { colors } = useTheme();
   const { tab, params, go } = useOpsLocation(TABS);
   const [rev, setRev] = useState(0);
   const [core, setCore] = useState<OpsCore | null>(null);
   const [rest, setRest] = useState<OpsRest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
-  const data = useMemo<OpsData | null>(() => (core && rest ? { ...core, ...rest } : null), [core, rest]);
+  const data = useMemo<OpsData | null>(
+    () => (core && rest ? { ...core, ...rest } : null),
+    [core, rest],
+  );
 
   const fetchCore = async (): Promise<OpsCore> => {
-    const [supply, orders, board] = await Promise.all([ops.fetchSupply(), buyers.fetchOrders(), fulfil.fetchBoard()]);
+    const [supply, orders, board] = await Promise.all([
+      ops.fetchSupply(),
+      buyers.fetchOrders(),
+      fulfil.fetchBoard(),
+    ]);
     return { supply, orders, board };
   };
   const fetchRest = async (): Promise<OpsRest> => {
-    const [farmers, buyerRows, categories, team, config, drivers, decisions, payables, runs] = await Promise.all([
-      ops.fetchFarmers(), ops.fetchBuyers(), ops.fetchCategories(), ops.fetchTeam(), ops.fetchConfig(),
-      fulfil.fetchDriverRoutes(), fulfil.fetchDecisions(), payouts.fetchPayables(), payouts.fetchPayoutRuns(),
-    ]);
-    return { farmers, buyers: buyerRows, categories, team, config, drivers, decisions, payables, runs };
+    const [farmers, buyerRows, categories, team, config, drivers, decisions, payables, runs] =
+      await Promise.all([
+        ops.fetchFarmers(),
+        ops.fetchBuyers(),
+        ops.fetchCategories(),
+        ops.fetchTeam(),
+        ops.fetchConfig(),
+        fulfil.fetchDriverRoutes(),
+        fulfil.fetchDecisions(),
+        payouts.fetchPayables(),
+        payouts.fetchPayoutRuns(),
+      ]);
+    return {
+      farmers,
+      buyers: buyerRows,
+      categories,
+      team,
+      config,
+      drivers,
+      decisions,
+      payables,
+      runs,
+    };
   };
 
   const load = useCallback(async () => {
@@ -98,6 +153,7 @@ export function OpsHome({ account }: { account: Account }) {
   useEffect(() => {
     load();
   }, [load]);
+  const live = useLiveReload(load, LIVE_TABLES);
 
   const n = {
     payments: core?.orders.filter((o) => o.state === 'awaiting_payment').length ?? 0,
@@ -106,34 +162,78 @@ export function OpsHome({ account }: { account: Account }) {
   };
   const groups: NavGroup[] = [
     { title: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'grid' }] },
-    { title: 'Supply', items: [
-      { key: 'supply', label: 'Supply', icon: 'leaf' },
-      { key: 'farmers', label: 'Farmers', icon: 'users' },
-    ] },
-    { title: 'Sales', items: [
-      { key: 'buyers', label: 'Buyers', icon: 'user' },
-      { key: 'orders', label: 'Orders', icon: 'package' },
-      { key: 'decisions', label: 'Decisions', icon: 'shield', badge: n.decisions },
-    ] },
-    { title: 'Money', items: [
-      { key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments },
-      { key: 'payouts', label: 'Farmer payouts', icon: 'arrowUpRight', badge: n.payouts },
-    ] },
-    { title: 'Logistics', items: [
-      { key: 'routes', label: 'Routes', icon: 'truck' },
-      { key: 'trucks', label: 'Cold trucks', icon: 'truck' },
-    ] },
+    {
+      title: 'Supply',
+      items: [
+        { key: 'supply', label: 'Supply', icon: 'leaf' },
+        { key: 'farmers', label: 'Farmers', icon: 'users' },
+      ],
+    },
+    {
+      title: 'Sales',
+      items: [
+        { key: 'buyers', label: 'Buyers', icon: 'user' },
+        { key: 'orders', label: 'Orders', icon: 'package' },
+        { key: 'decisions', label: 'Decisions', icon: 'shield', badge: n.decisions },
+      ],
+    },
+    {
+      title: 'Money',
+      items: [
+        { key: 'payments', label: 'Payments in', icon: 'arrowDownLeft', badge: n.payments },
+        { key: 'refunds', label: 'Buyer refunds', icon: 'arrowUpRight' },
+        { key: 'payouts', label: 'Farmer payouts', icon: 'arrowUpRight', badge: n.payouts },
+      ],
+    },
+    {
+      title: 'Logistics',
+      items: [
+        { key: 'routes', label: 'Routes', icon: 'truck' },
+        { key: 'fleet', label: 'Fleet', icon: 'truck' },
+        { key: 'trucks', label: 'Cold trucks', icon: 'truck' },
+      ],
+    },
     { title: 'Catalogue', items: [{ key: 'prices', label: 'Prices and products', icon: 'tag' }] },
-    { title: 'Admin', items: [{ key: 'team', label: 'Team', icon: 'shield' }, { key: 'settings', label: 'Settings', icon: 'sliders' }] },
+    {
+      title: 'Admin',
+      items: [
+        { key: 'team', label: 'Team', icon: 'shield' },
+        { key: 'settings', label: 'Settings', icon: 'sliders' },
+      ],
+    },
   ];
   const [title, sub] = TITLES[tab];
-  const page = { params, setParams: (p: Record<string, string>, replace = false) => go(tab, p, replace), rev };
+  const icon = groups.flatMap((g) => g.items).find((i) => i.key === tab)?.icon ?? 'grid';
+  const page = {
+    params,
+    setParams: (p: Record<string, string>, replace = false) => go(tab, p, replace),
+    rev,
+  };
 
   return (
-    <OpsShell groups={groups} active={tab} onSelect={(t) => go(t)} name={account.name} onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}>
+    <OpsShell
+      refresh={live}
+      groups={groups}
+      active={tab}
+      onSelect={(t) => go(t)}
+      name={account.name}
+      onSignOut={() => authService.signOut().finally(() => reset({ name: 'ops' }))}
+    >
       <View style={s.header}>
-        <Text style={s.title}>{title}</Text>
-        <Text style={s.sub}>{sub}</Text>
+        <View style={s.headIcon}>
+          <Icon name={icon} size={22} color={colors.brandInk} />
+        </View>
+        <View style={s.headText}>
+          <Text style={s.title}>{title}</Text>
+          <Text style={s.sub}>{sub}</Text>
+        </View>
+        <View style={s.livePill} accessibilityLabel="Updating live">
+          <View style={s.liveDotBox}>
+            <Pulse color={colors.brand500} size={10} />
+            <View style={s.liveDot} />
+          </View>
+          <Text style={s.liveText}>Live</Text>
+        </View>
       </View>
       {error ? (
         <>
@@ -142,22 +242,51 @@ export function OpsHome({ account }: { account: Account }) {
         </>
       ) : null}
       {tab === 'dashboard' && core ? (
-        <DashboardPanel data={core} onGo={(t) => go(t)} />
+        <Reveal key={tab}>
+          <DashboardPanel data={core} drivers={rest?.drivers ?? null} onGo={go} />
+        </Reveal>
       ) : data ? (
-        <>
+        <Reveal key={tab}>
           {tab === 'supply' ? <SupplyPanel supply={data.supply} {...page} /> : null}
           {tab === 'farmers' ? <FarmersPanel {...page} /> : null}
           {tab === 'buyers' ? <BuyersPanel {...page} /> : null}
-          {tab === 'orders' ? <OrdersBoard orders={data.board} onChange={load} /> : null}
+          {tab === 'orders' ? (
+            <OrdersBoard drivers={data.drivers} board={data.board} onChange={load} {...page} />
+          ) : null}
           {tab === 'routes' ? <RoutesPanel drivers={data.drivers} onChange={load} /> : null}
-          {tab === 'decisions' ? <DecisionsPanel decisions={data.decisions} onChange={load} /> : null}
-          {tab === 'payments' ? <PaymentsPanel orders={data.orders} onChange={load} {...page} /> : null}
-          {tab === 'payouts' ? <PayoutsPanel payables={data.payables} runs={data.runs} farmers={data.farmers} onChange={load} /> : null}
+          {tab === 'decisions' ? (
+            <DecisionsPanel decisions={data.decisions} onChange={load} />
+          ) : null}
+          {tab === 'payments' ? (
+            <PaymentsPanel orders={data.orders} onChange={load} {...page} />
+          ) : null}
+          {tab === 'refunds' ? <RefundsPanel rev={rev} /> : null}
+          {tab === 'payouts' ? (
+            <PayoutsPanel
+              payables={data.payables}
+              runs={data.runs}
+              farmers={data.farmers}
+              onChange={load}
+            />
+          ) : null}
+          {tab === 'fleet' ? <FleetPanel team={data.team} rev={rev} /> : null}
           {tab === 'trucks' ? <TrucksPanel /> : null}
-          {tab === 'prices' ? <PricesPanel categories={data.categories} config={data.config} onChange={load} {...page} /> : null}
+          {tab === 'prices' ? (
+            <PricesPanel
+              categories={data.categories}
+              config={data.config}
+              onChange={load}
+              {...page}
+            />
+          ) : null}
           {tab === 'team' ? <TeamPanel team={data.team} onChange={load} /> : null}
-          {tab === 'settings' ? <ConfigPanel config={data.config} onChange={load} /> : null}
-        </>
+          {tab === 'settings' ? (
+            <>
+              <ConfigPanel config={data.config} onChange={load} />
+              <LogisticsSettings rev={rev} />
+            </>
+          ) : null}
+        </Reveal>
       ) : error ? null : (
         <PanelSkeleton />
       )}
@@ -166,7 +295,34 @@ export function OpsHome({ account }: { account: Account }) {
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
-  header: { gap: 2, marginBottom: 4 },
-  title: { fontFamily: fonts.heading, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.ink },
+  header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, marginBottom: 4 },
+  headIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: c.brandTint,
+  },
+  headText: { flex: 1, gap: 2 },
+  livePill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: c.surfaceSunken,
+  },
+  liveDotBox: { width: 10, height: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.brand500 },
+  liveText: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.inkMuted },
+  title: {
+    fontFamily: fonts.heading,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: c.ink,
+  },
   sub: { fontFamily: fonts.sansRegular, fontSize: 14, color: c.inkMuted },
 });

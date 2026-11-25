@@ -3,3 +3,5 @@ export * from './Banner';
 export * from './Toast';
 export * from './Skeleton';
 export * from './WelcomeDialog';
+export * from './Dialog';
+export * from './Motion';
