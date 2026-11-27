@@ -1,125 +1,145 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Badge, Button, Card, ChoiceChips, Icon, Input, Pagination } from '../../components/common';
+import { Text, View } from 'react-native';
+import { Button, Card, Pagination } from '../../components/common';
 import { Banner, useToast } from '../../components/feedback';
-import { fetchFarmerReport, saveCsv, type ReportRow } from '../../services/report.service';
-import { fonts, useTheme, useThemedStyles, type ColorToken } from '../../theme';
-import { fmtQty, formatPhone } from '../../utils/format';
-import { Empty, PanelSkeleton, Stat, StatGrid } from '../ops/components/OpsBits';
+import { useDebounced } from '../../hooks/useDebounced';
 import {
-  NO_FILTERS,
-  applyFilters,
-  byArea,
-  groupFarmers,
-  heatPoints,
-  sortFarmers,
-  sumByUnit,
-  toCsv,
-  type ByUnit,
-  type Filters,
+  MIME,
+  NO_QUERY,
+  fetchReportRows,
+  fetchReportView,
+  saveFile,
+  savePdf,
+  type ExportFormat,
   type HeatMetric,
-  type SortKey,
-  type Status,
-} from './farmerReport';
+  type ReportQuery,
+  type ReportView,
+} from '../../services/report.service';
+import { fonts, useThemedStyles, type ColorToken } from '../../theme';
+import { Empty, PanelSkeleton, Stat, StatGrid } from '../ops/components/OpsBits';
+import { ExportBar } from './ExportBar';
+import { FarmerRow } from './FarmerRow';
+import { FilterSelect } from './FilterSelect';
 import { HeatMap } from './HeatMap';
+import { ReportFilters } from './ReportFilters';
+import { buildPdfHtml } from './exportPdf';
+import { buildXlsx } from './exportXlsx';
+import {
+  NEEDS_UNIT,
+  heatCaption,
+  isFiltered,
+  reportFileName,
+  toCsv,
+  unitsText,
+} from './farmerReport';
 
-const ALL = 'All';
-const PAGE = 15;
-const STATUS: Record<Status, string> = {
-  all: ALL,
-  in_stock: 'In stock',
-  sold_out: 'Sold out',
-  none: 'Nothing listed',
-};
-const WALLET = { all: ALL, verified: 'Verified', unverified: 'Not verified' } as const;
-const SORTS: Record<SortKey, string> = {
-  name: 'Name',
-  locality: 'Collection point',
-  joined: 'Joined',
-  listings: 'Listings',
-  listed: 'Listed',
-  remaining: 'In stock',
-};
-const METRICS: Record<HeatMetric, string> = {
-  farmers: 'Farmers',
-  listed: 'Listed',
-  remaining: 'In stock',
-};
-const keyOf = <T extends string>(map: Record<T, string>, label: string) =>
-  (Object.keys(map) as T[]).find((k) => map[k] === label) ?? (Object.keys(map)[0] as T);
-const unitsText = (t: ByUnit, k: 'listed' | 'remaining') =>
-  Object.entries(t)
-    .filter(([, v]) => v[k] > 0 || k === 'listed')
-    .map(([u, v]) => fmtQty(v[k], u))
-    .join(' · ') || '—';
+const SIZES = [10, 25, 50].map((n) => ({ value: String(n), label: `${n} per page` }));
+const LABEL: Record<ExportFormat, string> = { pdf: 'PDF report', xlsx: 'Excel workbook', csv: 'CSV' };
 
 /**
- * Farmers, their stock and where they are, with filters, sorting, a density map and a CSV export.
- * Shared by the ops console and the government site; both read the same guarded database report.
+ * Farmers, their stock and where they are. Search, filters, sorting and paging all run in the database; this screen
+ * holds one page of farmers plus the map points. Shared by the ops console and the government site.
  */
 export function FarmerReport() {
   const s = useThemedStyles(styles);
-  const { colors } = useTheme();
   const toast = useToast();
-  const [rows, setRows] = useState<ReportRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [f, setF] = useState<Filters>(NO_FILTERS);
-  const [sort, setSort] = useState<SortKey>('joined');
-  const [dir, setDir] = useState<'asc' | 'desc'>('desc');
+  const [base, setBase] = useState<ReportQuery>(NO_QUERY);
+  const [text, setText] = useState('');
   const [metric, setMetric] = useState<HeatMetric>('farmers');
-  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(10);
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<ReportView | null>(null);
+  const [loaded, setLoaded] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [rev, setRev] = useState(0);
+  const [everyone, setEveryone] = useState<number | null>(null); // farmers with no filters on, for "12 of 340"
 
-  const load = useCallback(() => {
-    fetchFarmerReport()
-      .then(setRows)
-      .catch((e: Error) => setError(e.message));
-  }, []);
-  useEffect(load, [load]);
+  // Typing waits for a short pause, then becomes part of the query.
+  const q = useDebounced(text, 300);
+  const query = useMemo(() => ({ ...base, q }), [base, q]);
+  // The page goes back to 1 by itself whenever the filters, sort or map metric change.
+  const filterKey = JSON.stringify([query, metric, size]);
+  const [pg, setPg] = useState({ key: filterKey, n: 1 });
+  const page = pg.key === filterKey ? pg.n : 1;
+  const setPage = (n: number) => setPg({ key: filterKey, n });
+  const key = JSON.stringify([filterKey, page, rev]);
+  const busy = loaded !== key;
 
-  const farmers = useMemo(() => groupFarmers(rows ?? []), [rows]);
-  const options = useMemo(() => {
-    const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort();
-    const lines = (rows ?? []).filter((r) => r.listingId);
-    return {
-      localities: uniq(farmers.map((x) => x.locality)),
-      products: uniq(lines.map((r) => r.product)),
-      units: uniq(lines.map((r) => r.unit)),
+  useEffect(() => {
+    let live = true;
+    fetchReportView(query, metric, page, size)
+      .then((v) => {
+        if (!live) return;
+        if (!isFiltered(query)) setEveryone(v.total);
+        // A stale page (the filters shrank the list) falls back to the first one.
+        if (!v.farmers.length && v.total > 0 && page > 1) return setPg({ key: filterKey, n: 1 });
+        setView(v);
+        setError(null);
+        setLoaded(key);
+      })
+      .catch((e: Error) => {
+        if (!live) return;
+        setError(e.message);
+        setLoaded(key);
+      });
+    return () => {
+      live = false;
     };
-  }, [rows, farmers]);
+    // `key` covers every input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
-  const shown = useMemo(
-    () => sortFarmers(applyFilters(farmers, f), sort, dir, f.unit),
-    [farmers, f, sort, dir],
-  );
-  const totals = useMemo(() => sumByUnit(shown), [shown]);
-  const area = useMemo(() => byArea(shown), [shown]);
-  const points = useMemo(() => heatPoints(shown, metric, f.unit), [shown, metric, f.unit]);
-  const pageRows = shown.slice((page - 1) * PAGE, page * PAGE);
-
-  const set = (patch: Partial<Filters>) => {
-    setF((p) => ({ ...p, ...patch }));
-    setPage(1);
-    // Listed / In stock only compare inside one unit.
-    if ('unit' in patch && !patch.unit) {
-      setMetric('farmers');
-      if (sort === 'listed' || sort === 'remaining') setSort('joined');
-    }
+  const change = useCallback((patch: Partial<ReportQuery>) => {
+    const { q: typed, ...rest } = patch;
+    if (typed !== undefined) setText(typed);
+    setBase((p) => {
+      const next = { ...p, ...rest };
+      // Amount sorts and shading only compare inside one unit.
+      if (!next.unit && NEEDS_UNIT.includes(next.sort)) next.sort = NO_QUERY.sort;
+      return next;
+    });
+    if ('unit' in rest && !rest.unit) setMetric('farmers');
+  }, []);
+  const clear = () => {
+    setText('');
+    setBase(NO_QUERY);
+    setMetric('farmers');
   };
-  const filtered = JSON.stringify(f) !== JSON.stringify(NO_FILTERS);
-  const unitSorts = f.unit
-    ? (Object.keys(SORTS) as SortKey[])
-    : (['name', 'locality', 'joined', 'listings'] as SortKey[]);
 
-  const exportCsv = async () => {
+  const download = async (fmt: ExportFormat) => {
+    if (!view) return;
+    setExporting(fmt);
     try {
-      await saveCsv(toCsv(shown), `cryochain-farmers-${new Date().toISOString().slice(0, 10)}.csv`);
+      const rows = await fetchReportRows(query);
+      const generated = new Date();
+      if (fmt === 'csv') await saveFile(toCsv(rows), reportFileName('csv'), MIME.csv);
+      else if (fmt === 'xlsx')
+        await saveFile(buildXlsx({ rows, view, query, generated }), reportFileName('xlsx'), MIME.xlsx);
+      else
+        await savePdf(
+          buildPdfHtml({
+            rows,
+            view,
+            query,
+            generated,
+            metricNote: heatCaption(query.unit ? metric : 'farmers', query.unit),
+            title: reportFileName('pdf').replace(/\.pdf$/, ''),
+          }),
+          reportFileName('pdf'),
+        );
+      toast.show(
+        fmt === 'pdf' ? 'Choose “Save as PDF” in the print window.' : `${LABEL[fmt]} downloaded.`,
+        'success',
+      );
     } catch (e) {
       toast.show(e instanceof Error ? e.message : 'Could not export the report.', 'error');
+    } finally {
+      setExporting(null);
     }
   };
 
-  if (!rows)
+  if (!view)
     return error ? (
       <View style={s.gap}>
         <Banner text={error} />
@@ -128,14 +148,14 @@ export function FarmerReport() {
           variant="outline"
           onPress={() => {
             setError(null);
-            load();
+            setRev((n) => n + 1);
           }}
         />
       </View>
     ) : (
-      <PanelSkeleton variant="list" />
+      <PanelSkeleton variant="stats" />
     );
-  if (!farmers.length)
+  if (!isFiltered(query) && view.total === 0)
     return (
       <Empty
         icon="users"
@@ -144,294 +164,136 @@ export function FarmerReport() {
       />
     );
 
-  const located = shown.filter((x) => x.lat != null).length;
+  const filtered = isFiltered(query);
+  const mapped = view.points.length > 0;
+  const map = (
+    <View style={s.mapCol}>
+      {mapped ? (
+        <HeatMap
+          points={view.points}
+          total={view.total}
+          located={view.located}
+          metric={metric}
+          onMetric={setMetric}
+          unit={query.unit}
+        />
+      ) : (
+        <Card style={s.noMap}>
+          <Text style={s.h}>Nothing to map</Text>
+          <Text style={s.meta}>
+            None of these farmers has shared a farm location
+            {query.unit && metric !== 'farmers' ? `, or has any ${query.unit} ${metric === 'listed' ? 'listed' : 'in stock'}` : ''}
+            .
+          </Text>
+        </Card>
+      )}
+    </View>
+  );
+
   return (
     <View style={s.gap}>
       <StatGrid>
         <Stat
           label="Farmers"
-          value={String(shown.length)}
-          note={filtered ? `of ${farmers.length}` : undefined}
+          value={view.total.toLocaleString('en-GH')}
+          note={filtered && everyone != null ? `of ${everyone.toLocaleString('en-GH')}` : undefined}
           icon="users"
         />
         <Stat
           label="On the map"
-          value={String(located)}
+          value={view.located.toLocaleString('en-GH')}
           note={
-            located < shown.length ? `${shown.length - located} without a location` : 'All located'
+            view.located < view.total ? `${view.total - view.located} without a location` : 'All located'
           }
           icon="pin"
         />
-        <Stat
-          label="Listings"
-          value={String(shown.reduce((n, x) => n + x.lines.length, 0))}
-          icon="leaf"
-        />
-        <Stat label="Listed" value={unitsText(totals, 'listed')} icon="package" />
-        <Stat
-          label="Still in stock"
-          value={unitsText(totals, 'remaining')}
-          tone="brand"
-          icon="grid"
-        />
+        <Stat label="Listings" value={view.listings.toLocaleString('en-GH')} icon="leaf" />
+        <Stat label="Listed" value={unitsText(view.totals, 'listed')} icon="package" />
+        <Stat label="Still in stock" value={unitsText(view.totals, 'remaining')} tone="brand" icon="grid" />
       </StatGrid>
 
-      <Card style={s.panel}>
-        <Input
-          label="Search"
-          value={f.q}
-          onChangeText={(q) => set({ q })}
-          placeholder="Name, phone, town or address"
-        />
-        <View style={s.chips}>
-          <ChoiceChips
-            label="Collection point"
-            options={[ALL, ...options.localities]}
-            value={f.locality || ALL}
-            onChange={(v) => set({ locality: v === ALL ? '' : v })}
-          />
-          <ChoiceChips
-            label="Product"
-            options={[ALL, ...options.products]}
-            value={f.product || ALL}
-            onChange={(v) => set({ product: v === ALL ? '' : v })}
-          />
-          <ChoiceChips
-            label="Unit"
-            options={[ALL, ...options.units]}
-            value={f.unit || ALL}
-            onChange={(v) => set({ unit: v === ALL ? '' : v })}
-          />
-          <ChoiceChips
-            label="Stock"
-            options={Object.values(STATUS)}
-            value={STATUS[f.status]}
-            onChange={(v) => set({ status: keyOf(STATUS, v) })}
-          />
-          <ChoiceChips
-            label="Wallet"
-            options={Object.values(WALLET)}
-            value={WALLET[f.wallet]}
-            onChange={(v) => set({ wallet: keyOf(WALLET, v) })}
-          />
-        </View>
-        <View style={s.bar}>
-          <View style={s.grow}>
-            <ChoiceChips
-              label="Sort by"
-              options={unitSorts.map((k) => SORTS[k])}
-              value={SORTS[sort]}
-              onChange={(v) => {
-                setSort(keyOf(SORTS, v));
-                setPage(1);
-              }}
-            />
-          </View>
-          <Button
-            label={dir === 'asc' ? 'Ascending' : 'Descending'}
-            variant="outline"
-            size="sm"
-            icon={dir === 'asc' ? 'chevronUp' : 'chevronDown'}
-            onPress={() => setDir(dir === 'asc' ? 'desc' : 'asc')}
-          />
-        </View>
-        <View style={s.bar}>
-          {filtered ? (
-            <Button
-              label="Clear filters"
-              variant="ghost"
-              size="sm"
-              onPress={() => {
-                setF(NO_FILTERS);
-                setPage(1);
-                setMetric('farmers');
-              }}
-            />
-          ) : (
-            <View />
-          )}
-          <Button
-            label={`Export CSV · ${shown.length} farmer${shown.length === 1 ? '' : 's'}`}
-            icon="download"
-            onPress={exportCsv}
-            disabled={!shown.length}
-          />
-        </View>
-      </Card>
-
-      <Card style={s.panel}>
-        <View style={s.bar}>
-          <View style={s.grow}>
-            <Text style={s.h}>Where farmers are</Text>
-            <Text style={s.meta}>
-              Darker areas have more{' '}
-              {metric === 'farmers'
-                ? 'farmers'
-                : metric === 'listed'
-                  ? `${f.unit} listed`
-                  : `${f.unit} in stock`}
-              . Tap a dot for the farmer.
-            </Text>
-          </View>
-          {f.unit ? (
-            <ChoiceChips
-              label="Shade by"
-              options={Object.values(METRICS)}
-              value={METRICS[metric]}
-              onChange={(v) => setMetric(keyOf(METRICS, v))}
-            />
-          ) : null}
-        </View>
-        {points.length ? (
-          <HeatMap points={points} />
-        ) : (
-          <Text style={s.meta}>None of these farmers has shared a farm location yet.</Text>
-        )}
-      </Card>
-
-      <Card style={s.panel}>
-        <Text style={s.h}>By collection point</Text>
-        {area.map((a) => (
-          <View key={a.locality} style={s.areaRow}>
-            <Text style={[s.value, s.grow]} numberOfLines={1}>
-              {a.locality}
-            </Text>
-            <Text style={s.meta}>
-              {a.farmers} farmer{a.farmers === 1 ? '' : 's'}
-            </Text>
-            <Text style={[s.value, s.areaStock]} numberOfLines={1}>
-              {unitsText(a.totals, 'listed')}
-            </Text>
-          </View>
-        ))}
-      </Card>
-
-      <Text style={s.h}>Farmers</Text>
-      {shown.length === 0 ? <Text style={s.meta}>No farmer matches these filters.</Text> : null}
-      {pageRows.map((x) => {
-        const on = open === x.id;
-        return (
-          <Card key={x.id} style={s.item}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: on }}
-              onPress={() => setOpen(on ? null : x.id)}
-              style={s.head}
-            >
-              <View style={s.grow}>
-                <Text style={s.name} numberOfLines={1}>
-                  {x.name}
-                </Text>
-                <Text style={s.meta} numberOfLines={1}>
-                  {[x.locality, formatPhone(x.phone)].filter(Boolean).join(' · ') || '—'}
-                </Text>
-              </View>
-              <View style={s.stock}>
-                <Text style={s.value} numberOfLines={1}>
-                  {x.lines.length ? unitsText(x.totals, 'listed') : 'Nothing listed'}
-                </Text>
-                {x.lines.length ? (
-                  <Text style={s.meta} numberOfLines={1}>
-                    {unitsText(x.totals, 'remaining')} left
-                  </Text>
-                ) : null}
-              </View>
-              <Badge
-                label={x.walletVerified ? 'Verified' : 'Not verified'}
-                tone={x.walletVerified ? 'success' : 'warning'}
-              />
-              <Icon name="chevronDown" size={18} color={colors.inkMuted} />
-            </Pressable>
-            {on ? (
-              <View style={s.body}>
-                <Text style={s.meta}>Farm address</Text>
-                <Text style={s.value}>{x.address || '—'}</Text>
-                <Text style={s.meta}>
-                  {x.lat != null
-                    ? `GPS ${x.lat.toFixed(5)}, ${x.lng?.toFixed(5)}`
-                    : 'No GPS location shared'}{' '}
-                  · Joined {new Date(x.joinedAt).toLocaleDateString('en-GH')}
-                </Text>
-                {x.lines.map((l) => (
-                  <View key={l.listingId} style={s.line}>
-                    <Text style={[s.value, s.grow]} numberOfLines={1}>
-                      {l.product}
-                    </Text>
-                    <Text style={s.cell}>{fmtQty(l.listed, l.unit)} listed</Text>
-                    <Text style={s.cell}>{fmtQty(l.sold, l.unit)} sold</Text>
-                    <Text style={s.cell}>{fmtQty(l.delivered, l.unit)} delivered</Text>
-                    <Text style={[s.cell, s.strong]}>{fmtQty(l.remaining, l.unit)} left</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </Card>
-        );
-      })}
-      <Pagination
-        page={page}
-        total={shown.length}
-        pageSize={PAGE}
-        onPage={setPage}
-        noun="farmers"
+      <ReportFilters
+        query={query}
+        text={text}
+        onText={setText}
+        onChange={change}
+        onClear={clear}
+        options={view.options}
       />
+
+      <ExportBar
+        count={view.total}
+        busy={exporting}
+        disabled={busy || view.total === 0}
+        onExport={download}
+      />
+
+      <View style={[s.dim, busy && s.busy]}>
+        {map}
+
+        <View style={s.listHead}>
+          <Text style={s.h}>Farmers</Text>
+          <Text style={s.meta}>
+            {view.total.toLocaleString('en-GH')} match{view.total === 1 ? 'es' : ''}
+          </Text>
+        </View>
+        {view.farmers.length === 0 ? (
+          <Empty
+            icon="search"
+            title="No farmer matches"
+            hint="Try a different spelling, or remove a filter."
+          />
+        ) : (
+          view.farmers.map((x) => (
+            <FarmerRow
+              key={x.id}
+              farmer={x}
+              open={open === x.id}
+              onToggle={() => setOpen(open === x.id ? null : x.id)}
+            />
+          ))
+        )}
+        <View style={s.foot}>
+          <Text style={s.meta}>
+            {view.total
+              ? `Showing ${(page - 1) * size + 1}–${Math.min(page * size, view.total)} of ${view.total.toLocaleString('en-GH')}`
+              : 'No farmers to show'}
+          </Text>
+          <View style={s.perPage}>
+            <FilterSelect
+              label="Show"
+              value={String(size)}
+              options={SIZES}
+              onChange={(v) => setSize(Number(v))}
+            />
+          </View>
+        </View>
+        <Pagination page={page} total={view.total} pageSize={size} onPage={setPage} noun="farmers" />
+      </View>
     </View>
   );
 }
 
 const styles = (c: Record<ColorToken, string>) => ({
   gap: { gap: 14 },
-  panel: { gap: 12 },
-  chips: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 },
-  bar: {
+  dim: { gap: 14 },
+  busy: { opacity: 0.55 },
+  mapCol: { flex: 1, minWidth: 0 },
+  foot: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
-    alignItems: 'flex-end' as const,
+    alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     gap: 12,
   },
-  grow: { flex: 1, minWidth: 160, gap: 2 },
-  h: { fontFamily: fonts.heading, fontSize: 18, color: c.ink },
-  areaRow: {
+  perPage: { width: 190 },
+  noMap: { gap: 6, minHeight: 160, justifyContent: 'center' as const },
+  listHead: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderTopColor: c.borderSubtle,
+    alignItems: 'baseline' as const,
+    justifyContent: 'space-between' as const,
+    marginTop: 6,
   },
-  areaStock: { minWidth: 120, textAlign: 'right' as const },
-  item: { padding: 0, overflow: 'hidden' as const },
-  head: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    flexWrap: 'wrap' as const,
-    gap: 12,
-    padding: 14,
-    minHeight: 64,
-  },
-  stock: { alignItems: 'flex-end' as const, minWidth: 130 },
-  body: { gap: 6, padding: 14, borderTopWidth: 1, borderTopColor: c.borderSubtle },
-  line: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-    paddingVertical: 4,
-  },
-  cell: {
-    fontFamily: fonts.sansRegular,
-    fontSize: 13,
-    color: c.inkMuted,
-    fontVariant: ['tabular-nums' as const],
-  },
-  strong: { fontFamily: fonts.sansBold, color: c.ink },
-  name: { fontFamily: fonts.sansBold, fontSize: 16, color: c.ink },
-  value: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 14,
-    color: c.ink,
-    fontVariant: ['tabular-nums' as const],
-  },
+  h: { fontFamily: fonts.heading, fontSize: 20, color: c.ink },
   meta: { fontFamily: fonts.sansRegular, fontSize: 13, color: c.inkMuted },
 });

@@ -1,200 +1,71 @@
-import type { ReportRow } from '../../services/report.service';
+import type {
+  HeatMetric,
+  ReportQuery,
+  ReportRow,
+  SortKey,
+  Status,
+  UnitTotals,
+} from '../../services/report.service';
+import { NO_QUERY } from '../../services/report.service';
+import { fmtQty } from '../../utils/format';
 
-export interface Totals {
-  listed: number;
-  sold: number;
-  delivered: number;
-  remaining: number;
-}
-/** Stock per unit: units (kg, bunch...) never add up across each other. */
-export type ByUnit = Record<string, Totals>;
-
-export interface ReportFarmer {
-  id: string;
-  name: string;
-  phone: string;
-  locality: string;
-  address: string;
-  lat: number | null;
-  lng: number | null;
-  walletVerified: boolean;
-  joinedAt: string;
-  lines: ReportRow[];
-  totals: ByUnit;
-}
-
-export type Status = 'all' | 'in_stock' | 'sold_out' | 'none';
-export type SortKey = 'name' | 'locality' | 'joined' | 'listings' | 'listed' | 'remaining';
-
-export interface Filters {
-  q: string;
-  locality: string;
-  product: string;
-  /** '' means every unit. */
-  unit: string;
-  status: Status;
-  wallet: 'all' | 'verified' | 'unverified';
-}
-export const NO_FILTERS: Filters = {
-  q: '',
-  locality: '',
-  product: '',
-  unit: '',
-  status: 'all',
-  wallet: 'all',
+export const STATUS: Record<Status, string> = {
+  all: 'All',
+  in_stock: 'In stock',
+  sold_out: 'Sold out',
+  none: 'Nothing listed',
 };
+export const SORTS: Record<SortKey, string> = {
+  name: 'Name',
+  joined: 'Date joined',
+  listings: 'Number of listings',
+  listed: 'Amount listed',
+  remaining: 'Amount in stock',
+};
+export const METRICS: Record<HeatMetric, string> = {
+  farmers: 'Farmers',
+  listed: 'Listed',
+  remaining: 'In stock',
+};
+/** What the map shades, in words. */
+export const heatCaption = (m: HeatMetric, unit: string) =>
+  m === 'farmers' || !unit
+    ? 'Farmers in the area'
+    : m === 'listed'
+      ? `${unit} listed in the area`
+      : `${unit} in stock in the area`;
+/** Amount sorts and map shading compare quantities, which only add up inside one unit. */
+export const NEEDS_UNIT: SortKey[] = ['listed', 'remaining'];
 
-export function totalsOf(lines: ReportRow[]): ByUnit {
-  const out: ByUnit = {};
-  for (const l of lines) {
-    const t = (out[l.unit] ??= { listed: 0, sold: 0, delivered: 0, remaining: 0 });
-    t.listed += l.listed;
-    t.sold += l.sold;
-    t.delivered += l.delivered;
-    t.remaining += l.remaining;
-  }
+export const isFiltered = (q: ReportQuery) =>
+  q.q.trim() !== '' ||
+  q.product !== '' ||
+  q.unit !== '' ||
+  q.status !== NO_QUERY.status;
+
+/** Active filters as plain sentences, for the PDF and Excel cover. */
+export function describeQuery(q: ReportQuery): string[] {
+  const out: string[] = [];
+  if (q.q.trim()) out.push(`Search: “${q.q.trim()}”`);
+  if (q.product) out.push(`Product: ${q.product}`);
+  if (q.unit) out.push(`Unit: ${q.unit}`);
+  if (q.status !== 'all') out.push(`Stock: ${STATUS[q.status]}`);
   return out;
 }
 
-/** Report rows are one per farmer and listing; this folds them into one entry per farmer. */
-export function groupFarmers(rows: ReportRow[]): ReportFarmer[] {
-  const by = new Map<string, ReportFarmer>();
-  for (const r of rows) {
-    let f = by.get(r.farmerId);
-    if (!f) {
-      f = {
-        id: r.farmerId,
-        name: r.farmerName,
-        phone: r.phone,
-        locality: r.locality,
-        address: r.address,
-        lat: r.latitude,
-        lng: r.longitude,
-        walletVerified: r.walletVerified,
-        joinedAt: r.joinedAt,
-        lines: [],
-        totals: {},
-      };
-      by.set(r.farmerId, f);
-    }
-    if (r.listingId) f.lines.push(r);
-  }
-  const all = [...by.values()];
-  all.forEach((f) => (f.totals = totalsOf(f.lines)));
-  return all;
-}
+/** "120 kg · 8 bunch": one figure per unit, since units never add up. */
+export const unitsText = (
+  t: Pick<UnitTotals, 'unit' | 'listed' | 'remaining'>[],
+  k: 'listed' | 'remaining',
+) =>
+  t
+    .filter((v) => v[k] > 0 || k === 'listed')
+    .map((v) => fmtQty(v[k], v.unit))
+    .join(' · ') || '—';
 
-/** Applies the filters; line filters (product, unit) also narrow each farmer's lines and totals. */
-export function applyFilters(farmers: ReportFarmer[], f: Filters): ReportFarmer[] {
-  const q = f.q.trim().toLowerCase();
-  const lineFilter = Boolean(f.product || f.unit);
-  const out: ReportFarmer[] = [];
-  for (const farmer of farmers) {
-    if (f.locality && farmer.locality !== f.locality) continue;
-    if (f.wallet !== 'all' && farmer.walletVerified !== (f.wallet === 'verified')) continue;
-    if (
-      q &&
-      ![farmer.name, farmer.phone, farmer.locality, farmer.address].some((v) =>
-        v.toLowerCase().includes(q),
-      )
-    )
-      continue;
-    const lines = farmer.lines.filter(
-      (l) => (!f.product || l.product === f.product) && (!f.unit || l.unit === f.unit),
-    );
-    if (lineFilter && lines.length === 0) continue;
-    const stocked = lines.some((l) => l.remaining > 0);
-    if (f.status === 'none' && lines.length > 0) continue;
-    if (f.status === 'in_stock' && !stocked) continue;
-    if (f.status === 'sold_out' && (lines.length === 0 || stocked)) continue;
-    out.push({ ...farmer, lines, totals: totalsOf(lines) });
-  }
-  return out;
-}
-
-const amount = (f: ReportFarmer, unit: string, k: 'listed' | 'remaining') =>
-  unit ? (f.totals[unit]?.[k] ?? 0) : 0;
-
-export function sortFarmers(
-  farmers: ReportFarmer[],
-  key: SortKey,
-  dir: 'asc' | 'desc',
-  unit: string,
-): ReportFarmer[] {
-  const val = (f: ReportFarmer): string | number =>
-    key === 'name'
-      ? f.name.toLowerCase()
-      : key === 'locality'
-        ? f.locality.toLowerCase()
-        : key === 'joined'
-          ? f.joinedAt
-          : key === 'listings'
-            ? f.lines.length
-            : amount(f, unit, key);
-  const sign = dir === 'asc' ? 1 : -1;
-  return [...farmers].sort((a, b) => {
-    const x = val(a);
-    const y = val(b);
-    return (x < y ? -1 : x > y ? 1 : a.name.localeCompare(b.name)) * sign;
-  });
-}
-
-/** Total across farmers, per unit. */
-export function sumByUnit(farmers: ReportFarmer[]): ByUnit {
-  return totalsOf(farmers.flatMap((f) => f.lines));
-}
-
-export interface AreaRow {
-  locality: string;
-  farmers: number;
-  listings: number;
-  totals: ByUnit;
-}
-
-/** One row per collection point or town, biggest first. */
-export function byArea(farmers: ReportFarmer[]): AreaRow[] {
-  const by = new Map<string, ReportFarmer[]>();
-  for (const f of farmers) {
-    const k = f.locality || 'No collection point';
-    by.set(k, [...(by.get(k) ?? []), f]);
-  }
-  return [...by.entries()]
-    .map(([locality, fs]) => ({
-      locality,
-      farmers: fs.length,
-      listings: fs.reduce((n, f) => n + f.lines.length, 0),
-      totals: sumByUnit(fs),
-    }))
-    .sort((a, b) => b.farmers - a.farmers || a.locality.localeCompare(b.locality));
-}
-
-export type HeatMetric = 'farmers' | 'listed' | 'remaining';
-
-export interface HeatPoint {
-  id: string;
-  lat: number;
-  lng: number;
-  weight: number;
-  farmer: ReportFarmer;
-}
-
-/** Farmers with a GPS fix. Listed and remaining only mean something inside one unit; otherwise each farmer counts as one. */
-export function heatPoints(farmers: ReportFarmer[], metric: HeatMetric, unit: string): HeatPoint[] {
-  const m = unit ? metric : 'farmers';
-  const out: HeatPoint[] = [];
-  for (const f of farmers) {
-    if (f.lat == null || f.lng == null) continue;
-    const weight = m === 'farmers' ? 1 : amount(f, unit, m);
-    if (weight > 0) out.push({ id: f.id, lat: f.lat, lng: f.lng, weight, farmer: f });
-  }
-  return out;
-}
-
-const unitText = (t: ByUnit) =>
-  Object.entries(t)
-    .map(([u, v]) => `${v.listed} ${u}`)
-    .join(', ');
-export const stockText = unitText;
+export const fileStamp = () => new Date().toISOString().slice(0, 10);
+/** "Farmer-Stock-Report_2026-11-27.pdf" */
+export const reportFileName = (ext: 'pdf' | 'xlsx' | 'csv') => `Farmer-Stock-Report_${fileStamp()}.${ext}`;
 
 /** Neutralises cells a spreadsheet would run as a formula (names and addresses are typed by farmers). */
 const cell = (v: string | number | boolean | null): string => {
@@ -203,51 +74,69 @@ const cell = (v: string | number | boolean | null): string => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-const HEAD = [
+export const COLUMNS = [
   'Farmer',
   'Phone',
-  'Collection point',
   'Farm address',
   'Latitude',
   'Longitude',
-  'Wallet verified',
   'Joined',
   'Product',
   'Unit',
   'Listed',
   'Sold',
   'Delivered',
-  'Remaining',
+  'In stock',
   'Listed on',
-];
-const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
+] as const;
+/** Columns that hold quantities (right-aligned, numeric). */
+export const AMOUNT_COLS = [8, 9, 10, 11];
+export const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
 
-/** The current view as CSV: one row per farmer and listing; a farmer with nothing listed gets one row with empty stock. */
-export function toCsv(farmers: ReportFarmer[]): string {
-  const rows = farmers.flatMap((f) => {
-    const base = [
-      f.name,
-      f.phone,
-      f.locality,
-      f.address,
-      f.lat,
-      f.lng,
-      f.walletVerified ? 'Yes' : 'No',
-      day(f.joinedAt),
-    ];
-    return f.lines.length
-      ? f.lines.map((l) => [
-          ...base,
-          l.product,
-          l.unit,
-          l.listed,
-          l.sold,
-          l.delivered,
-          l.remaining,
-          day(l.listedAt),
-        ])
-      : [[...base, '', '', '', '', '', '', '']];
-  });
-  // The BOM makes Excel read the file as UTF-8.
-  return '﻿' + [HEAD, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
+/** The cells of one export row, in COLUMNS order. A farmer with nothing listed has empty stock cells. */
+export const rowCells = (r: ReportRow): (string | number | null)[] => [
+  r.farmerName,
+  r.phone,
+  r.address,
+  r.latitude,
+  r.longitude,
+  day(r.joinedAt),
+  r.listingId ? r.product : '',
+  r.listingId ? r.unit : '',
+  r.listingId ? r.listed : null,
+  r.listingId ? r.sold : null,
+  r.listingId ? r.delivered : null,
+  r.listingId ? r.remaining : null,
+  day(r.listedAt),
+];
+
+/** The export rows as CSV, with a byte-order mark so Excel reads the UTF-8 names correctly. */
+export function toCsv(rows: ReportRow[]): string {
+  const body = rows.map((r) => rowCells(r).map(cell).join(','));
+  return `﻿${[COLUMNS.join(','), ...body].join('\r\n')}\r\n`;
 }
+
+/** "FSR-20261127-0930": the number printed on the PDF and the Excel cover. */
+export const reportNo = (d: Date) => {
+  const iso = d.toISOString();
+  return `FSR-${iso.slice(0, 10).replace(/-/g, '')}-${iso.slice(11, 16).replace(':', '')}`;
+};
+
+/** Stock by product and unit, with farmer and listing counts. */
+export function byProduct(rows: ReportRow[]) {
+  const m = new Map<string, { product: string; unit: string; farmers: Set<string>; listings: number } & Omit<UnitTotals, 'unit'>>();
+  for (const r of rows) {
+    if (!r.listingId) continue;
+    const k = `${r.product}\u0000${r.unit}`;
+    const e = m.get(k) ?? { product: r.product, unit: r.unit, farmers: new Set<string>(), listings: 0, listed: 0, sold: 0, delivered: 0, remaining: 0 };
+    e.farmers.add(r.farmerId);
+    e.listings += 1;
+    e.listed += r.listed;
+    e.sold += r.sold;
+    e.delivered += r.delivered;
+    e.remaining += r.remaining;
+    m.set(k, e);
+  }
+  return [...m.values()].sort((a, b) => a.product.localeCompare(b.product) || a.unit.localeCompare(b.unit));
+}
+

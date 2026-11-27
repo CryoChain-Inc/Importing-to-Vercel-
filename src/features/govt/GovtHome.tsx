@@ -27,7 +27,7 @@ export function GovtHome({ account }: { account: Account }) {
       <View style={s.head}>
         <Text style={s.title}>Farmer and stock report</Text>
         <Text style={s.sub}>
-          Farmers, what they have listed, and where they farm. Filter, then export to CSV.
+          Farmers, what they have listed and where they farm. Search and filter, then download a PDF, Excel or CSV copy.
         </Text>
       </View>
       <FarmerReport />
