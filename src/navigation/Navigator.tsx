@@ -54,15 +54,19 @@ const PATH: Record<Route['name'], string> = {
   produce: '/produce',
   home: '/home',
 };
-/** The ops console owns its URL (/ops/<section>?page=2), so entering it, or reloading on a deep link, keeps the address as is. */
+/** Each signed-in role lands on its own URL; the ops console owns /ops/<section>?page=2, so a deep link there is kept as is. */
 const pathFor = (r: Route) =>
-  r.name === 'home' && (r.role === 'ops' || r.role === 'govt')
-    ? window.location.pathname + window.location.search
-    : r.name === 'home' && r.role === 'farmer'
-      ? `/farmer/${r.tab ?? 'listings'}`
-      : r.name === 'produce'
-        ? `/farmer/listings/${encodeURIComponent(r.product)}`
-        : PATH[r.name];
+  r.name === 'home' && r.role === 'ops'
+    ? /^\/ops(\/|$)/.test(window.location.pathname)
+      ? window.location.pathname + window.location.search
+      : '/ops'
+    : r.name === 'home' && r.role === 'govt'
+      ? '/govt'
+      : r.name === 'home' && r.role === 'farmer'
+        ? `/farmer/${r.tab ?? 'listings'}`
+        : r.name === 'produce'
+          ? `/farmer/listings/${encodeURIComponent(r.product)}`
+          : PATH[r.name];
 
 /**
  * Route stack mirrored into the browser history on web (URL changes, Back/Forward work)
